@@ -1,0 +1,45 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stagepilot",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-02-14",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "NEXT_CACHE_WORKERS_KV",
+      "id": "347ef0e8548c4cf8bdca53ea132034f7"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "stagepilot-db",
+      "database_id": "e2b02c81-fb8f-4ed7-a066-51e44f80e5e0"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "STAGE_ROOM",
+        "class_name": "StageRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "StageRoom"
+      ]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

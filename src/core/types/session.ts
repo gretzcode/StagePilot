@@ -1,0 +1,40 @@
+import { DeviceState } from "./device";
+import { Material, PresentationState } from "./presentation";
+import { TimerState } from "./timer";
+import { BriefState } from "./brief";
+
+export interface DisplayState {
+  id: string;
+  role: "audience" | "confidence";
+  isBlanked: boolean;
+  theme: "dark" | "light";
+  customMessage?: string;
+}
+
+export interface RoomSessionInfo {
+  roomId: string;
+  roomCode: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  isActive: boolean;
+}
+
+export interface HostSessionInfo {
+  hostUserId: string;
+  hostDeviceId: string | null;
+  isHostConnected: boolean;
+}
+
+export interface StageSessionState {
+  session: RoomSessionInfo;
+  host: HostSessionInfo;
+  activeControllerDeviceId: string | null;
+  devices: Record<string, DeviceState>;
+  materials: Material[];
+  presentation: PresentationState;
+  timer: TimerState;
+  brief: BriefState;
+  displays: Record<string, DisplayState>;
+  version: number;
+}
