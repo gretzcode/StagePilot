@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { StageSessionState, StageCommand, DeviceApprovalStatus } from "@/core/types";
 import { ServerMessage } from "@/core/realtime/protocol";
 
+import { stageSessionReducer } from "@/core/session/reducer";
+
 export interface UseStageRoomSessionOptions {
   roomCode: string;
   role: "host" | "control" | "audience" | "confidence";
@@ -141,8 +143,6 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
 
   const dispatchCommand = useCallback(
     async (type: StageCommand["type"], payload: Record<string, unknown> = {}) => {
-      if (!normalizedRoomCode || !deviceId) return;
-
       const commandPayload: StageCommand = {
         commandId: `cmd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
         type,
@@ -151,6 +151,16 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         roomCode: normalizedRoomCode,
         timestamp: Date.now(),
       } as StageCommand;
+
+      // Optimistic local state update for 0ms UI responsiveness
+      setState((prevState) => {
+        if (!prevState) return prevState;
+        try {
+          return stageSessionReducer(prevState, commandPayload);
+        } catch {
+          return prevState;
+        }
+      });
 
       // Try WebSocket send first
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {

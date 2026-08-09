@@ -11,8 +11,22 @@ interface SlideViewerProps {
   role?: "control" | "audience" | "confidence";
 }
 
+// Global Memory-Mapped RAM Cache for Slide Images (0ms Sync Retrieval)
+const slideImageMemoryCache = new Map<string, HTMLImageElement>();
+
+function preloadSlideImage(url: string): HTMLImageElement {
+  if (slideImageMemoryCache.has(url)) {
+    return slideImageMemoryCache.get(url)!;
+  }
+  const img = new Image();
+  img.src = url;
+  slideImageMemoryCache.set(url, img);
+  return img;
+}
+
 export function SlideViewer({ material, slide, currentPage, blanked, role }: SlideViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const baseIframeSrc = useRef<string | null>(null);
 
   const rawUrl = material?.externalUrl || material?.url || "";
   const isGoogleSlides = rawUrl.includes("docs.google.com/presentation");
@@ -26,51 +40,61 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
     ? `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${currentPage}`
     : null;
 
-  // Currently displayed image URL on screen (Guards against black flash during long jumps e.g. slide 2 -> 20)
-  const [displayedImgUrl, setDisplayedImgUrl] = useState<string | null>(targetGoogleSlideImg);
+  // Currently displayed image URL on screen
+  const [displayedImgUrl, setDisplayedImgUrl] = useState<string | null>(() => {
+    if (!targetGoogleSlideImg) return null;
+    preloadSlideImage(targetGoogleSlideImg);
+    return targetGoogleSlideImg;
+  });
 
-  // 1. Full Deck Background Pre-loader Worker: Pre-caches ALL slides (1 to N) into browser HTTP/RAM cache
+  // 1. High-Priority Proximal Pre-fetch Engine (N+1, N+2, N-1) for 0ms transitions
   useEffect(() => {
-    if (googlePresentationId && material?.totalPages && material.totalPages > 0) {
-      // Pre-load all slides sequentially in background
-      const maxToLoad = Math.min(material.totalPages, 100);
-      for (let page = 1; page <= maxToLoad; page++) {
-        const img = new Image();
-        img.src = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${page}`;
-      }
-    }
-  }, [googlePresentationId, material?.totalPages]);
+    if (!googlePresentationId || !material?.totalPages || material.totalPages <= 0) return;
 
-  // 2. Double-Buffered Image onLoad Guard: Swaps displayed image ONLY after new slide image finishes loading
+    // Prioritize immediate next & previous slides first
+    const pagesToPreload = [currentPage + 1, currentPage + 2, currentPage - 1, currentPage + 3].filter(
+      (p) => p >= 1 && p <= material.totalPages
+    );
+
+    pagesToPreload.forEach((p) => {
+      const url = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${p}`;
+      preloadSlideImage(url);
+    });
+
+    // Background pre-fetch remaining deck slides
+    const maxToLoad = Math.min(material.totalPages, 100);
+    for (let page = 1; page <= maxToLoad; page++) {
+      const url = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${page}`;
+      preloadSlideImage(url);
+    }
+  }, [googlePresentationId, currentPage, material?.totalPages]);
+
+  // 2. Synchronous Instant Image Swap Engine (0ms Lag Response)
   useEffect(() => {
     if (!targetGoogleSlideImg) return;
 
-    // Check if target image is already in memory cache
-    const imgPreload = new Image();
-    imgPreload.src = targetGoogleSlideImg;
-
-    if (imgPreload.complete) {
+    const cachedImg = preloadSlideImage(targetGoogleSlideImg);
+    if (cachedImg.complete) {
       setDisplayedImgUrl(targetGoogleSlideImg);
     } else {
-      imgPreload.onload = () => {
+      cachedImg.onload = () => {
         setDisplayedImgUrl(targetGoogleSlideImg);
       };
     }
   }, [targetGoogleSlideImg]);
 
-  // Single persistent base iframe URL for Control Room
-  const persistentIframeSrc = isGoogleSlides && googlePresentationId
-    ? `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${currentPage}`
-    : rawUrl;
+  // 3. Persistent Base Iframe URL (Avoids iframe re-mounts on slide change)
+  if (isGoogleSlides && googlePresentationId && !baseIframeSrc.current) {
+    baseIframeSrc.current = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${currentPage}`;
+  }
+  const persistentIframeSrc = baseIframeSrc.current || rawUrl;
 
-  // In-place postMessage / location update for Google Slides iframe in Control Room
+  // 4. Ultra-Fast Hash & postMessage Update for Control Room Iframe
   useEffect(() => {
     if (isGoogleSlides && iframeRef.current?.contentWindow) {
       try {
         const targetHash = `#slide=id.p${currentPage}`;
-        iframeRef.current.contentWindow.location.replace(
-          `${iframeRef.current.src.split("#")[0]}${targetHash}`
-        );
+        iframeRef.current.contentWindow.location.hash = targetHash;
         iframeRef.current.contentWindow.postMessage(
           JSON.stringify({ gslides: "slide", page: currentPage, slide: currentPage }),
           "*"
