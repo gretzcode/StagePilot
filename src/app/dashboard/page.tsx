@@ -331,10 +331,9 @@ export default function DashboardPage() {
                   type="text"
                   value={newRoomTitle}
                   onChange={(e) => setNewRoomTitle(e.target.value)}
-                  placeholder="e.g. Main Stage — Tech Summit 2026"
                   required
                   autoFocus
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-sm transition"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-purple-500 text-sm transition"
                 />
               </div>
 
