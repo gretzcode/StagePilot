@@ -90,7 +90,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
   if (isGoogleSlides && googlePresentationId && !baseIframeSrc.current) {
     baseIframeSrc.current = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${currentPage}`;
   } else if (isGoogleDrive && googleFileId && !baseIframeSrc.current) {
-    baseIframeSrc.current = `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}`;
+    baseIframeSrc.current = `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0`;
   }
   const persistentIframeSrc = baseIframeSrc.current || rawUrl;
 
@@ -110,7 +110,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
     } else if (isGoogleDrive && googleFileId && iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.location.replace(
-          `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}`
+          `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0`
         );
       } catch {
         // Cross-origin fallback
@@ -159,7 +159,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
       <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
         {/* Container clipping mask crops Google Slides bottom control bar & Google Drive PDF top bar */}
         <div
-          className="w-full h-full relative"
+          className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}
           style={
             isGoogleSlides
               ? { clipPath: "inset(0 0 32px 0)" }

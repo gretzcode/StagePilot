@@ -8,10 +8,9 @@ export class PdfMaterialProvider implements MaterialProvider {
     return type === "pdf";
   }
 
-  async parse(source: string | File | Blob, name: string): Promise<Material> {
+  async parse(source: string | File | Blob, name: string, totalPagesInput?: number): Promise<Material> {
     const url = typeof source === "string" ? source : URL.createObjectURL(source);
-    // Parse PDF page count and generate slide metadata
-    const estimatedPages = 12;
+    const estimatedPages = totalPagesInput && totalPagesInput > 0 ? totalPagesInput : 12;
     const slides: SlideMetadata[] = Array.from({ length: estimatedPages }, (_, i) => ({
       index: i + 1,
       title: `Page ${i + 1}`,

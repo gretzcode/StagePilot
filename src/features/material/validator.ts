@@ -253,6 +253,46 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
             // Continue to next endpoint if one fails
           }
         }
+    // Google Drive PDF Dynamic Page Auto-Detection
+    if (host.includes("drive.google.com")) {
+      const match = parsed.pathname.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || parsed.search.match(/id=([A-Za-z0-9_-]+)/);
+      if (match && match[1]) {
+        const fileId = match[1];
+        const targetUrl = `https://drive.google.com/file/d/${fileId}/view`;
+
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 4000);
+
+          const res = await fetch(targetUrl, {
+            signal: controller.signal,
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Accept-Language": "en-US,en;q=0.9",
+            },
+          });
+          clearTimeout(timeout);
+
+          if (res.ok) {
+            const html = await res.text();
+
+            // Match pageCount pattern in Google Drive viewer JSON script
+            const pageCountMatch =
+              html.match(/["']numPages["']:\s*(\d+)/i) ||
+              html.match(/["']pageCount["']:\s*(\d+)/i) ||
+              html.match(/\\"pageCount\\":\s*(\d+)/i) ||
+              html.match(/\\\[null,\s*(\d+),\s*\\"PDF\\"/i);
+
+            if (pageCountMatch && pageCountMatch[1]) {
+              const pages = parseInt(pageCountMatch[1], 10);
+              if (pages > 0) {
+                return { totalPages: pages };
+              }
+            }
+          }
+        } catch {
+          // Silently fall back to default
+        }
       }
     }
   } catch {
