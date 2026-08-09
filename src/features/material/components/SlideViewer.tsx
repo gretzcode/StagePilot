@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Material, SlideMetadata } from "@/core/types";
+import { PdfSlideViewer } from "./PdfSlideViewer";
 
 interface SlideViewerProps {
   material: Material | null;
@@ -140,7 +141,18 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
     );
   }
 
-  if (material.type === "url" || material.type === "canva" || material.type === "pdf") {
+  if (material.type === "pdf" || isGoogleDrive) {
+    return (
+      <PdfSlideViewer
+        url={rawUrl}
+        currentPage={currentPage}
+        role={role}
+        title={material.name}
+      />
+    );
+  }
+
+  if (material.type === "url" || material.type === "canva") {
     // Audience & Confidence Displays: Render Pre-cached Full Deck HD Image Feed with onLoad Guard
     if (isGoogleSlides && (displayedImgUrl || targetGoogleSlideImg) && role !== "control") {
       return (
@@ -157,16 +169,10 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
 
     return (
       <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
-        {/* Container clipping mask crops Google Slides bottom control bar & Google Drive PDF top bar */}
+        {/* Container clipping mask crops Google Slides bottom control bar */}
         <div
           className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}
-          style={
-            isGoogleSlides
-              ? { clipPath: "inset(0 0 32px 0)" }
-              : isGoogleDrive
-              ? { clipPath: "inset(48px 0 0 0)" }
-              : undefined
-          }
+          style={isGoogleSlides ? { clipPath: "inset(0 0 32px 0)" } : undefined}
         >
           <iframe
             ref={iframeRef}

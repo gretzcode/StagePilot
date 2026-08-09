@@ -253,6 +253,9 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
             // Continue to next endpoint if one fails
           }
         }
+      }
+    }
+
     // Google Drive PDF Dynamic Page Auto-Detection
     if (host.includes("drive.google.com")) {
       const match = parsed.pathname.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || parsed.search.match(/id=([A-Za-z0-9_-]+)/);

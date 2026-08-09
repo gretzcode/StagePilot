@@ -16,7 +16,7 @@ export default function LoginPage() {
   useEffect(() => {
     let isMounted = true;
     fetch("/api/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res && res.ok ? (res.json() as Promise<{ authenticated?: boolean }>) : null))
       .then((data) => {
         if (isMounted && data?.authenticated) {
           router.replace("/dashboard");
