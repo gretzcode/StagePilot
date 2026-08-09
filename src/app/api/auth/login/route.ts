@@ -26,12 +26,12 @@ export async function POST(request: Request) {
 
     const defaultHash = await getDefaultHash();
     const isValidDefaultHost =
-      email.toLowerCase() === "host@stagepilot.live" &&
+      email.toLowerCase() === "host@kian.co" &&
       (await verifyPassword(password, defaultHash));
 
     if (!isValidDefaultHost) {
       return NextResponse.json(
-        { error: "Invalid email or password. Default host account: host@stagepilot.live / password123" },
+        { error: "Invalid email or password" },
         { status: 401 }
       );
     }
