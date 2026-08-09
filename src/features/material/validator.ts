@@ -93,8 +93,9 @@ export function validateExternalUrl(urlString: string): ValidationResult {
     }
 
     const isCanva = parsed.hostname.includes("canva.com");
+    const isGoogleDrive = parsed.hostname.includes("drive.google.com");
     const sourceType: MaterialSourceType = isCanva ? "CANVA_LINK" : "EXTERNAL_URL";
-    const materialType: MaterialType = isCanva ? "canva" : "url";
+    const materialType: MaterialType = isCanva ? "canva" : isGoogleDrive ? "pdf" : "url";
 
     return {
       valid: true,

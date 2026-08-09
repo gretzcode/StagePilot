@@ -35,6 +35,9 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
   const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
   const googlePresentationId = match ? match[1] : null;
 
+  const driveMatch = rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/id=([A-Za-z0-9_-]+)/);
+  const googleFileId = driveMatch ? driveMatch[1] : null;
+
   // Target Google Slides PNG export URL
   const targetGoogleSlideImg = googlePresentationId
     ? `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${currentPage}`
@@ -86,6 +89,8 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
   // 3. Persistent Base Iframe URL (Avoids iframe re-mounts on slide change)
   if (isGoogleSlides && googlePresentationId && !baseIframeSrc.current) {
     baseIframeSrc.current = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${currentPage}`;
+  } else if (isGoogleDrive && googleFileId && !baseIframeSrc.current) {
+    baseIframeSrc.current = `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}`;
   }
   const persistentIframeSrc = baseIframeSrc.current || rawUrl;
 
@@ -102,8 +107,16 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
       } catch {
         // Cross-origin fallback
       }
+    } else if (isGoogleDrive && googleFileId && iframeRef.current?.contentWindow) {
+      try {
+        iframeRef.current.contentWindow.location.replace(
+          `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}`
+        );
+      } catch {
+        // Cross-origin fallback
+      }
     }
-  }, [currentPage, isGoogleSlides]);
+  }, [currentPage, isGoogleSlides, isGoogleDrive, googleFileId]);
 
   if (blanked) {
     return (
@@ -127,7 +140,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
     );
   }
 
-  if (material.type === "url" || material.type === "canva") {
+  if (material.type === "url" || material.type === "canva" || material.type === "pdf") {
     // Audience & Confidence Displays: Render Pre-cached Full Deck HD Image Feed with onLoad Guard
     if (isGoogleSlides && (displayedImgUrl || targetGoogleSlideImg) && role !== "control") {
       return (
@@ -144,8 +157,17 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
 
     return (
       <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
-        {/* Container clipping mask crops Google Slides bottom control bar */}
-        <div className="w-full h-full relative" style={isGoogleSlides ? { clipPath: "inset(0 0 32px 0)" } : undefined}>
+        {/* Container clipping mask crops Google Slides bottom control bar & Google Drive PDF top bar */}
+        <div
+          className="w-full h-full relative"
+          style={
+            isGoogleSlides
+              ? { clipPath: "inset(0 0 32px 0)" }
+              : isGoogleDrive
+              ? { clipPath: "inset(48px 0 0 0)" }
+              : undefined
+          }
+        >
           <iframe
             ref={iframeRef}
             src={persistentIframeSrc}
