@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { DeviceRole, StageSessionState } from "@/core/types";
 import { Radio, Tv, Monitor, ArrowRight, AlertCircle } from "lucide-react";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
@@ -242,12 +241,6 @@ export default function JoinPage() {
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
-
-        <div className="mt-6 pt-4 border-t border-slate-800 text-center">
-          <Link href="/" className="text-xs text-slate-500 hover:text-slate-300">
-            ← Return to Homepage
-          </Link>
-        </div>
       </div>
     </div>
   );

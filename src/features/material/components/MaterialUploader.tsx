@@ -47,7 +47,7 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
         return;
       }
 
-      const fallbackMat = defaultPresentationAdapter.adaptUploadedFile(file.name, validation.materialType);
+      const fallbackMat = await defaultPresentationAdapter.loadMaterial(file, file.name, validation.materialType);
       onMaterialAdded(fallbackMat);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Gagal mengunggah file.");
@@ -90,7 +90,7 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
         return;
       }
 
-      const fallbackMat = defaultPresentationAdapter.adaptExternalUrl(urlInput.trim(), title);
+      const fallbackMat = await defaultPresentationAdapter.loadMaterial(urlInput.trim(), title, validation.materialType);
       onMaterialAdded(fallbackMat);
       setUrlInput("");
       setUrlTitle("");
