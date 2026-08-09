@@ -1,6 +1,7 @@
 import { DeviceRole } from "./device";
 import { BriefUrgency } from "./brief";
 import { TimerMode } from "./timer";
+import { Material } from "./presentation";
 
 export type StageCommandType =
   | "ROOM_CREATE"
@@ -8,6 +9,8 @@ export type StageCommandType =
   | "DEVICE_APPROVE"
   | "DEVICE_REJECT"
   | "DEVICE_REMOVE"
+  | "MATERIAL_ADD"
+  | "MATERIAL_REMOVE"
   | "PRESENTATION_START"
   | "PRESENTATION_EXIT"
   | "SLIDE_NEXT"
@@ -65,6 +68,13 @@ export interface DeviceRemoveCommand extends BaseCommand {
   type: "DEVICE_REMOVE";
   payload: {
     targetDeviceId: string;
+  };
+}
+
+export interface MaterialRemoveCommand extends BaseCommand {
+  type: "MATERIAL_REMOVE";
+  payload: {
+    materialId: string;
   };
 }
 
@@ -145,6 +155,13 @@ export interface DisplayShowCommand extends BaseCommand {
   };
 }
 
+export interface MaterialAddCommand extends BaseCommand {
+  type: "MATERIAL_ADD";
+  payload: {
+    material: Material;
+  };
+}
+
 export interface ControlTakeoverCommand extends BaseCommand {
   type: "CONTROL_TAKEOVER";
   payload: {
@@ -158,6 +175,8 @@ export type StageCommand =
   | DeviceApproveCommand
   | DeviceRejectCommand
   | DeviceRemoveCommand
+  | MaterialAddCommand
+  | MaterialRemoveCommand
   | PresentationStartCommand
   | PresentationExitCommand
   | SlideNextCommand

@@ -1,177 +1,450 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ShieldCheck, Users, CheckCircle, XCircle, Play, Radio } from "lucide-react";
+import { ShieldCheck, Users, CheckCircle, XCircle, Play, Trash2, Radio, Tv, Monitor, Sparkles, ListVideo, Plus } from "lucide-react";
+import { useStageRoomSession } from "@/core/realtime/useStageRoomSession";
+import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
+import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
+import { getPersistentDeviceId } from "@/core/utils/device-id";
+import { TimerControl } from "@/features/timer/components/TimerControl";
+import { BriefControl } from "@/features/brief/components/BriefControl";
+import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
+import { MaterialUploader } from "@/features/material/components/MaterialUploader";
+import { Material } from "@/core/types";
 
-export default function ControlRoomPage() {
-  const [roomCode] = useState("A7K9P2");
-  const [pendingDevices, setPendingDevices] = useState([
-    { id: "dev-99", name: "Backstage iPad Pro", role: "confidence", userAgent: "Safari / iPadOS" },
-    { id: "dev-101", name: "AV Desk Laptop", role: "control", userAgent: "Chrome / Windows" },
-  ]);
-  const [approvedDevices, setApprovedDevices] = useState([
-    { id: "dev-host", name: "Host Workstation", role: "host", status: "online" },
-    { id: "dev-aud-1", name: "Main Projector Mac", role: "audience", status: "online" },
-  ]);
+function ControlRoomContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const rawRoomCode = searchParams.get("roomCode");
+  const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
+  const requestedRole = (searchParams.get("role") || "host") as "host" | "control";
+  const isHost = requestedRole === "host";
 
-  const handleApprove = (id: string) => {
-    const dev = pendingDevices.find((d) => d.id === id);
-    if (dev) {
-      setPendingDevices(pendingDevices.filter((d) => d.id !== id));
-      setApprovedDevices([...approvedDevices, { id: dev.id, name: dev.name, role: dev.role, status: "online" }]);
-    }
+  const [deviceId] = useState(() => getPersistentDeviceId(requestedRole, roomCode, searchParams.get("deviceId")));
+  const [showUploader, setShowUploader] = useState(false);
+
+  const { state, roomError, roomName, approvalStatus, dispatchCommand } = useStageRoomSession({
+    roomCode,
+    role: requestedRole,
+    deviceId,
+    deviceName: isHost ? "Host Primary Controller" : "Brief Controller",
+  });
+
+  const handleMaterialAdd = (newMaterial: Material) => {
+    setShowUploader(false);
+    dispatchCommand("MATERIAL_ADD", { material: newMaterial });
   };
 
-  const handleReject = (id: string) => {
-    setPendingDevices(pendingDevices.filter((d) => d.id !== id));
-  };
+  const handleApprove = useCallback(
+    (targetDeviceId: string) => {
+      dispatchCommand("DEVICE_APPROVE", { targetDeviceId });
+    },
+    [dispatchCommand]
+  );
+
+  const handleReject = useCallback(
+    (targetDeviceId: string) => {
+      dispatchCommand("DEVICE_REJECT", { targetDeviceId });
+    },
+    [dispatchCommand]
+  );
+
+  const handleRemove = useCallback(
+    (targetDeviceId: string) => {
+      dispatchCommand("DEVICE_REMOVE", { targetDeviceId });
+    },
+    [dispatchCommand]
+  );
+
+  // 1. Technical & Room Access Errors
+  if (roomError) {
+    return <FriendlyErrorState errorType={roomError} roomCode={roomCode} />;
+  }
+
+  // 2. Pending Host Approval State for Non-Host Control Role
+  if (!isHost && approvalStatus === "pending") {
+    return (
+      <PendingApprovalState
+        deviceName="Brief Controller"
+        roomCode={roomCode}
+        role="control"
+      />
+    );
+  }
+
+  // 3. Rejected or Revoked Access State
+  if (!isHost && (approvalStatus === "rejected" || approvalStatus === "revoked")) {
+    return (
+      <FriendlyErrorState
+        errorType={approvalStatus === "revoked" ? "DEVICE_REVOKED" : "DEVICE_REJECTED"}
+        roomCode={roomCode}
+      />
+    );
+  }
+
+  const allDevices = state ? Object.values(state.devices) : [];
+  const pendingDevices = allDevices.filter((d) => d.approvalStatus === "pending");
+  const approvedDevices = allDevices.filter((d) => d.approvalStatus === "approved" || d.approvalStatus === "connected");
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      {/* Top Control Bar */}
-      <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col select-none">
+      {/* Top Header Bar */}
+      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur px-6 py-3 flex items-center justify-between z-20">
         <div className="flex items-center space-x-4">
-          <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center font-bold text-white shadow-md">
-            SP
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-xl bg-purple-600 flex items-center justify-center font-black text-white glow-purple">
+              SP
+            </div>
+            <span className="font-extrabold text-base tracking-tight text-white">StagePilot</span>
           </div>
-          <div>
-            <h1 className="font-bold text-base flex items-center space-x-2">
-              <span>Control Room</span>
-              <span className="text-xs bg-purple-950 text-purple-300 border border-purple-800/60 px-2 py-0.5 rounded-full font-mono">
-                Code: {roomCode}
-              </span>
-            </h1>
+
+          <div className="h-4 w-[1px] bg-slate-800" />
+
+          <div className="flex items-center space-x-3">
+            <span className="font-bold text-sm text-slate-200">Brief &amp; Stage Control</span>
+            {roomName && <span className="text-xs text-purple-300 font-semibold">({roomName})</span>}
+            <CopyRoomCodeButton roomCode={roomCode} />
           </div>
         </div>
 
         <div className="flex items-center space-x-3">
           <Link
-            href="/control/presentation"
-            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs transition flex items-center space-x-2 shadow-md glow-purple"
+            href={`/control/presentation?roomCode=${roomCode}${isHost ? "&role=host" : "&role=control"}`}
+            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition flex items-center space-x-2 glow-purple"
           >
             <Play className="w-3.5 h-3.5 fill-white" />
-            <span>Launch Presentation Control</span>
+            <span>Open Presentation View</span>
           </Link>
-          <Link
-            href="/dashboard"
-            className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white text-xs transition"
-          >
-            Exit Control Room
-          </Link>
+          {isHost && (
+            <Link
+              href="/dashboard"
+              className="px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 transition"
+            >
+              Dashboard
+            </Link>
+          )}
         </div>
       </header>
 
-      {/* Main Grid Layout */}
-      <main className="max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
-        {/* Device Approval Panel */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bold text-lg flex items-center space-x-2">
-                <Users className="w-5 h-5 text-purple-400" />
-                <span>Pending Guest Device Approvals</span>
+      {/* Main Workspace Body - Full-Width Edge-to-Edge Layout */}
+      <div className="flex-1 w-full px-6 py-6 grid grid-cols-12 gap-6 overflow-hidden">
+        {/* Left Column: Device Authorization (Host Only - Compact Sidebar) */}
+        {isHost && (
+          <aside className="col-span-12 md:col-span-4 lg:col-span-3 space-y-4 border-r-0 md:border-r border-slate-800/80 pr-0 md:pr-6 overflow-y-auto max-h-[calc(100vh-6rem)]">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5">
+                <Users className="w-4 h-4 text-purple-400" />
+                <span>Device Authorization</span>
               </h2>
-              <span className="text-xs bg-amber-950/80 border border-amber-800/60 text-amber-400 px-2.5 py-1 rounded-full font-semibold">
+              <span className="text-[10px] font-mono bg-purple-950 text-purple-300 px-2 py-0.5 rounded-md font-bold">
                 {pendingDevices.length} Pending
               </span>
             </div>
 
-            {pendingDevices.length === 0 ? (
-              <div className="p-8 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/40 text-slate-500 text-sm">
-                No pending device approval requests.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {pendingDevices.map((device) => (
+            {/* Pending Devices Section */}
+            <div className="space-y-2">
+              <span className="text-[10px] font-mono font-bold uppercase text-amber-400 block">
+                Pending Requests ({pendingDevices.length})
+              </span>
+
+              {pendingDevices.length === 0 ? (
+                <div className="p-4 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/40 text-slate-500 text-[11px]">
+                  No pending requests.
+                </div>
+              ) : (
+                pendingDevices.map((device) => (
                   <div
                     key={device.id}
-                    className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between"
+                    className="p-3 rounded-2xl bg-slate-900 border border-amber-500/40 shadow-md space-y-2"
                   >
-                    <div>
-                      <h4 className="font-semibold text-sm text-white">{device.name}</h4>
-                      <div className="flex items-center space-x-2 text-xs text-slate-400 mt-1">
-                        <span className="capitalize px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
-                          Role: {device.role}
-                        </span>
-                        <span>•</span>
-                        <span>{device.userAgent}</span>
-                      </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-white truncate max-w-[120px]">{device.name}</span>
+                      <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-800 text-purple-300 border border-slate-700">
+                        {device.role}
+                      </span>
                     </div>
+                    <p className="text-[10px] text-slate-400 font-mono truncate">{device.id}</p>
 
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1.5 pt-1">
                       <button
                         onClick={() => handleApprove(device.id)}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center space-x-1 transition"
+                        className="flex-1 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold transition flex items-center justify-center space-x-1 shadow-sm"
                       >
-                        <CheckCircle className="w-3.5 h-3.5" />
+                        <CheckCircle className="w-3 h-3" />
                         <span>Approve</span>
                       </button>
                       <button
                         onClick={() => handleReject(device.id)}
-                        className="px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-800/50 text-xs font-semibold flex items-center space-x-1 transition"
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-950 border border-rose-800 hover:bg-rose-900 text-rose-300 text-[10px] font-bold transition flex items-center justify-center"
                       >
-                        <XCircle className="w-3.5 h-3.5" />
-                        <span>Reject</span>
+                        <XCircle className="w-3 h-3" />
                       </button>
                     </div>
                   </div>
-                ))}
+                ))
+              )}
+            </div>
+
+            {/* Approved Devices Section */}
+            <div className="space-y-2 pt-2 border-t border-slate-800/80">
+              <span className="text-[10px] font-mono font-bold uppercase text-purple-400 flex items-center justify-between">
+                <span>Approved Devices ({approvedDevices.length})</span>
+                <ShieldCheck className="w-3.5 h-3.5" />
+              </span>
+
+              {approvedDevices.length === 0 ? (
+                <div className="p-4 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/40 text-slate-500 text-[11px]">
+                  No active devices.
+                </div>
+              ) : (
+                approvedDevices.map((device) => (
+                  <div
+                    key={device.id}
+                    className="p-3 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+                        <span className="font-bold text-xs text-white truncate">{device.name}</span>
+                      </div>
+                      <div className="flex items-center space-x-2 mt-0.5">
+                        <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300">
+                          {device.role}
+                        </span>
+                      </div>
+                    </div>
+
+                    {!device.isHostDevice && (
+                      <button
+                        onClick={() => handleRemove(device.id)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-400 transition"
+                        title="Revoke Permission"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </aside>
+        )}
+
+        {/* Right Area: Brief & Stage Control Center (Full-Width for Non-Host, Grid for Host) */}
+        <main className={`${isHost ? "col-span-12 md:col-span-8 lg:col-span-9" : "col-span-12"} space-y-6 overflow-y-auto max-h-[calc(100vh-6rem)] pr-1`}>
+          {/* Header Action Banner */}
+          <div className="glass-panel p-6 rounded-3xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden">
+            <div className="space-y-1 relative z-10">
+              <div className="flex items-center space-x-2">
+                <Radio className="w-4 h-4 text-purple-400 animate-pulse" />
+                <span className="text-xs font-bold uppercase tracking-wider text-purple-300">
+                  Briefing &amp; Show Caller Master Control
+                </span>
               </div>
+              <h1 className="text-xl font-bold text-white">Stage Master Control</h1>
+              <p className="text-xs text-slate-400 max-w-2xl">
+                Manage MC/Speaker stage timer, broadcast show caller cues to confidence HUD, and launch live presentation deck when ready.
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-3 relative z-10">
+              <Link
+                href={`/control/presentation?roomCode=${roomCode}${isHost ? "&role=host" : "&role=control"}`}
+                className="px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center space-x-2 glow-purple shadow-xl"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Launch Presentation Deck View</span>
+              </Link>
+            </div>
+          </div>
+
+          {/* Grid: Timer & Brief Controls */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Stage Timer Widget */}
+            {state && (
+              <TimerControl
+                timer={state.timer}
+                onStart={() => dispatchCommand("TIMER_START")}
+                onPause={() => dispatchCommand("TIMER_PAUSE")}
+                onReset={() => dispatchCommand("TIMER_RESET")}
+                onSetDuration={(duration) => dispatchCommand("TIMER_SET", { duration })}
+              />
+            )}
+
+            {/* Speaker Brief / Show Caller Cue Widget */}
+            {state && (
+              <BriefControl
+                brief={state.brief}
+                onSendBrief={(text, urgency) => dispatchCommand("BRIEF_UPDATE", { text, urgency })}
+              />
             )}
           </div>
 
-          {/* Approved Connected Devices List */}
-          <div className="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl">
-            <h2 className="font-bold text-lg mb-4 flex items-center space-x-2">
-              <ShieldCheck className="w-5 h-5 text-emerald-400" />
-              <span>Authorized Room Devices</span>
-            </h2>
+          {/* Stage Materials Playlist Queue Section */}
+          <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+                  <ListVideo className="w-4 h-4 text-purple-400" />
+                  <span>Stage Materials Queue ({state?.materials.length || 0})</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Tambahkan materi presentasi (Google Slides, Canva, PDF, Video) dan aktifkan penayangan saat giliran pembicara.
+                </p>
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {approvedDevices.map((dev) => (
-                <div key={dev.id} className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm text-white">{dev.name}</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  </div>
-                  <div className="mt-2 text-xs text-slate-400 flex items-center justify-between">
-                    <span className="capitalize font-mono bg-slate-800 px-2 py-0.5 rounded text-slate-300">
-                      {dev.role}
-                    </span>
-                    <span className="text-emerald-400 font-semibold">{dev.status}</span>
-                  </div>
+              <button
+                onClick={() => setShowUploader(!showUploader)}
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center space-x-1.5 glow-purple cursor-pointer shadow-md"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{showUploader ? "Close Uploader" : "Add Material to Queue"}</span>
+              </button>
+            </div>
+
+            {showUploader && (
+              <div className="pt-2">
+                <MaterialUploader
+                  roomCode={roomCode}
+                  onMaterialAdded={handleMaterialAdd}
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+              {state?.materials && state.materials.length > 0 ? (
+                state.materials.map((mat) => {
+                  const isLive = state.presentation.isPresenting && state.presentation.materialId === mat.id;
+
+                  return (
+                    <div
+                      key={mat.id}
+                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+                        isLive
+                          ? "bg-purple-950/40 border-purple-500/60 ring-1 ring-purple-500/40 shadow-xl"
+                          : "bg-slate-900/70 border-slate-800 hover:border-slate-700"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-start justify-between mb-2">
+                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400">
+                            {mat.type.toUpperCase()} • {mat.totalPages} SLIDES
+                          </span>
+
+                          {isLive ? (
+                            <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white text-[9px] font-extrabold uppercase tracking-wider flex items-center space-x-1 animate-pulse">
+                              <Play className="w-2.5 h-2.5 fill-current" />
+                              <span>LIVE</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 text-[9px] font-bold uppercase tracking-wider">
+                              READY
+                            </span>
+                          )}
+                        </div>
+
+                        <h4 className="font-bold text-sm text-white line-clamp-2 mb-1">{mat.name}</h4>
+                        <p className="text-[11px] font-mono text-slate-400 truncate">{mat.url}</p>
+                      </div>
+
+                      <div className="pt-4 mt-3 border-t border-slate-800/80 flex items-center space-x-2">
+                        <button
+                          onClick={() => {
+                            dispatchCommand("PRESENTATION_START", { materialId: mat.id, startPage: 1 });
+                            router.push(`/control/presentation?roomCode=${encodeURIComponent(roomCode)}${isHost ? "&role=host" : "&role=control"}`);
+                          }}
+                          className="flex-1 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 glow-purple shadow-md cursor-pointer"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>{isLive ? "VIEW LIVE PRESENTATION" : "GO LIVE / PRESENT"}</span>
+                        </button>
+                        {!isLive && (
+                          <button
+                            onClick={() => {
+                              dispatchCommand("MATERIAL_REMOVE", { materialId: mat.id });
+                              fetch("/api/material/delete", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ materialId: mat.id }),
+                              }).catch(() => {});
+                            }}
+                            className="p-2 rounded-xl bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+                            title="Delete Material Permanently from Database"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="col-span-full p-8 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-3xl bg-slate-900/30">
+                  Belum ada materi di antrean. Klik tombol <strong>&quot;Add Material to Queue&quot;</strong> di atas untuk memasukkan link atau file presentasi.
                 </div>
-              ))}
+              )}
             </div>
           </div>
-        </div>
 
-        {/* Room Quick Status Sidebar */}
-        <div className="space-y-6">
-          <div className="glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl">
-            <h3 className="font-bold text-base mb-4 flex items-center space-x-2">
-              <Radio className="w-4 h-4 text-purple-400" />
-              <span>Runtime Coordinator</span>
+          {/* Live Displays Quick Access Panel */}
+          <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-2">
+              <Tv className="w-4 h-4 text-purple-400" />
+              <span>Live Stage Display Windows</span>
             </h3>
 
-            <div className="space-y-3 text-xs">
-              <div className="flex justify-between py-2 border-b border-slate-800">
-                <span className="text-slate-400">Durable Object:</span>
-                <span className="font-mono text-purple-300">StageRoom DO Active</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-slate-800">
-                <span className="text-slate-400">WebSocket API:</span>
-                <span className="font-mono text-emerald-400">Hibernation Enabled</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-slate-800">
-                <span className="text-slate-400">Failover/Takeover:</span>
-                <span className="font-mono text-slate-300">Ready</span>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Audience Display Link */}
+              <a
+                href={`/display/audience?roomCode=${roomCode}`}
+                target="_blank"
+                rel="noreferrer"
+                className="p-5 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-indigo-500/50 transition flex items-center justify-between group"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-950 border border-indigo-800/60 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition">
+                    <Tv className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-white">Audience Stage Output</h4>
+                    <p className="text-[11px] text-slate-400">Clean full-screen presentation display</p>
+                  </div>
+                </div>
+                <span className="text-xs font-mono text-purple-400 font-bold group-hover:translate-x-0.5 transition">↗</span>
+              </a>
+
+              {/* Confidence Display Link */}
+              <a
+                href={`/display/confidence?roomCode=${roomCode}`}
+                target="_blank"
+                rel="noreferrer"
+                className="p-5 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-purple-500/50 transition flex items-center justify-between group"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-950 border border-purple-800/60 flex items-center justify-center text-purple-400 group-hover:scale-105 transition">
+                    <Monitor className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-white">Confidence Display HUD</h4>
+                    <p className="text-[11px] text-slate-400">Speaker timer, next slide &amp; show caller brief cues</p>
+                  </div>
+                </div>
+                <span className="text-xs font-mono text-purple-400 font-bold group-hover:translate-x-0.5 transition">↗</span>
+              </a>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
+  );
+}
+
+export default function ControlRoomPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">Loading...</div>}>
+      <ControlRoomContent />
+    </Suspense>
   );
 }

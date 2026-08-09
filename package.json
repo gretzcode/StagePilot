@@ -9,33 +9,39 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build:worker": "opennextjs-cloudflare && node scripts/patch-worker.mjs",
-    "deploy": "pnpm build:worker && wrangler deploy"
+    "build:worker": "opennextjs-cloudflare build && node -e \"const fs=require('fs'); const p='.open-next/worker.js'; let c=fs.readFileSync(p,'utf8'); if(!c.includes('StageRoom')) fs.appendFileSync(p, '\\nexport { StageRoom } from \\\"../workers/stage-room.ts\\\";\\n');\"",
+    "deploy": "npm run build:worker && npx wrangler deploy"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
     "jose": "^6.0.8",
     "lucide-react": "^0.475.0",
-    "next": "^16.2.12",
+    "next": "16.2.12",
     "pdfjs-dist": "^4.10.38",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tailwind-merge": "^3.0.1",
     "zod": "^3.24.2",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250214.0",
+    "@cloudflare/workers-types": "^5.20260722.1",
     "@eslint/eslintrc": "^3.2.0",
-    "@opennextjs/cloudflare": "^1.20.2",
+    "@opennextjs/cloudflare": "1.20.2",
+    "@playwright/test": "^1.50.1",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
+    "@typescript-eslint/eslint-plugin": "^8.24.0",
+    "@typescript-eslint/parser": "^8.24.0",
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.20.1",
-    "eslint-config-next": "^16.2.12",
+    "eslint-config-next": "16.2.12",
     "postcss": "^8.5.2",
+    "@tailwindcss/postcss": "^4.0.7",
     "tailwindcss": "^4.0.7",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5",
-    "wrangler": "^4.114.0"
+    "wrangler": "4.114.0"
   }
 }

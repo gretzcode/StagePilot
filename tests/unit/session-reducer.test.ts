@@ -97,4 +97,44 @@ describe("Stage Session Reducer", () => {
     state = stageSessionReducer(state, nextCmd);
     expect(state.presentation.currentPage).toBe(2);
   });
+
+  it("should process MATERIAL_ADD command and update state.materials", () => {
+    let state = createInitialSessionState(roomId, roomId, "Test Room", hostUserId, hostDeviceId);
+
+    const newMaterial = {
+      id: "mat-new-123",
+      name: "Uploaded Deck.pdf",
+      type: "pdf" as const,
+      url: "http://example.com/uploaded.pdf",
+      totalPages: 10,
+      slides: [{ index: 1, title: "Slide 1" }],
+      uploadedAt: Date.now(),
+      status: "ready" as const,
+    };
+
+    const addCmd: StageCommand = {
+      type: "MATERIAL_ADD",
+      commandId: "cmd-add-mat",
+      senderDeviceId: hostDeviceId,
+      timestamp: Date.now(),
+      payload: { material: newMaterial },
+    };
+
+    state = stageSessionReducer(state, addCmd);
+    expect(state.materials.length).toBe(1);
+    expect(state.materials[0].id).toBe("mat-new-123");
+
+    const startCmd: StageCommand = {
+      type: "PRESENTATION_START",
+      commandId: "cmd-start-new",
+      senderDeviceId: hostDeviceId,
+      timestamp: Date.now(),
+      payload: { materialId: "mat-new-123", startPage: 1 },
+    };
+
+    state = stageSessionReducer(state, startCmd);
+    expect(state.presentation.isPresenting).toBe(true);
+    expect(state.presentation.materialId).toBe("mat-new-123");
+    expect(state.presentation.totalPages).toBe(10);
+  });
 });

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateRoomCode } from "@/lib/utils";
+import { RoomRegistry } from "@/lib/rooms/registry";
 import { verifyHostToken } from "@/lib/auth/jwt";
 
 export async function POST(request: Request) {
@@ -9,29 +9,34 @@ export async function POST(request: Request) {
     const cookieHeader = request.headers.get("cookie");
     const tokenFromCookie = cookieHeader
       ?.split(";")
-      .find((c) => c.trim().startsWith("stagepilot_host_token="))
+      .map((c) => c.trim())
+      .find((c) => c.startsWith("stagepilot_session_id=") || c.startsWith("stagepilot_host_token="))
       ?.split("=")[1];
 
     const token = tokenFromHeader || tokenFromCookie;
     const payload = token ? await verifyHostToken(token) : null;
 
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    const title = typeof body.title === "string" ? body.title : "Main Stage — Production Session";
-    const hostUserId = payload?.sub || (typeof body.hostUserId === "string" ? body.hostUserId : "host-default");
+    if (!payload || !payload.sub) {
+      return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+    }
 
-    const roomCode = generateRoomCode(6);
-    const roomId = `room-${roomCode.toLowerCase()}`;
+    const hostUserId = payload.sub;
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const title = typeof body.title === "string" && body.title.trim().length > 0 ? body.title.trim() : "Main Stage — Production Session";
+
+    const room = await RoomRegistry.createRoom(hostUserId, title);
 
     return NextResponse.json({
       success: true,
       room: {
-        roomId,
-        roomCode,
-        title,
-        hostUserId,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        isActive: true,
+        roomId: room.roomId,
+        roomCode: room.roomCode,
+        title: room.name,
+        hostUserId: room.hostUserId,
+        createdAt: room.createdAt,
+        updatedAt: room.updatedAt,
+        isActive: room.status === "ACTIVE",
+        status: room.status,
       },
     });
   } catch (err: unknown) {

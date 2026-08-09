@@ -1,8 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { StageSessionState, StageCommand, Material } from "@/core/types";
+import { Material } from "@/core/types";
 import { ThumbnailList } from "@/features/material/components/ThumbnailList";
 import { SlideViewer } from "@/features/material/components/SlideViewer";
 import { TimerControl } from "@/features/timer/components/TimerControl";
@@ -18,70 +18,38 @@ import {
   Tv,
   Layers,
   Sparkles,
+  X,
+  ListVideo,
+  Plus,
+  Play,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Trash2,
 } from "lucide-react";
+import { useStageRoomSession } from "@/core/realtime/useStageRoomSession";
+import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
+import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
+import { getPersistentDeviceId } from "@/core/utils/device-id";
+import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
 
 function PresentationControlContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const roomCode = searchParams.get("roomCode") || "A7K9P2";
-  const deviceId = searchParams.get("deviceId") || `dev-ctrl-${Date.now().toString(36)}`;
+  const rawRoomCode = searchParams.get("roomCode");
+  const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
+  const requestedRole = (searchParams.get("role") || "control") as "host" | "control";
 
-  const [state, setState] = useState<StageSessionState | null>(null);
-  const [ws, setWs] = useState<WebSocket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [deviceId] = useState(() => getPersistentDeviceId(requestedRole, roomCode, searchParams.get("deviceId")));
   const [showUploader, setShowUploader] = useState(false);
 
-  // Connect WebSocket to StageRoom Durable Object
-  useEffect(() => {
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socketUrl = `${wsProtocol}//${window.location.host}/api/ws?roomCode=${encodeURIComponent(
-      roomCode
-    )}&deviceId=${encodeURIComponent(deviceId)}&role=control`;
+  const { state, roomError, roomName, approvalStatus, dispatchCommand } = useStageRoomSession({
+    roomCode,
+    role: requestedRole,
+    deviceId,
+    deviceName: requestedRole === "host" ? "Host Primary Controller" : "Presentation Controller",
+  });
 
-    const socket = new WebSocket(socketUrl);
-
-    socket.onopen = () => {
-      setIsConnected(true);
-    };
-
-    socket.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "SYNC_STATE") {
-          setState(msg.state);
-        }
-      } catch (err) {
-        console.error("Failed to parse WebSocket message:", err);
-      }
-    };
-
-    socket.onclose = () => {
-      setIsConnected(false);
-    };
-
-    setWs(socket);
-
-    return () => {
-      socket.close();
-    };
-  }, [roomCode, deviceId]);
-
-  const dispatchCommand = useCallback(
-    (commandType: StageCommand["type"], payload: Record<string, unknown> = {}) => {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      const cmd = {
-        type: commandType,
-        commandId: `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        senderDeviceId: deviceId,
-        timestamp: Date.now(),
-        payload,
-      } as StageCommand;
-      ws.send(JSON.stringify({ type: "EXECUTE_COMMAND", payload: cmd }));
-    },
-    [ws, deviceId]
-  );
-
-  // Keyboard navigation shortcuts
+  // Keyboard Navigation & Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
@@ -105,9 +73,6 @@ function PresentationControlContent() {
       } else if (e.key === "b" || e.key === "B") {
         e.preventDefault();
         dispatchCommand("DISPLAY_BLANK", { blank: !state?.presentation.blanked });
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        dispatchCommand("PRESENTATION_EXIT");
       } else if (e.key === "Home") {
         e.preventDefault();
         dispatchCommand("SLIDE_GOTO", { pageNumber: 1 });
@@ -125,15 +90,131 @@ function PresentationControlContent() {
 
   const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
 
-  const handleAddMaterial = (newMaterial: Material) => {
-    if (state) {
-      state.materials.push(newMaterial);
-      setState({ ...state });
+  // Dynamic Slide Boundary Auto-Trimmer Worker (Detects exact end boundary and trims extra empty slides)
+  useEffect(() => {
+    if (!activeMaterial || (activeMaterial.type !== "url" && activeMaterial.type !== "canva")) return;
+
+    const rawUrl = activeMaterial.externalUrl || activeMaterial.url || "";
+    const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
+    const googlePresentationId = match ? match[1] : null;
+
+    if (googlePresentationId && activeMaterial.totalPages > 1) {
+      let isMounted = true;
+
+      async function findExactEndBoundary() {
+        if (!activeMaterial) return;
+        const checkImage = (page: number): Promise<boolean> => {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                resolve(true);
+              } else {
+                resolve(false);
+              }
+            };
+            img.onerror = () => resolve(false);
+            img.src = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${page}`;
+          });
+        };
+
+        const maxPagesToScan = activeMaterial.totalPages;
+        let realMax = 1;
+        for (let page = 1; page <= maxPagesToScan; page++) {
+          if (!isMounted) break;
+          const valid = await checkImage(page);
+          if (valid) {
+            realMax = page;
+          } else if (page > 1) {
+            // Found first invalid page! End boundary detected.
+            break;
+          }
+        }
+
+        if (isMounted && activeMaterial && realMax > 0 && realMax !== activeMaterial.totalPages) {
+          const trimmedSlides = Array.from({ length: realMax }, (_, i) => ({
+            index: i + 1,
+            title: `Slide ${i + 1}`,
+            url: rawUrl,
+            contentUrl: rawUrl,
+          }));
+
+          dispatchCommand("MATERIAL_ADD", {
+            material: {
+              ...activeMaterial,
+              totalPages: realMax,
+              slides: trimmedSlides,
+            },
+          });
+        }
+      }
+
+      findExactEndBoundary();
+
+      return () => {
+        isMounted = false;
+      };
     }
+  }, [activeMaterial?.id, dispatchCommand]);
+
+
+
+  const [leftTab, setLeftTab] = useState<"playlist" | "slides">("playlist");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Auto-switch sidebar tab to 'slides' whenever GO LIVE / PRESENT is clicked or active
+  useEffect(() => {
+    if (state?.presentation.isPresenting && state.presentation.materialId) {
+      setLeftTab("slides");
+    }
+  }, [state?.presentation.isPresenting, state?.presentation.materialId]);
+
+  const handleAddMaterial = (newMaterial: Material) => {
     setShowUploader(false);
-    dispatchCommand("PRESENTATION_START", { materialId: newMaterial.id, startPage: 1 });
+    dispatchCommand("MATERIAL_ADD", { material: newMaterial });
+
+    if (!state?.presentation.isPresenting) {
+      dispatchCommand("PRESENTATION_START", { materialId: newMaterial.id, startPage: 1 });
+      setLeftTab("slides");
+    }
   };
 
+  const handleRemoveMaterial = (materialId: string) => {
+    dispatchCommand("MATERIAL_REMOVE", { materialId });
+    fetch("/api/material/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ materialId }),
+    }).catch(() => {});
+  };
+
+  // 1. Technical & Room Access Errors
+  if (roomError) {
+    return <FriendlyErrorState errorType={roomError} roomCode={roomCode} />;
+  }
+
+  // 2. Pending Approval State for Guest Controller (P0-1)
+  if (approvalStatus === "pending") {
+    return (
+      <PendingApprovalState
+        deviceName="Presentation Controller"
+        roomCode={roomCode}
+        role="control"
+      />
+    );
+  }
+
+  // 3. Rejected or Revoked Device Access State
+  if (approvalStatus === "rejected" || approvalStatus === "revoked") {
+    return (
+      <FriendlyErrorState
+        errorType={approvalStatus === "revoked" ? "DEVICE_REVOKED" : "DEVICE_REJECTED"}
+        roomCode={roomCode}
+      />
+    );
+  }
+
+  // 4. Approved Presentation Control Surface
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden">
       {/* Top Stage Control Header */}
@@ -146,70 +227,189 @@ function PresentationControlContent() {
             <span className="font-extrabold text-base tracking-tight text-white">StagePilot</span>
           </div>
 
-          <div className="h-4 w-px bg-slate-800" />
+          <div className="h-4 w-[1px] bg-slate-800" />
 
-          <div className="flex items-center space-x-2">
-            <span className="text-xs text-slate-400 font-medium">ROOM CODE:</span>
-            <span className="font-mono font-bold text-sm text-purple-300 bg-slate-800/80 px-2.5 py-0.5 rounded-lg border border-slate-700">
-              {roomCode}
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
-            <span className="text-xs font-mono font-semibold text-slate-300">
-              {isConnected ? "LIVE RUNTIME CONNECTED" : "RECONNECTING..."}
-            </span>
+          <div className="flex items-center space-x-3">
+            <CopyRoomCodeButton roomCode={roomCode} />
+            {roomName && <span className="text-xs text-purple-300 font-semibold">({roomName})</span>}
           </div>
         </div>
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => setShowUploader(!showUploader)}
-            className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-white flex items-center space-x-1.5 transition"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="p-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-purple-300 transition cursor-pointer flex items-center space-x-1.5 text-xs font-semibold"
+            title={isSidebarOpen ? "Hide Sidebar (Distraction-Free Mode)" : "Show Sidebar"}
           >
-            <Layers className="w-4 h-4 text-purple-400" />
-            <span>Materials ({state?.materials.length || 0})</span>
+            {isSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
+            <span className="hidden sm:inline">{isSidebarOpen ? "Hide Sidebar" : "Show Sidebar"}</span>
           </button>
 
           <button
-            onClick={() => router.push(`/control?roomCode=${roomCode}`)}
-            className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 hover:text-white flex items-center space-x-1.5 transition"
+            onClick={() => dispatchCommand("DISPLAY_BLANK", { blank: !state?.presentation.blanked })}
+            className={`px-3.5 py-1.5 rounded-xl border text-xs font-bold transition flex items-center space-x-1.5 ${
+              state?.presentation.blanked
+                ? "bg-amber-500/20 border-amber-500/60 text-amber-300"
+                : "bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+            }`}
+          >
+            {state?.presentation.blanked ? <EyeOff className="w-4 h-4 text-amber-400" /> : <Eye className="w-4 h-4" />}
+            <span>{state?.presentation.blanked ? "DISPLAY BLANKED" : "BLANK DISPLAY (B)"}</span>
+          </button>
+
+          <button
+            onClick={() => router.push(`/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`)}
+            className="p-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 transition"
+            title="Exit Presentation to Control Room Dashboard"
           >
             <LogOut className="w-4 h-4" />
-            <span>Control Room</span>
           </button>
         </div>
       </header>
 
-      {/* Main Operator Layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* LEFT COLUMN: Thumbnails & Material Deck */}
-        <aside className="w-72 bg-slate-900/60 border-r border-slate-800/80 p-4 flex flex-col space-y-4 overflow-y-auto">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Slide Deck</h4>
-            <span className="text-[10px] font-mono text-purple-400 font-bold">
-              {state?.presentation.currentPage || 0} / {state?.presentation.totalPages || 0}
-            </span>
-          </div>
+      {/* Main Workspace Body */}
+      <div className="flex-1 grid grid-cols-12 overflow-hidden">
+        {/* Left Column: Stage Material Playlist Queue & Slides Deck (Collapsible) */}
+        {isSidebarOpen && (
+          <div className="col-span-3 border-r border-slate-800 bg-slate-900/40 flex flex-col overflow-hidden transition-all duration-200">
+            {/* Tab Switcher Header */}
+            <div className="p-3 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+              <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs w-full">
+                <button
+                  onClick={() => setLeftTab("playlist")}
+                  className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition flex items-center justify-center space-x-1.5 cursor-pointer ${
+                    leftTab === "playlist" ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <ListVideo className="w-3.5 h-3.5" />
+                  <span>PLAYLIST ({state?.materials.length || 0})</span>
+                </button>
 
-          {showUploader && (
-            <div className="mb-2">
-              <MaterialUploader onMaterialAdded={handleAddMaterial} />
+                <button
+                  onClick={() => setLeftTab("slides")}
+                  className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition flex items-center justify-center space-x-1.5 cursor-pointer ${
+                    leftTab === "slides" ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>SLIDES ({state?.presentation.totalPages || 0})</span>
+                </button>
+              </div>
             </div>
-          )}
 
-          <ThumbnailList
-            material={activeMaterial}
-            currentPage={state?.presentation.currentPage || 1}
-            onSelectSlide={(pageNumber) => dispatchCommand("SLIDE_GOTO", { pageNumber })}
-          />
-        </aside>
+            {/* Left Column Content View */}
+            {leftTab === "playlist" ? (
+              <div className="flex-1 flex flex-col p-4 overflow-y-auto space-y-3">
+                <button
+                  onClick={() => setShowUploader(true)}
+                  className="w-full py-2.5 px-4 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 font-bold text-xs transition flex items-center justify-center space-x-2 shadow-sm cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Material to Queue</span>
+                </button>
 
-        {/* CENTER COLUMN: Current & Next Slide Stage Canvas */}
-        <main className="flex-1 flex flex-col p-6 space-y-4 overflow-y-auto bg-slate-950">
-          {/* Active Presentation Surface */}
-          <div className="flex-1 rounded-3xl border border-slate-800 overflow-hidden relative shadow-2xl min-h-[380px]">
+                <div className="space-y-2.5">
+                  {state?.materials && state.materials.length > 0 ? (
+                    state.materials.map((mat) => {
+                      const isLive = state.presentation.isPresenting && state.presentation.materialId === mat.id;
+
+                      return (
+                        <div
+                          key={mat.id}
+                          className={`p-3.5 rounded-2xl border transition-all ${
+                            isLive
+                              ? "bg-purple-950/40 border-purple-500/60 ring-1 ring-purple-500/40 shadow-lg"
+                              : "bg-slate-900/60 border-slate-800 hover:border-slate-700"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-1">
+                            <div className="flex-1 pr-2">
+                              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400 block mb-0.5">
+                                {mat.type.toUpperCase()} • {mat.totalPages} SLIDES
+                              </span>
+                              <h4 className="text-xs font-bold text-white line-clamp-1">{mat.name}</h4>
+                            </div>
+
+                            {isLive ? (
+                              <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white text-[9px] font-extrabold uppercase tracking-wider flex items-center space-x-1 animate-pulse">
+                                <Play className="w-2.5 h-2.5 fill-current" />
+                                <span>LIVE</span>
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 text-[9px] font-bold uppercase tracking-wider">
+                                READY
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/60 mt-2">
+                            {!isLive ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    dispatchCommand("PRESENTATION_START", { materialId: mat.id, startPage: 1 });
+                                    setLeftTab("slides");
+                                  }}
+                                  className="flex-1 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 glow-purple cursor-pointer shadow"
+                                >
+                                  <Play className="w-3 h-3 fill-current" />
+                                  <span>GO LIVE NOW</span>
+                                </button>
+                                <button
+                                   onClick={() => handleRemoveMaterial(mat.id)}
+                                   className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+                                   title="Remove from Queue & Database"
+                                 >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => setLeftTab("slides")}
+                                className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition flex items-center justify-center space-x-1.5 cursor-pointer"
+                              >
+                                <Layers className="w-3 h-3 text-purple-400" />
+                                <span>VIEW SLIDES DECK</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="p-6 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-2xl">
+                      Belum ada materi di antrean. Klik tombol di atas untuk menambah materi.
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate max-w-[180px]">
+                    DECK: {activeMaterial?.name || "None"}
+                  </span>
+                  <button
+                    onClick={() => setShowUploader(true)}
+                    className="p-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-[10px] font-bold cursor-pointer transition flex items-center space-x-1"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add Material</span>
+                  </button>
+                </div>
+                <ThumbnailList
+                  material={activeMaterial}
+                  currentPage={state?.presentation.currentPage || 1}
+                  onSelectSlide={(pageNumber: number) => dispatchCommand("SLIDE_GOTO", { pageNumber })}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Center Column: Live Slide Output Viewer (Expands dynamically to col-span-9 when sidebar is hidden) */}
+        <div className={`${isSidebarOpen ? "col-span-6" : "col-span-9"} bg-black flex flex-col justify-between p-6 relative overflow-hidden transition-all duration-200`}>
+          <div className="flex-1 flex items-center justify-center relative">
             <SlideViewer
               material={activeMaterial}
               slide={state?.presentation.currentSlide || null}
@@ -219,61 +419,53 @@ function PresentationControlContent() {
             />
           </div>
 
-          {/* Controller Toolbar & Next Slide Preview */}
-          <div className="glass-panel p-4 rounded-3xl border border-slate-800 flex items-center justify-between">
-            {/* Primary Slide Controls */}
+          {/* Slide Controls Bar */}
+          <div className="h-16 bg-slate-900/90 border border-slate-800 rounded-2xl px-6 flex items-center justify-between shadow-2xl mt-4 z-10">
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => dispatchCommand("SLIDE_PREVIOUS")}
-                className="px-4 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center space-x-1 transition"
+                disabled={!state?.presentation.currentPage || state.presentation.currentPage <= 1}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition"
               >
-                <ChevronLeft className="w-4 h-4 text-purple-400" />
-                <span>Prev Slide</span>
+                <ChevronLeft className="w-5 h-5" />
               </button>
-
               <button
                 onClick={() => dispatchCommand("SLIDE_NEXT")}
-                className="px-5 py-2 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center space-x-1.5 transition glow-purple"
+                disabled={
+                  !state?.presentation.currentPage ||
+                  (activeMaterial?.type !== "url" &&
+                    activeMaterial?.type !== "canva" &&
+                    !!state.presentation.totalPages &&
+                    state.presentation.totalPages > 1 &&
+                    state.presentation.currentPage >= state.presentation.totalPages)
+                }
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition cursor-pointer"
+                title="Next Slide (Right Arrow)"
               >
-                <span>Next Slide</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={() => dispatchCommand("DISPLAY_BLANK", { blank: !state?.presentation.blanked })}
-                className={`px-4 py-2 rounded-2xl font-bold text-xs flex items-center space-x-1.5 transition border ${
-                  state?.presentation.blanked
-                    ? "bg-rose-950 text-rose-300 border-rose-800"
-                    : "bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700"
-                }`}
-              >
-                {state?.presentation.blanked ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4 text-rose-400" />}
-                <span>{state?.presentation.blanked ? "Show Display" : "Blank Screen"}</span>
+                <ChevronRight className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Next Slide Preview Banner */}
-            <div className="flex items-center space-x-3 bg-slate-900/80 px-4 py-2 rounded-2xl border border-slate-800">
-              <span className="text-[10px] font-mono uppercase font-bold text-slate-500">NEXT SLIDE:</span>
-              <span className="text-xs font-semibold text-purple-300 truncate max-w-xs">
-                {state?.presentation.nextSlide?.title || (state?.presentation.currentPage ? `Slide ${state.presentation.currentPage + 1}` : "End of Deck")}
-              </span>
-            </div>
+            <span className="font-mono text-sm font-bold text-slate-300">
+              SLIDE {state?.presentation.currentPage || 1} / {state?.presentation.totalPages || 1}
+            </span>
 
-            {/* Presentation Exit */}
             <button
-              onClick={() => dispatchCommand("PRESENTATION_EXIT")}
-              className="px-3.5 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-rose-400 font-bold text-xs flex items-center space-x-1 transition"
+              onClick={() => {
+                dispatchCommand("PRESENTATION_EXIT");
+                router.push(`/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`);
+              }}
+              className="px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
             >
               <Square className="w-3.5 h-3.5" />
-              <span>Exit Deck</span>
+              <span>Stop Presentation</span>
             </button>
           </div>
-        </main>
+        </div>
 
-        {/* RIGHT COLUMN: Stage Timer, Brief & Device Status */}
-        <aside className="w-80 bg-slate-900/60 border-l border-slate-800/80 p-4 space-y-4 overflow-y-auto">
-          {/* Stage Timer */}
+        {/* Right Column: Timer & Show Caller Brief Cue Controls */}
+        <div className="col-span-3 border-l border-slate-800 bg-slate-900/40 p-4 space-y-4 overflow-y-auto">
+          {/* Stage Timer Control */}
           {state && (
             <TimerControl
               timer={state.timer}
@@ -284,7 +476,7 @@ function PresentationControlContent() {
             />
           )}
 
-          {/* Speaker Brief */}
+          {/* Show Caller Brief Cue Control */}
           {state && (
             <BriefControl
               brief={state.brief}
@@ -292,44 +484,62 @@ function PresentationControlContent() {
             />
           )}
 
-          {/* Connected Display Links */}
+          {/* Quick Display Links Panel */}
           <div className="glass-panel p-4 rounded-3xl border border-slate-800 space-y-2">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800 pb-1.5">
-              Live Displays
-            </h4>
-            <div className="grid grid-cols-2 gap-2">
-              <a
-                href={`/display/audience?roomCode=${roomCode}`}
-                target="_blank"
-                rel="noreferrer"
-                className="p-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-center transition block"
-              >
-                <Tv className="w-4 h-4 text-purple-400 mx-auto mb-1" />
-                <span className="text-[11px] font-bold text-slate-200 block">Audience</span>
-                <span className="text-[9px] text-slate-500 font-mono">Clean Output</span>
-              </a>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+              Live Stage Displays
+            </span>
 
-              <a
-                href={`/display/confidence?roomCode=${roomCode}`}
-                target="_blank"
-                rel="noreferrer"
-                className="p-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-center transition block"
-              >
-                <Sparkles className="w-4 h-4 text-amber-400 mx-auto mb-1" />
-                <span className="text-[11px] font-bold text-slate-200 block">Confidence</span>
-                <span className="text-[9px] text-slate-500 font-mono">Speaker HUD</span>
-              </a>
-            </div>
+            <a
+              href={`/display/audience?roomCode=${roomCode}`}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-indigo-300 flex items-center justify-between transition"
+            >
+              <span className="flex items-center space-x-2">
+                <Tv className="w-4 h-4 text-indigo-400" />
+                <span>Audience Display Window</span>
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">↗</span>
+            </a>
+
+            <a
+              href={`/display/confidence?roomCode=${roomCode}`}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-purple-300 flex items-center justify-between transition"
+            >
+              <span className="flex items-center space-x-2">
+                <Tv className="w-4 h-4 text-purple-400" />
+                <span>Confidence Display Window</span>
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">↗</span>
+            </a>
           </div>
-        </aside>
+        </div>
       </div>
+
+      {/* Material Uploader Modal */}
+      {showUploader && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg relative">
+            <button
+              onClick={() => setShowUploader(false)}
+              className="absolute top-4 right-4 z-10 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <MaterialUploader roomCode={roomCode} onMaterialAdded={handleAddMaterial} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function PresentationControlPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">Loading...</div>}>
       <PresentationControlContent />
     </Suspense>
   );

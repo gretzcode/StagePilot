@@ -1,42 +1,41 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { StageSessionState } from "@/core/types";
 import { SlideViewer } from "@/features/material/components/SlideViewer";
-import { Clock, MessageSquare, AlertCircle, Maximize2 } from "lucide-react";
+import { Clock, MessageSquare, AlertCircle, Monitor } from "lucide-react";
+import { useStageRoomSession } from "@/core/realtime/useStageRoomSession";
+import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
+import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
+
+import { getPersistentDeviceId } from "@/core/utils/device-id";
+import { useTimerTicker } from "@/features/timer/hooks/useTimerTicker";
+import { useAutoHideCursor } from "@/core/hooks/useAutoHideCursor";
+import { formatStageTimer } from "@/features/timer/utils/timer-formatter";
+
+function getBriefFontSize(length: number): string {
+  if (length <= 35) return "text-5xl sm:text-6xl md:text-7xl lg:text-8xl";
+  if (length <= 80) return "text-3xl sm:text-4xl md:text-5xl lg:text-6xl";
+  if (length <= 150) return "text-2xl sm:text-3xl md:text-4xl lg:text-5xl";
+  return "text-xl sm:text-2xl md:text-3xl lg:text-4xl";
+}
 
 function ConfidenceDisplayContent() {
   const searchParams = useSearchParams();
-  const roomCode = searchParams.get("roomCode") || "A7K9P2";
-  const deviceId = searchParams.get("deviceId") || `dev-conf-${Date.now().toString(36)}`;
-
-  const [state, setState] = useState<StageSessionState | null>(null);
+  const rawRoomCode = searchParams.get("roomCode");
+  const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
+  const [deviceId] = useState(() => getPersistentDeviceId("confidence", roomCode, searchParams.get("deviceId")));
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const showControls = useAutoHideCursor(2500);
 
-  useEffect(() => {
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socketUrl = `${wsProtocol}//${window.location.host}/api/ws?roomCode=${encodeURIComponent(
-      roomCode
-    )}&deviceId=${encodeURIComponent(deviceId)}&role=confidence`;
+  const { state, roomError, approvalStatus, roomName } = useStageRoomSession({
+    roomCode,
+    role: "confidence",
+    deviceId,
+    deviceName: "Confidence Display",
+  });
 
-    const socket = new WebSocket(socketUrl);
-
-    socket.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "SYNC_STATE") {
-          setState(msg.state);
-        }
-      } catch (err) {
-        console.error("Failed to parse Confidence WebSocket message:", err);
-      }
-    };
-
-    return () => {
-      socket.close();
-    };
-  }, [roomCode, deviceId]);
+  const now = useTimerTicker(state?.timer.status === "running");
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -48,127 +47,198 @@ function ConfidenceDisplayContent() {
     }
   };
 
-  const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "f" || e.key === "F11") {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
-  // Compute timestamp-based timer countdown
-  const now = Date.now();
-  let remainingSeconds = state?.timer.remaining || 0;
-  if (state?.timer.status === "running" && state.timer.startedAt) {
-    const elapsed = Math.floor((now - state.timer.startedAt) / 1000);
-    remainingSeconds = Math.max(0, state.timer.duration - elapsed);
+  // 1. Error state (ROOM_NOT_FOUND, ROOM_ACCESS_DENIED, etc.)
+  if (roomError) {
+    return <FriendlyErrorState errorType={roomError} roomCode={roomCode} />;
   }
 
-  const mins = Math.floor(remainingSeconds / 60);
-  const secs = remainingSeconds % 60;
-  const formattedTime = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  // 2. Pending Host Approval State (P0-1 & P0-3)
+  if (approvalStatus === "pending") {
+    return (
+      <PendingApprovalState
+        deviceName="Confidence Display"
+        roomCode={roomCode}
+        role="confidence"
+      />
+    );
+  }
 
-  const isWarning = remainingSeconds > 0 && remainingSeconds <= 120;
-  const isCritical = remainingSeconds > 0 && remainingSeconds <= 30;
-  const isFinished = remainingSeconds === 0 && state?.timer.status === "running";
+  // 3. Rejected or Revoked Device State
+  if (approvalStatus === "rejected" || approvalStatus === "revoked") {
+    return <FriendlyErrorState errorType={approvalStatus === "revoked" ? "DEVICE_REVOKED" : "DEVICE_REJECTED"} roomCode={roomCode} />;
+  }
+
+  // 4. Approved Confidence HUD Output
+  const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
+  const isPresenting = Boolean(state?.presentation.isPresenting && activeMaterial);
+
+  // Compute timestamp-based timer countdown & negative overtime increment
+  const { formattedTime, isOvertime, isWarning, isCritical, isFinished } = formatStageTimer(
+    state?.timer.status || "idle",
+    state?.timer.duration || 300,
+    state?.timer.remaining || 300,
+    state?.timer.startedAt || null,
+    now
+  );
 
   return (
-    <div className="w-screen h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden p-6 space-y-4">
-      {/* Top Bar: Room & Connection Header */}
-      <header className="flex items-center justify-between bg-slate-900/80 px-6 py-3 rounded-2xl border border-slate-800">
-        <div className="flex items-center space-x-3">
-          <span className="font-extrabold text-sm tracking-wider text-purple-400 uppercase">
-            CONFIDENCE DISPLAY HUD
-          </span>
-          <span className="font-mono text-xs text-slate-400 font-bold bg-slate-800 px-2.5 py-0.5 rounded-lg border border-slate-700">
-            ROOM: {roomCode}
-          </span>
-        </div>
-
-        <div className="flex items-center space-x-4">
-          <span className="text-xs font-mono text-slate-400">
-            SLIDE {state?.presentation.currentPage || 1} OF {state?.presentation.totalPages || 1}
-          </span>
-          {!isFullscreen && (
-            <button
-              onClick={toggleFullscreen}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
-              title="Fullscreen"
-            >
-              <Maximize2 className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      </header>
-
+    <div
+      onDoubleClick={toggleFullscreen}
+      className="w-screen h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden p-3 relative cursor-none"
+    >
       {/* Main HUD Body */}
-      <div className="flex-1 grid grid-cols-12 gap-6 overflow-hidden">
-        {/* Current Slide Display Canvas */}
-        <div className="col-span-8 bg-black rounded-3xl border border-slate-800 overflow-hidden relative shadow-2xl">
-          <SlideViewer
-            material={activeMaterial}
-            slide={state?.presentation.currentSlide || null}
-            currentPage={state?.presentation.currentPage || 1}
-            blanked={state?.presentation.blanked}
-            role="confidence"
-          />
-        </div>
+      {isPresenting ? (
+        <div className="flex-1 grid grid-cols-12 gap-4 overflow-hidden">
+          {/* Current Slide Display Canvas (Expanded to 75% screen area) */}
+          <div className="col-span-9 bg-black rounded-3xl border border-slate-800/80 overflow-hidden relative shadow-2xl flex items-center justify-center">
+            <SlideViewer
+              material={activeMaterial}
+              slide={state?.presentation.currentSlide || null}
+              currentPage={state?.presentation.currentPage || 1}
+              blanked={state?.presentation.blanked}
+              role="confidence"
+            />
+          </div>
 
-        {/* Right Info Column: Timer, Next Slide, Speaker Brief */}
-        <div className="col-span-4 flex flex-col space-y-4">
-          {/* Large Countdown Stage Timer */}
-          <div className="glass-panel p-6 rounded-3xl border border-slate-800 text-center flex flex-col justify-center">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-center space-x-1.5 mb-2">
+          {/* Right Info Column: Timer (1/3 height) & Speaker Brief (2/3 height) */}
+          <div className="col-span-3 flex flex-col space-y-3 h-full overflow-hidden">
+            {/* 1/3 Height Countdown Stage Timer */}
+            <div className="h-1/3 glass-panel p-4 rounded-3xl border border-slate-800 text-center flex flex-col items-center justify-center bg-slate-900/80 shadow-2xl">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center space-x-1 mb-1">
+                <Clock className="w-3.5 h-3.5 text-purple-400" />
+                <span>STAGE TIMER</span>
+              </span>
+              <div
+                className={`font-mono text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-none ${
+                  isOvertime || isCritical || isFinished
+                    ? "text-rose-400 animate-pulse"
+                    : isWarning
+                    ? "text-amber-400"
+                    : "text-white"
+                }`}
+              >
+                {formattedTime}
+              </div>
+              <span className={`text-[9px] font-mono uppercase font-bold px-2.5 py-0.5 rounded-full border border-slate-800 self-center mt-2 ${
+                isOvertime
+                  ? "bg-rose-950 text-rose-400 border-rose-800 animate-pulse"
+                  : "bg-slate-950 text-slate-400"
+              }`}>
+                {isOvertime ? "OVERTIME" : (state?.timer.status || "IDLE")}
+              </span>
+            </div>
+
+            {/* 2/3 Height Speaker Brief / Stage Cue Banner */}
+            <div className="h-2/3 glass-panel p-4 rounded-3xl border border-slate-800 flex flex-col bg-slate-900/80 overflow-hidden shadow-2xl">
+              <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5 border-b border-slate-800 pb-2 mb-2">
+                <MessageSquare className="w-3.5 h-3.5 text-purple-400" />
+                <span>STAGE CUE</span>
+              </span>
+
+              {state?.brief.activeMessage ? (
+                <div
+                  className={`p-4 rounded-2xl border flex-1 flex flex-col justify-center items-center text-center overflow-hidden ${
+                    state.brief.activeMessage.urgency === "urgent"
+                      ? "bg-rose-950/80 border-rose-700 text-rose-100"
+                      : state.brief.activeMessage.urgency === "warning"
+                      ? "bg-amber-950/80 border-amber-700 text-amber-100"
+                      : "bg-slate-900 border-slate-800 text-slate-100"
+                  }`}
+                >
+                  <span className="text-[10px] font-mono font-bold uppercase mb-2 opacity-80 flex items-center space-x-1">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>{state.brief.activeMessage.urgency} CUE</span>
+                  </span>
+                  <p className="text-sm sm:text-base md:text-lg font-black leading-snug break-words max-w-full">
+                    &ldquo;{state.brief.activeMessage.text}&rdquo;
+                  </p>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center p-3 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-slate-800/80">
+                  <MessageSquare className="w-8 h-8 text-slate-700 mb-2" />
+                  <span>No active stage cue.</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Standby Mode Layout when NOT Presenting: Equal Balanced Split (Timer Top 45%, Brief Bottom 55%) */
+        <div className="flex-1 flex flex-col justify-between w-full h-full p-2 overflow-hidden space-y-4">
+          {/* Top Half: Stage Countdown Timer */}
+          <div className="flex-1 glass-panel p-6 rounded-3xl border border-slate-800 flex flex-col justify-center items-center text-center shadow-2xl bg-slate-900/80 relative overflow-hidden">
+            <span className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2 mb-1">
               <Clock className="w-4 h-4 text-purple-400" />
-              <span>REMAINING STAGE TIME</span>
+              <span>STAGE COUNTDOWN TIMER</span>
             </span>
-            <div className={`font-mono text-6xl font-black tracking-tight ${
-              isCritical || isFinished
-                ? "text-rose-400 animate-pulse"
-                : isWarning
-                ? "text-amber-400"
-                : "text-white"
-            }`}>
+
+            <div
+              className={`font-mono text-7xl sm:text-8xl md:text-[9rem] lg:text-[10.5rem] font-black tracking-tight leading-none drop-shadow-2xl ${
+                isOvertime || isCritical || isFinished
+                  ? "text-rose-400 animate-pulse"
+                  : isWarning
+                  ? "text-amber-400"
+                  : "text-white"
+              }`}
+            >
               {formattedTime}
             </div>
-            <span className="text-[10px] font-mono uppercase font-bold text-slate-500 mt-2">
-              STATUS: {state?.timer.status || "IDLE"}
+
+            <span className={`text-[11px] font-mono uppercase font-bold px-3 py-1 rounded-full border shadow-md mt-1 ${
+              isOvertime
+                ? "bg-rose-950 text-rose-400 border-rose-800 animate-pulse"
+                : "bg-slate-950 text-slate-400 border-slate-800"
+            }`}>
+              STATUS: {isOvertime ? "OVERTIME" : (state?.timer.status || "IDLE")}
             </span>
           </div>
 
-          {/* Next Slide Preview */}
-          <div className="glass-panel p-4 rounded-3xl border border-slate-800">
-            <span className="text-[10px] font-mono uppercase font-bold text-slate-400 block mb-1">
-              NEXT SLIDE PREVIEW
-            </span>
-            <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800 text-xs font-semibold text-purple-300">
-              {state?.presentation.nextSlide?.title || (state?.presentation.currentPage ? `Slide ${state.presentation.currentPage + 1}` : "End of Deck")}
-            </div>
-          </div>
-
-          {/* Speaker Brief / Show Caller Banner */}
-          <div className="flex-1 glass-panel p-5 rounded-3xl border border-slate-800 flex flex-col">
-            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5 border-b border-slate-800 pb-2 mb-3">
-              <MessageSquare className="w-4 h-4 text-purple-400" />
-              <span>SHOW CALLER BRIEF</span>
-            </span>
-
+          {/* Bottom Half: Giant Prominent Stage Brief / Cue */}
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-slate-900/60 rounded-3xl border border-slate-800/80">
             {state?.brief.activeMessage ? (
-              <div className={`p-4 rounded-2xl border flex-1 flex flex-col justify-center ${
-                state.brief.activeMessage.urgency === "urgent"
-                  ? "bg-rose-950/80 border-rose-700 text-rose-100"
-                  : state.brief.activeMessage.urgency === "warning"
-                  ? "bg-amber-950/80 border-amber-700 text-amber-100"
-                  : "bg-slate-900 border-slate-800 text-slate-100"
-              }`}>
-                <span className="text-[10px] font-mono font-bold uppercase mb-1 opacity-75 flex items-center space-x-1">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  <span>{state.brief.activeMessage.urgency} CUE</span>
+              <div className="flex flex-col items-center justify-center text-center space-y-4 w-full h-full">
+                <span className={`text-xs font-mono font-black uppercase tracking-wider px-5 py-1.5 rounded-full flex items-center space-x-2 shadow-lg ${
+                  state.brief.activeMessage.urgency === "urgent"
+                    ? "bg-rose-600 text-white animate-pulse"
+                    : state.brief.activeMessage.urgency === "warning"
+                    ? "bg-amber-500 text-slate-950 font-extrabold"
+                    : "bg-purple-600 text-white"
+                }`}>
+                  <AlertCircle className="w-4 h-4" />
+                  <span>{state.brief.activeMessage.urgency.toUpperCase()} STAGE CUE</span>
                 </span>
-                <p className="text-base font-bold leading-snug">{state.brief.activeMessage.text}</p>
+
+                <p className={`${getBriefFontSize(state.brief.activeMessage.text.length)} font-black tracking-tight leading-snug max-w-6xl w-full text-center overflow-hidden transition-all ${
+                  state.brief.activeMessage.urgency === "urgent"
+                    ? "text-rose-300"
+                    : state.brief.activeMessage.urgency === "warning"
+                    ? "text-amber-300"
+                    : "text-white"
+                }`}>
+                  &ldquo;{state.brief.activeMessage.text}&rdquo;
+                </p>
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center p-4 text-center text-slate-500 text-xs bg-slate-900/40 rounded-2xl border border-slate-800/80">
-                No active speaker notes.
+              <div className="flex flex-col items-center justify-center text-center text-slate-500 space-y-2 my-auto">
+                <MessageSquare className="w-12 h-12 text-slate-700 mb-2" />
+                <p className="text-2xl font-black text-slate-400">Belum ada Stage Brief / Catatan panggung.</p>
+                <span className="text-xs text-slate-600 font-mono">Control Room Ready</span>
               </div>
             )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

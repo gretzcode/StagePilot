@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHostToken } from "@/lib/auth/jwt";
+import { verifyPassword, hashPassword } from "@/lib/auth/password";
+import { SESSION_COOKIE_NAME, SESSION_TTL_SECONDS } from "@/lib/auth/session";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -7,19 +9,35 @@ const loginSchema = z.object({
   password: z.string().min(6),
 });
 
+// Pre-computed PBKDF2 hash for host@stagepilot.live / password123
+let cachedDefaultHash: string | null = null;
+
+async function getDefaultHash(): Promise<string> {
+  if (!cachedDefaultHash) {
+    cachedDefaultHash = await hashPassword("password123");
+  }
+  return cachedDefaultHash;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { email, password } = loginSchema.parse(body);
 
-    // Phase 1 host authentication check
-    // In Phase 1, host login evaluates valid credentials
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+    const defaultHash = await getDefaultHash();
+    const isValidDefaultHost =
+      email.toLowerCase() === "host@stagepilot.live" &&
+      (await verifyPassword(password, defaultHash));
+
+    if (!isValidDefaultHost) {
+      return NextResponse.json(
+        { error: "Invalid email or password. Default host account: host@stagepilot.live / password123" },
+        { status: 401 }
+      );
     }
 
     const hostUserId = `host-${Buffer.from(email).toString("base64").replace(/=/g, "").slice(0, 10)}`;
-    const name = email.split("@")[0] || "Host User";
+    const name = email.split("@")[0] || "Stage Host";
     const token = await createHostToken(hostUserId, email, name);
 
     const response = NextResponse.json({
@@ -33,13 +51,15 @@ export async function POST(request: Request) {
       token,
     });
 
+    // Set canonical session cookie
     response.cookies.set({
-      name: "stagepilot_host_token",
+      name: SESSION_COOKIE_NAME,
       value: token,
       httpOnly: true,
       path: "/",
       sameSite: "strict",
-      maxAge: 86400,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: SESSION_TTL_SECONDS,
     });
 
     return response;
@@ -48,3 +68,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+

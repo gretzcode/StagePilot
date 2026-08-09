@@ -1,42 +1,29 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { StageSessionState } from "@/core/types";
 import { SlideViewer } from "@/features/material/components/SlideViewer";
-import { Maximize2 } from "lucide-react";
+import { Tv } from "lucide-react";
+import { useStageRoomSession } from "@/core/realtime/useStageRoomSession";
+import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
+import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
+import { getPersistentDeviceId } from "@/core/utils/device-id";
+import { useAutoHideCursor } from "@/core/hooks/useAutoHideCursor";
 
 function AudienceDisplayContent() {
   const searchParams = useSearchParams();
-  const roomCode = searchParams.get("roomCode") || "A7K9P2";
-  const deviceId = searchParams.get("deviceId") || `dev-aud-${Date.now().toString(36)}`;
-
-  const [state, setState] = useState<StageSessionState | null>(null);
+  const rawRoomCode = searchParams.get("roomCode");
+  const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
+  const [deviceId] = useState(() => getPersistentDeviceId("audience", roomCode, searchParams.get("deviceId")));
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const showControls = useAutoHideCursor(2500);
 
-  useEffect(() => {
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socketUrl = `${wsProtocol}//${window.location.host}/api/ws?roomCode=${encodeURIComponent(
-      roomCode
-    )}&deviceId=${encodeURIComponent(deviceId)}&role=audience`;
-
-    const socket = new WebSocket(socketUrl);
-
-    socket.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === "SYNC_STATE") {
-          setState(msg.state);
-        }
-      } catch (err) {
-        console.error("Failed to parse Audience WebSocket message:", err);
-      }
-    };
-
-    return () => {
-      socket.close();
-    };
-  }, [roomCode, deviceId]);
+  const { state, roomError, approvalStatus, roomName } = useStageRoomSession({
+    roomCode,
+    role: "audience",
+    deviceId,
+    deviceName: "Audience Display",
+  });
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -48,28 +35,68 @@ function AudienceDisplayContent() {
     }
   };
 
-  const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "f" || e.key === "F11") {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
-  return (
-    <div className="w-screen h-screen bg-black overflow-hidden relative select-none cursor-none">
-      {/* Primary Clean Audience Stage Output */}
-      <SlideViewer
-        material={activeMaterial}
-        slide={state?.presentation.currentSlide || null}
-        currentPage={state?.presentation.currentPage || 1}
-        blanked={state?.presentation.blanked}
+  // 1. Error state (ROOM_NOT_FOUND, ROOM_ACCESS_DENIED, etc.)
+  if (roomError) {
+    return <FriendlyErrorState errorType={roomError} roomCode={roomCode} />;
+  }
+
+  // 2. Pending Host Approval State (P0-1)
+  if (approvalStatus === "pending") {
+    return (
+      <PendingApprovalState
+        deviceName="Audience Display"
+        roomCode={roomCode}
         role="audience"
       />
+    );
+  }
 
-      {/* Subtle Fullscreen Trigger (Fades out when in fullscreen) */}
-      {!isFullscreen && (
-        <button
-          onClick={toggleFullscreen}
-          className="absolute bottom-4 right-4 p-3 rounded-full bg-slate-900/40 hover:bg-slate-900/80 border border-slate-700/40 text-white/50 hover:text-white transition opacity-40 hover:opacity-100 cursor-pointer"
-          title="Toggle Fullscreen Output"
-        >
-          <Maximize2 className="w-4 h-4" />
-        </button>
+  // 3. Rejected or Revoked Device State
+  if (approvalStatus === "rejected" || approvalStatus === "revoked") {
+    return <FriendlyErrorState errorType={approvalStatus === "revoked" ? "DEVICE_REVOKED" : "DEVICE_REJECTED"} roomCode={roomCode} />;
+  }
+
+  // 4. Approved State Output
+  const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
+  const isPresenting = Boolean(state?.presentation.isPresenting && activeMaterial);
+
+  return (
+    <div
+      onDoubleClick={toggleFullscreen}
+      className="w-screen h-screen bg-black overflow-hidden relative select-none cursor-none flex flex-col justify-center items-center"
+    >
+      {isPresenting ? (
+        <SlideViewer
+          material={activeMaterial}
+          slide={state?.presentation.currentSlide || null}
+          currentPage={state?.presentation.currentPage || 1}
+          blanked={state?.presentation.blanked}
+          role="audience"
+        />
+      ) : (
+        /* Waiting for presentation UI */
+        <div className="text-center space-y-4 p-8">
+          <div className="w-16 h-16 rounded-3xl bg-indigo-950/80 border border-indigo-800/60 flex items-center justify-center text-indigo-400 mx-auto shadow-2xl">
+            <Tv className="w-8 h-8" />
+          </div>
+          <h1 className="text-3xl font-bold text-white tracking-tight">Menunggu presentasi dimulai</h1>
+          {roomName && <p className="text-purple-300 font-semibold text-lg">{roomName}</p>}
+          <div className="inline-flex items-center space-x-2 bg-slate-900 border border-slate-800 px-4 py-2 rounded-full text-xs font-mono">
+            <span className="text-slate-400">ROOM CODE:</span>
+            <span className="text-purple-400 font-bold tracking-widest">{roomCode}</span>
+          </div>
+        </div>
       )}
     </div>
   );

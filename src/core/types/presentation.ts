@@ -1,6 +1,8 @@
-export type MaterialType = "pdf" | "pptx" | "url" | "image";
+export type MaterialSourceType = "UPLOADED_FILE" | "EXTERNAL_URL" | "CANVA_LINK";
 
-export type MaterialStatus = "uploading" | "processing" | "ready" | "error";
+export type MaterialType = "pdf" | "pptx" | "image" | "url" | "canva";
+
+export type MaterialStatus = "ready" | "expired" | "deleted" | "uploading" | "error";
 
 export interface SlideMetadata {
   index: number;
@@ -24,10 +26,17 @@ export interface Material {
   id: string;
   name: string;
   type: MaterialType;
+  sourceType?: MaterialSourceType;
   url: string;
+  objectKey?: string | null;
+  externalUrl?: string | null;
+  sizeBytes?: number;
   totalPages: number;
   slides: SlideMetadata[];
   uploadedAt: number;
+  expiresAt?: number;
+  ownerUserId?: string;
+  roomCode?: string;
   status: MaterialStatus;
   errorMessage?: string;
   metadata?: MaterialMetadata;

@@ -82,10 +82,35 @@ export function stageSessionReducer(
       break;
     }
 
+    case "MATERIAL_ADD": {
+      const { material } = command.payload;
+      const existingIdx = nextState.materials.findIndex((m) => m.id === material.id);
+      if (existingIdx >= 0) {
+        nextState.materials[existingIdx] = material;
+      } else {
+        nextState.materials.push(material);
+      }
+      break;
+    }
+
+    case "MATERIAL_REMOVE": {
+      const { materialId } = command.payload;
+      nextState.materials = nextState.materials.filter((m) => m.id !== materialId);
+      if (nextState.presentation.materialId === materialId) {
+        nextState.presentation.isPresenting = false;
+        nextState.presentation.materialId = null;
+        nextState.presentation.currentSlide = null;
+        nextState.presentation.nextSlide = null;
+        nextState.presentation.currentPage = 1;
+        nextState.presentation.totalPages = 0;
+      }
+      break;
+    }
+
     case "PRESENTATION_START": {
       const { materialId, startPage = 1 } = command.payload;
       const material = nextState.materials.find((m) => m.id === materialId);
-      const totalPages = material ? material.totalPages : 1;
+      const totalPages = material?.totalPages || material?.slides.length || 1;
 
       nextState.presentation = {
         isPresenting: true,
@@ -104,48 +129,86 @@ export function stageSessionReducer(
 
     case "PRESENTATION_EXIT": {
       nextState.presentation.isPresenting = false;
+      nextState.presentation.materialId = null;
+      nextState.presentation.currentSlide = null;
+      nextState.presentation.nextSlide = null;
+      nextState.presentation.currentPage = 1;
+      nextState.presentation.totalPages = 0;
+      nextState.presentation.blanked = false;
       nextState.presentation.updatedAt = now;
       break;
     }
 
     case "SLIDE_NEXT": {
       if (!nextState.presentation.isPresenting) break;
-      const currentPage = Math.min(
-        nextState.presentation.currentPage + 1,
-        nextState.presentation.totalPages || 1
-      );
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
+      const isWebMaterial = material?.type === "url" || material?.type === "canva";
+      const knownMax = isWebMaterial ? 100 : (material?.totalPages || 1);
 
+      const requestedPage = nextState.presentation.currentPage + 1;
+      const currentPage = Math.min(requestedPage, knownMax);
+
+      if (material && isWebMaterial && currentPage > material.slides.length) {
+        material.totalPages = Math.max(material.totalPages || 1, currentPage);
+        while (material.slides.length < currentPage) {
+          const idx = material.slides.length + 1;
+          material.slides.push({
+            index: idx,
+            title: `Slide ${idx}`,
+            url: material.url,
+            contentUrl: material.url,
+          });
+        }
+      }
+
+      const totalPages = Math.max(nextState.presentation.totalPages || 1, material?.totalPages || currentPage);
       nextState.presentation.currentPage = currentPage;
+      nextState.presentation.totalPages = totalPages;
       nextState.presentation.currentSlide = material?.slides[currentPage - 1] || { index: currentPage, title: `Slide ${currentPage}` };
-      nextState.presentation.nextSlide = material?.slides[currentPage] || (currentPage < (nextState.presentation.totalPages || 1) ? { index: currentPage + 1, title: `Slide ${currentPage + 1}` } : null);
+      nextState.presentation.nextSlide = material?.slides[currentPage] || (currentPage < totalPages ? { index: currentPage + 1, title: `Slide ${currentPage + 1}` } : null);
       nextState.presentation.updatedAt = now;
       break;
     }
 
     case "SLIDE_PREVIOUS": {
       if (!nextState.presentation.isPresenting) break;
-      const currentPage = Math.max(nextState.presentation.currentPage - 1, 1);
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
+      const currentPage = Math.max(nextState.presentation.currentPage - 1, 1);
+      const totalPages = Math.max(nextState.presentation.totalPages || 1, material?.totalPages || 1);
 
       nextState.presentation.currentPage = currentPage;
+      nextState.presentation.totalPages = totalPages;
       nextState.presentation.currentSlide = material?.slides[currentPage - 1] || { index: currentPage, title: `Slide ${currentPage}` };
-      nextState.presentation.nextSlide = material?.slides[currentPage] || (currentPage < (nextState.presentation.totalPages || 1) ? { index: currentPage + 1, title: `Slide ${currentPage + 1}` } : null);
+      nextState.presentation.nextSlide = material?.slides[currentPage] || (currentPage < totalPages ? { index: currentPage + 1, title: `Slide ${currentPage + 1}` } : null);
       nextState.presentation.updatedAt = now;
       break;
     }
 
     case "SLIDE_GOTO": {
       if (!nextState.presentation.isPresenting) break;
-      const targetPage = Math.max(
-        1,
-        Math.min(command.payload.pageNumber, nextState.presentation.totalPages || 1)
-      );
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
+      const isWebMaterial = material?.type === "url" || material?.type === "canva";
+      const knownMax = isWebMaterial ? 100 : (material?.totalPages || 1);
+      const targetPage = Math.max(1, Math.min(command.payload.pageNumber, knownMax));
 
+      if (material && isWebMaterial && targetPage > material.slides.length) {
+        material.totalPages = Math.max(material.totalPages || 1, targetPage);
+        while (material.slides.length < targetPage) {
+          const idx = material.slides.length + 1;
+          material.slides.push({
+            index: idx,
+            title: `Slide ${idx}`,
+            url: material.url,
+            contentUrl: material.url,
+          });
+        }
+      }
+
+      const totalPages = Math.max(nextState.presentation.totalPages || 1, material?.totalPages || targetPage);
       nextState.presentation.currentPage = targetPage;
+      nextState.presentation.totalPages = totalPages;
       nextState.presentation.currentSlide = material?.slides[targetPage - 1] || { index: targetPage, title: `Slide ${targetPage}` };
-      nextState.presentation.nextSlide = material?.slides[targetPage] || (targetPage < (nextState.presentation.totalPages || 1) ? { index: targetPage + 1, title: `Slide ${targetPage + 1}` } : null);
+      nextState.presentation.nextSlide = material?.slides[targetPage] || (targetPage < totalPages ? { index: targetPage + 1, title: `Slide ${targetPage + 1}` } : null);
       nextState.presentation.updatedAt = now;
       break;
     }
@@ -183,7 +246,7 @@ export function stageSessionReducer(
     case "TIMER_PAUSE": {
       if (nextState.timer.status === "running" && nextState.timer.startedAt) {
         const elapsedSeconds = Math.floor((now - nextState.timer.startedAt) / 1000);
-        nextState.timer.remaining = Math.max(0, nextState.timer.duration - elapsedSeconds);
+        nextState.timer.remaining = nextState.timer.duration - elapsedSeconds;
       }
       nextState.timer.status = "paused";
       nextState.timer.pausedAt = now;

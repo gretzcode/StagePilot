@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { TimerState } from "@/core/types";
 import { Play, Pause, RotateCcw, Clock } from "lucide-react";
+import { useTimerTicker } from "../hooks/useTimerTicker";
+import { formatStageTimer } from "../utils/timer-formatter";
 
 interface TimerControlProps {
   timer: TimerState;
@@ -14,23 +16,15 @@ interface TimerControlProps {
 
 export function TimerControl({ timer, onStart, onPause, onReset, onSetDuration }: TimerControlProps) {
   const [customMinutes, setCustomMinutes] = useState(10);
+  const now = useTimerTicker(timer.status === "running");
 
-  // Compute display remaining time from timestamp
-  const now = Date.now();
-  let remaining = timer.remaining;
-
-  if (timer.status === "running" && timer.startedAt) {
-    const elapsedSeconds = Math.floor((now - timer.startedAt) / 1000);
-    remaining = Math.max(0, timer.duration - elapsedSeconds);
-  }
-
-  const mins = Math.floor(remaining / 60);
-  const secs = remaining % 60;
-  const formattedTime = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-
-  const isWarning = remaining > 0 && remaining <= 120;
-  const isCritical = remaining > 0 && remaining <= 30;
-  const isFinished = remaining === 0 && timer.status === "running";
+  const { formattedTime, isOvertime, isWarning, isCritical, isFinished } = formatStageTimer(
+    timer.status,
+    timer.duration,
+    timer.remaining,
+    timer.startedAt,
+    now
+  );
 
   return (
     <div className="glass-panel p-5 rounded-3xl border border-slate-800">
@@ -40,19 +34,21 @@ export function TimerControl({ timer, onStart, onPause, onReset, onSetDuration }
           <span>Stage Timer</span>
         </h4>
         <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
-          timer.status === "running"
+          isOvertime
+            ? "bg-rose-950 text-rose-400 border border-rose-800 animate-pulse"
+            : timer.status === "running"
             ? "bg-emerald-950 text-emerald-400 border border-emerald-800"
             : timer.status === "paused"
             ? "bg-amber-950 text-amber-400 border border-amber-800"
             : "bg-slate-800 text-slate-400"
         }`}>
-          {timer.status}
+          {isOvertime ? "OVERTIME" : timer.status}
         </span>
       </div>
 
       <div className="text-center py-2">
         <div className={`font-mono text-4xl font-extrabold tracking-tight ${
-          isCritical || isFinished
+          isOvertime || isCritical || isFinished
             ? "text-rose-400 animate-pulse"
             : isWarning
             ? "text-amber-400"

@@ -54,13 +54,19 @@ export function BriefControl({ brief, onSendBrief }: BriefControlProps) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-2">
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Send quick cue to speaker... (e.g. Wrap up in 2 mins, Q&A next)"
-          rows={2}
-          className="w-full p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
-        />
+        <div className="relative">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={280}
+            placeholder="Send quick cue to speaker... (e.g. Wrap up in 2 mins, Q&A next)"
+            rows={2}
+            className="w-full p-2.5 pr-12 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+          />
+          <span className="absolute bottom-2 right-2 text-[9px] font-mono text-slate-500">
+            {text.length}/280
+          </span>
+        </div>
 
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-1 bg-slate-900 p-1 rounded-xl border border-slate-800">

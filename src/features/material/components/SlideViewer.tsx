@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import { Material, SlideMetadata } from "@/core/types";
 
 interface SlideViewerProps {
@@ -11,6 +12,75 @@ interface SlideViewerProps {
 }
 
 export function SlideViewer({ material, slide, currentPage, blanked, role }: SlideViewerProps) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const rawUrl = material?.externalUrl || material?.url || "";
+  const isGoogleSlides = rawUrl.includes("docs.google.com/presentation");
+  const isGoogleDrive = rawUrl.includes("drive.google.com");
+
+  const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
+  const googlePresentationId = match ? match[1] : null;
+
+  // Target Google Slides PNG export URL
+  const targetGoogleSlideImg = googlePresentationId
+    ? `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${currentPage}`
+    : null;
+
+  // Currently displayed image URL on screen (Guards against black flash during long jumps e.g. slide 2 -> 20)
+  const [displayedImgUrl, setDisplayedImgUrl] = useState<string | null>(targetGoogleSlideImg);
+
+  // 1. Full Deck Background Pre-loader Worker: Pre-caches ALL slides (1 to N) into browser HTTP/RAM cache
+  useEffect(() => {
+    if (googlePresentationId && material?.totalPages && material.totalPages > 0) {
+      // Pre-load all slides sequentially in background
+      const maxToLoad = Math.min(material.totalPages, 100);
+      for (let page = 1; page <= maxToLoad; page++) {
+        const img = new Image();
+        img.src = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${page}`;
+      }
+    }
+  }, [googlePresentationId, material?.totalPages]);
+
+  // 2. Double-Buffered Image onLoad Guard: Swaps displayed image ONLY after new slide image finishes loading
+  useEffect(() => {
+    if (!targetGoogleSlideImg) return;
+
+    // Check if target image is already in memory cache
+    const imgPreload = new Image();
+    imgPreload.src = targetGoogleSlideImg;
+
+    if (imgPreload.complete) {
+      setDisplayedImgUrl(targetGoogleSlideImg);
+    } else {
+      imgPreload.onload = () => {
+        setDisplayedImgUrl(targetGoogleSlideImg);
+      };
+    }
+  }, [targetGoogleSlideImg]);
+
+  // Single persistent base iframe URL for Control Room
+  const persistentIframeSrc = isGoogleSlides && googlePresentationId
+    ? `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${currentPage}`
+    : rawUrl;
+
+  // In-place postMessage / location update for Google Slides iframe in Control Room
+  useEffect(() => {
+    if (isGoogleSlides && iframeRef.current?.contentWindow) {
+      try {
+        const targetHash = `#slide=id.p${currentPage}`;
+        iframeRef.current.contentWindow.location.replace(
+          `${iframeRef.current.src.split("#")[0]}${targetHash}`
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ gslides: "slide", page: currentPage, slide: currentPage }),
+          "*"
+        );
+      } catch {
+        // Cross-origin fallback
+      }
+    }
+  }, [currentPage, isGoogleSlides]);
+
   if (blanked) {
     return (
       <div className="w-full h-full bg-black flex items-center justify-center select-none">
@@ -33,15 +103,33 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
     );
   }
 
-  if (material.type === "url") {
+  if (material.type === "url" || material.type === "canva") {
+    // Audience & Confidence Displays: Render Pre-cached Full Deck HD Image Feed with onLoad Guard
+    if (isGoogleSlides && (displayedImgUrl || targetGoogleSlideImg) && role !== "control") {
+      return (
+        <div className="w-full h-full bg-slate-950 flex items-center justify-center p-0 overflow-hidden relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={displayedImgUrl || targetGoogleSlideImg || ""}
+            alt={`${material.name} - Slide ${currentPage}`}
+            className="w-full h-full object-contain z-10 transition-opacity duration-150"
+          />
+        </div>
+      );
+    }
+
     return (
-      <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col">
-        <iframe
-          src={material.url}
-          title={material.name}
-          className="w-full h-full border-0"
-          sandbox="allow-scripts allow-same-origin allow-popups"
-        />
+      <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
+        {/* Container clipping mask crops Google Slides bottom control bar */}
+        <div className="w-full h-full relative" style={isGoogleSlides ? { clipPath: "inset(0 0 32px 0)" } : undefined}>
+          <iframe
+            ref={iframeRef}
+            src={persistentIframeSrc}
+            title={material.name}
+            className="w-full h-full border-0 bg-slate-950 z-10"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+          />
+        </div>
       </div>
     );
   }
@@ -53,7 +141,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
         <img
           src={slide?.contentUrl || material.url}
           alt={material.name}
-          className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+          className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-150"
         />
       </div>
     );

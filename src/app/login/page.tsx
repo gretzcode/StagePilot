@@ -3,21 +3,38 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Lock, Mail, Shield, ArrowRight } from "lucide-react";
+import { Lock, Mail, Shield, ArrowRight, AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("host@stagepilot.live");
-  const [password, setPassword] = useState("••••••••••••");
+  const [password, setPassword] = useState("password123");
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok) {
+        throw new Error(data.error || "Authentication failed");
+      }
+
       router.push("/dashboard");
-    }, 400);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -32,6 +49,13 @@ export default function LoginPage() {
             Account login for Stage Room Owners & Show Callers
           </p>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-950/80 border border-rose-800/60 text-rose-300 text-xs flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
@@ -69,7 +93,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-sm transition flex items-center justify-center space-x-2 glow-purple mt-6"
+            className="w-full py-3 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold text-sm transition flex items-center justify-center space-x-2 glow-purple mt-6"
           >
             <span>{loading ? "Authenticating..." : "Sign In to Dashboard"}</span>
             <ArrowRight className="w-4 h-4" />
@@ -89,3 +113,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

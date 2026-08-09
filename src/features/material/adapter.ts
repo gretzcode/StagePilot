@@ -4,6 +4,7 @@ import { PdfMaterialProvider } from "./providers/pdf";
 import { PptxMaterialProvider } from "./providers/pptx";
 import { UrlMaterialProvider } from "./providers/url";
 import { ImageMaterialProvider } from "./providers/image";
+import { CanvaMaterialProvider } from "./providers/canva";
 
 export class PresentationAdapterImpl implements PresentationAdapter {
   private providers: Map<MaterialType, MaterialProvider> = new Map();
@@ -15,6 +16,7 @@ export class PresentationAdapterImpl implements PresentationAdapter {
     this.registerProvider(new PptxMaterialProvider());
     this.registerProvider(new UrlMaterialProvider());
     this.registerProvider(new ImageMaterialProvider());
+    this.registerProvider(new CanvaMaterialProvider());
   }
 
   registerProvider(provider: MaterialProvider): void {
@@ -44,10 +46,11 @@ export class PresentationAdapterImpl implements PresentationAdapter {
   async loadMaterial(
     source: string | File | Blob,
     name: string,
-    type: MaterialType
+    type: MaterialType,
+    slideCount?: number
   ): Promise<Material> {
     const provider = this.getProvider(type);
-    return provider.parse(source, name);
+    return provider.parse(source, name, slideCount);
   }
 }
 
