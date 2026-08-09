@@ -138,14 +138,14 @@ export default function JoinPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4">
-      <div className="w-full max-w-md glass-panel p-8 rounded-3xl border border-slate-800 shadow-2xl relative z-10">
+    <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-3 sm:p-6 md:p-8">
+      <div className="w-full max-w-md sm:max-w-lg glass-panel p-6 sm:p-8 md:p-10 rounded-3xl border border-slate-800 shadow-2xl relative z-10">
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-12 h-12 rounded-2xl bg-purple-600 flex items-center justify-center text-white font-bold text-2xl mb-3 shadow-lg glow-purple">
             SP
           </div>
-          <h1 className="text-2xl font-bold">Join Stage Room</h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Join Stage Room</h1>
+          <p className="text-slate-400 text-xs sm:text-sm mt-1">
             Guest Pairing &amp; Role Authorization
           </p>
         </div>
@@ -169,7 +169,8 @@ export default function JoinPage() {
               onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
               placeholder="e.g. A7K9P2"
               required
-              className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-center font-mono text-2xl font-bold tracking-widest text-purple-400 focus:outline-none focus:border-purple-500 transition"
+              autoFocus
+              className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-center font-mono text-2xl sm:text-3xl font-bold tracking-widest text-purple-400 focus:outline-none focus:border-purple-500 transition"
             />
           </div>
 
@@ -183,7 +184,7 @@ export default function JoinPage() {
               onChange={(e) => setDeviceName(e.target.value)}
               placeholder="e.g. Backstage iPad / Stage Left"
               required
-              className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-purple-500 transition"
+              className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-purple-500 transition"
             />
           </div>
 
@@ -191,51 +192,66 @@ export default function JoinPage() {
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
               Requested Device Role
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={() => setRole("control")}
-                className={`p-3 rounded-xl border flex flex-col items-center justify-center transition ${
+                className={`p-3.5 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
                   role === "control"
-                    ? "bg-purple-600/20 border-purple-500 text-purple-300"
-                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                    ? "bg-purple-600/20 border-purple-500 text-purple-300 ring-2 ring-purple-500/30"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                 }`}
               >
-                <Radio className="w-5 h-5 mb-1" />
-                <span className="text-xs font-semibold">Control</span>
+                <div className="p-2 rounded-xl bg-purple-950/80 text-purple-400 sm:mb-1.5 flex-shrink-0">
+                  <Radio className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold block">Control Room</span>
+                  <span className="text-[10px] text-slate-400 block sm:hidden">Operator HP / Tablet</span>
+                </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setRole("audience")}
-                className={`p-3 rounded-xl border flex flex-col items-center justify-center transition ${
+                className={`p-3.5 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
                   role === "audience"
-                    ? "bg-indigo-600/20 border-indigo-500 text-indigo-300"
-                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                    ? "bg-indigo-600/20 border-indigo-500 text-indigo-300 ring-2 ring-indigo-500/30"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                 }`}
               >
-                <Tv className="w-5 h-5 mb-1" />
-                <span className="text-xs font-semibold">Audience</span>
+                <div className="p-2 rounded-xl bg-indigo-950/80 text-indigo-400 sm:mb-1.5 flex-shrink-0">
+                  <Tv className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold block">Audience</span>
+                  <span className="text-[10px] text-slate-400 block sm:hidden">Layar Proyektor / LED</span>
+                </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setRole("confidence")}
-                className={`p-3 rounded-xl border flex flex-col items-center justify-center transition ${
+                className={`p-3.5 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
                   role === "confidence"
-                    ? "bg-blue-600/20 border-blue-500 text-blue-300"
-                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white"
+                    ? "bg-blue-600/20 border-blue-500 text-blue-300 ring-2 ring-blue-500/30"
+                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                 }`}
               >
-                <Monitor className="w-5 h-5 mb-1" />
-                <span className="text-xs font-semibold">Confidence</span>
+                <div className="p-2 rounded-xl bg-blue-950/80 text-blue-400 sm:mb-1.5 flex-shrink-0">
+                  <Monitor className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold block">Confidence</span>
+                  <span className="text-[10px] text-slate-400 block sm:hidden">Monitor Panggung</span>
+                </div>
               </button>
             </div>
           </div>
 
           <button
             type="submit"
-            className="w-full py-3 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-sm transition flex items-center justify-center space-x-2 glow-purple mt-6"
+            className="w-full py-3.5 px-4 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition flex items-center justify-center space-x-2 glow-purple mt-6 cursor-pointer shadow-lg"
           >
             <span>Submit Join Request</span>
             <ArrowRight className="w-4 h-4" />

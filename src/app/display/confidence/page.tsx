@@ -99,9 +99,9 @@ function ConfidenceDisplayContent() {
     >
       {/* Main HUD Body */}
       {isPresenting ? (
-        <div className="flex-1 grid grid-cols-12 gap-4 overflow-hidden">
-          {/* Current Slide Display Canvas (Expanded to 75% screen area) */}
-          <div className="col-span-9 bg-black rounded-3xl border border-slate-800/80 overflow-hidden relative shadow-2xl flex items-center justify-center">
+        <div className="flex-1 flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 overflow-y-auto md:overflow-hidden">
+          {/* Current Slide Display Canvas (Expanded to 75% screen area on landscape) */}
+          <div className="col-span-1 md:col-span-8 lg:col-span-9 bg-black rounded-3xl border border-slate-800/80 overflow-hidden relative shadow-2xl flex items-center justify-center min-h-[260px] md:min-h-0">
             <SlideViewer
               material={activeMaterial}
               slide={state?.presentation.currentSlide || null}
@@ -112,7 +112,7 @@ function ConfidenceDisplayContent() {
           </div>
 
           {/* Right Info Column: Timer (1/3 height) & Speaker Brief (2/3 height) */}
-          <div className="col-span-3 flex flex-col space-y-3 h-full overflow-hidden">
+          <div className="col-span-1 md:col-span-4 lg:col-span-3 flex flex-col space-y-3 h-full min-h-[300px] md:min-h-0 overflow-hidden">
             {/* 1/3 Height Countdown Stage Timer */}
             <div className="h-1/3 glass-panel p-4 rounded-3xl border border-slate-800 text-center flex flex-col items-center justify-center bg-slate-900/80 shadow-2xl">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center justify-center space-x-1 mb-1">

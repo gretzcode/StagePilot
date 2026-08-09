@@ -90,37 +90,24 @@ function ControlRoomContent() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col select-none">
-      {/* Top Header Bar */}
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur px-6 py-3 flex items-center justify-between z-20">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 rounded-xl bg-purple-600 flex items-center justify-center font-black text-white glow-purple">
-              SP
-            </div>
-            <span className="font-extrabold text-base tracking-tight text-white">StagePilot</span>
+      {/* Top Header Bar — Ultra-Clean Single Row */}
+      <header className="h-14 px-3 sm:px-6 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between z-20">
+        <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-purple-600 flex items-center justify-center font-black text-white glow-purple text-xs flex-shrink-0">
+            SP
           </div>
 
-          <div className="h-4 w-[1px] bg-slate-800" />
-
-          <div className="flex items-center space-x-3">
-            <span className="font-bold text-sm text-slate-200">Brief &amp; Stage Control</span>
-            {roomName && <span className="text-xs text-purple-300 font-semibold">({roomName})</span>}
+          <div className="flex items-center space-x-1.5 sm:space-x-3 min-w-0">
             <CopyRoomCodeButton roomCode={roomCode} />
+            {roomName && <span className="text-[11px] text-purple-300 font-semibold truncate hidden md:inline">({roomName})</span>}
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <Link
-            href={`/control/presentation?roomCode=${roomCode}${isHost ? "&role=host" : "&role=control"}`}
-            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition flex items-center space-x-2 glow-purple"
-          >
-            <Play className="w-3.5 h-3.5 fill-white" />
-            <span>Open Presentation View</span>
-          </Link>
+        <div className="flex items-center space-x-1.5 sm:space-x-3 flex-shrink-0">
           {isHost && (
             <Link
               href="/dashboard"
-              className="px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 transition"
+              className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 transition"
             >
               Dashboard
             </Link>
@@ -128,11 +115,11 @@ function ControlRoomContent() {
         </div>
       </header>
 
-      {/* Main Workspace Body - Full-Width Edge-to-Edge Layout */}
-      <div className="flex-1 w-full px-6 py-6 grid grid-cols-12 gap-6 overflow-hidden">
+      {/* Main Workspace Body - Responsive Edge-to-Edge Layout */}
+      <div className="flex-1 w-full px-3 sm:px-6 py-4 sm:py-6 flex flex-col lg:grid lg:grid-cols-12 gap-4 sm:gap-6 overflow-y-auto lg:overflow-hidden">
         {/* Left Column: Device Authorization (Host Only - Compact Sidebar) */}
         {isHost && (
-          <aside className="col-span-12 md:col-span-4 lg:col-span-3 space-y-4 border-r-0 md:border-r border-slate-800/80 pr-0 md:pr-6 overflow-y-auto max-h-[calc(100vh-6rem)]">
+          <aside className="col-span-12 lg:col-span-3 space-y-4 border-b lg:border-b-0 lg:border-r border-slate-800/80 pb-4 lg:pb-0 pr-0 lg:pr-6 overflow-y-auto max-h-[300px] lg:max-h-[calc(100vh-6rem)]">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5">
                 <Users className="w-4 h-4 text-purple-400" />
@@ -233,7 +220,7 @@ function ControlRoomContent() {
         )}
 
         {/* Right Area: Brief & Stage Control Center (Full-Width for Non-Host, Grid for Host) */}
-        <main className={`${isHost ? "col-span-12 md:col-span-8 lg:col-span-9" : "col-span-12"} space-y-6 overflow-y-auto max-h-[calc(100vh-6rem)] pr-1`}>
+        <main className={`${isHost ? "col-span-12 lg:col-span-9" : "col-span-12"} space-y-6 overflow-y-auto max-h-[calc(100vh-6rem)] pr-1`}>
           {/* Header Action Banner */}
           <div className="glass-panel p-6 rounded-3xl border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden">
             <div className="space-y-1 relative z-10">
@@ -245,18 +232,8 @@ function ControlRoomContent() {
               </div>
               <h1 className="text-xl font-bold text-white">Stage Master Control</h1>
               <p className="text-xs text-slate-400 max-w-2xl">
-                Manage MC/Speaker stage timer, broadcast show caller cues to confidence HUD, and launch live presentation deck when ready.
+                Manage MC/Speaker stage timer, broadcast show caller cues to confidence HUD, and control live presentation materials queue below.
               </p>
-            </div>
-
-            <div className="flex items-center space-x-3 relative z-10">
-              <Link
-                href={`/control/presentation?roomCode=${roomCode}${isHost ? "&role=host" : "&role=control"}`}
-                className="px-5 py-3 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center space-x-2 glow-purple shadow-xl"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Launch Presentation Deck View</span>
-              </Link>
             </div>
           </div>
 
