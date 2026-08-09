@@ -58,7 +58,7 @@ export default function DashboardPage() {
   }, [router]);
 
   const handleOpenCreateModal = () => {
-    setNewRoomTitle(`Stage Room #${rooms.length + 1}`);
+    setNewRoomTitle("");
     setIsModalOpen(true);
   };
 
