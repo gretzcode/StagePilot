@@ -150,7 +150,8 @@ export class StageRoom extends DurableObject {
     await this.persistState();
 
     const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
+    const client = pair[0];
+    const server = pair[1];
 
     // Use WebSocket Hibernation API: accept and tag connection with deviceId and role
     this.ctx.acceptWebSocket(server, [deviceId, requestedRole]);

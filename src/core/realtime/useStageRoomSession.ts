@@ -92,7 +92,9 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
       normalizedRoomCode
     )}&deviceId=${encodeURIComponent(deviceId)}&role=${role}&deviceName=${encodeURIComponent(deviceName || "Device")}`;
 
+    let reconnectTimer: NodeJS.Timeout | null = null;
     let socket: WebSocket | null = null;
+
     try {
       socket = new WebSocket(socketUrl);
       socketRef.current = socket;
@@ -121,23 +123,23 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
       };
 
       socket.onclose = () => {
-        if (isMounted) setIsConnected(false);
+        if (isMounted) {
+          setIsConnected(false);
+          // Auto-fetch & reconnect only if connection dropped
+          reconnectTimer = setTimeout(() => {
+            if (isMounted && !roomErrorRef.current) {
+              fetchState();
+            }
+          }, 5000);
+        }
       };
     } catch {
-      // Fallback to polling if WebSocket fails
+      // Fallback
     }
-
-    // 4. HTTP Polling Fallback Timer (Runs ONLY when WebSocket is disconnected)
-    const pollInterval = setInterval(() => {
-      const isWsActive = socketRef.current && socketRef.current.readyState === WebSocket.OPEN;
-      if (isMounted && !roomErrorRef.current && !isWsActive) {
-        fetchState();
-      }
-    }, 3000);
 
     return () => {
       isMounted = false;
-      clearInterval(pollInterval);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (socket) {
         socket.onclose = null;
         socket.onmessage = null;
