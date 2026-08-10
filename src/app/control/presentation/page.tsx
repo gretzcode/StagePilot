@@ -225,12 +225,7 @@ function PresentationControlContent() {
     }
   }, [state?.presentation.isPresenting, state?.presentation.materialId]);
 
-  // Auto-redirect to main control page when presentation is stopped/exited
-  useEffect(() => {
-    if (state && !state.presentation.isPresenting) {
-      router.push(`/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`);
-    }
-  }, [state?.presentation.isPresenting, roomCode, requestedRole, router]);
+
 
   const handleAddMaterial = (newMaterial: Material) => {
     setShowUploader(false);
