@@ -324,7 +324,10 @@ function PresentationControlContent() {
 
           {/* Exit Presentation Button */}
           <button
-            onClick={() => router.push(`/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`)}
+            onClick={() => {
+              dispatchCommand("PRESENTATION_EXIT");
+              window.location.href = `/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`;
+            }}
             className="p-2 rounded-xl bg-slate-800/90 border border-slate-700 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
             title="Exit Presentation"
           >
@@ -558,6 +561,7 @@ function PresentationControlContent() {
             <button
               onClick={() => {
                 dispatchCommand("PRESENTATION_EXIT");
+                window.location.href = `/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`;
               }}
               className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
             >
