@@ -106,26 +106,42 @@ function PresentationControlContent() {
       if (!activeMaterial) return;
 
       setIsDiscoveringSlides(true);
-      const estimateInitialCount = Math.max(8, activeMaterial.totalPages || activeMaterial.slides?.length || 1, 1);
-      setDiscoveredPlaceholderCount(estimateInitialCount);
+      const initialCount = Math.max(1, activeMaterial.totalPages || activeMaterial.slides?.length || 1);
+      setDiscoveredPlaceholderCount(initialCount);
 
-      const checkImage = (page: number): Promise<boolean> => {
+      const checkImageWithRetry = (page: number, retries = 1): Promise<boolean> => {
         return new Promise((resolve) => {
-          const img = new Image();
-          const timer = window.setTimeout(() => resolve(false), 900);
-          img.onload = () => {
-            window.clearTimeout(timer);
-            resolve(img.naturalWidth > 0 && img.naturalHeight > 0);
+          const attempt = (remainingRetries: number) => {
+            const img = new Image();
+            const timer = window.setTimeout(() => {
+              img.onload = null;
+              img.onerror = null;
+              if (remainingRetries > 0) {
+                attempt(remainingRetries - 1);
+              } else {
+                resolve(false);
+              }
+            }, 3500);
+
+            img.onload = () => {
+              window.clearTimeout(timer);
+              resolve(img.naturalWidth > 0 && img.naturalHeight > 0);
+            };
+            img.onerror = () => {
+              window.clearTimeout(timer);
+              if (remainingRetries > 0) {
+                attempt(remainingRetries - 1);
+              } else {
+                resolve(false);
+              }
+            };
+            img.src = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${page}`;
           };
-          img.onerror = () => {
-            window.clearTimeout(timer);
-            resolve(false);
-          };
-          img.src = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${page}`;
+          attempt(retries);
         });
       };
 
-      const maxPagesToScan = Math.max(24, activeMaterial.totalPages || 1);
+      const maxPagesToScan = Math.max(40, activeMaterial.totalPages || 1);
       let discoveredPages = activeMaterial.totalPages || 1;
       let page = 1;
 
@@ -134,12 +150,12 @@ function PresentationControlContent() {
 
         const batchSize = 4;
         const currentBatch = Array.from({ length: Math.min(batchSize, maxPagesToScan - page + 1) }, (_, index) => page + index);
-        const results = await Promise.all(currentBatch.map((targetPage) => checkImage(targetPage)));
+        const results = await Promise.all(currentBatch.map((targetPage) => checkImageWithRetry(targetPage)));
 
         const confirmedInBatch = currentBatch.filter((_, index) => results[index]);
         if (confirmedInBatch.length > 0) {
           discoveredPages = confirmedInBatch[confirmedInBatch.length - 1];
-          setDiscoveredPlaceholderCount(Math.max(discoveredPages, estimateInitialCount));
+          setDiscoveredPlaceholderCount(discoveredPages);
         }
 
         if (confirmedInBatch.length === 0) {
@@ -150,12 +166,6 @@ function PresentationControlContent() {
       }
 
       if (!isMounted || !activeMaterial) return;
-
-      const shouldUpdate = discoveredPages > 1 && discoveredPages !== activeMaterial.totalPages;
-      if (!shouldUpdate && (activeMaterial.slides?.length || 0) >= discoveredPages) {
-        setDiscoveredPlaceholderCount(discoveredPages || estimateInitialCount);
-        return;
-      }
 
       const expandedSlides = Array.from({ length: discoveredPages }, (_, i) => ({
         index: i + 1,
@@ -171,7 +181,7 @@ function PresentationControlContent() {
           slides: expandedSlides,
         },
       });
-      setDiscoveredPlaceholderCount(discoveredPages || estimateInitialCount);
+      setDiscoveredPlaceholderCount(discoveredPages);
       setIsDiscoveringSlides(false);
     }
 
@@ -214,6 +224,13 @@ function PresentationControlContent() {
       setLeftTab("slides");
     }
   }, [state?.presentation.isPresenting, state?.presentation.materialId]);
+
+  // Auto-redirect to main control page when presentation is stopped/exited
+  useEffect(() => {
+    if (state && !state.presentation.isPresenting) {
+      router.push(`/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`);
+    }
+  }, [state?.presentation.isPresenting, roomCode, requestedRole, router]);
 
   const handleAddMaterial = (newMaterial: Material) => {
     setShowUploader(false);
@@ -537,7 +554,6 @@ function PresentationControlContent() {
             <button
               onClick={() => {
                 dispatchCommand("PRESENTATION_EXIT");
-                router.push(`/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`);
               }}
               className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
             >
