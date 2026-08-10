@@ -10,10 +10,14 @@ interface SlideViewerProps {
   currentPage: number;
   blanked?: boolean;
   role?: "control" | "audience" | "confidence";
+  /** Called when the real PDF page count is discovered from PDF.js */
+  onNumPagesDiscovered?: (numPages: number) => void;
 }
 
 // Global Memory-Mapped RAM Cache for Slide Images (0ms Sync Retrieval)
 const slideImageMemoryCache = new Map<string, HTMLImageElement>();
+const PREFETCH_DELAY_MS = 1800;
+const MAX_PREFETCH_AHEAD = 12;
 
 function preloadSlideImage(url: string): HTMLImageElement {
   if (slideImageMemoryCache.has(url)) {
@@ -25,7 +29,7 @@ function preloadSlideImage(url: string): HTMLImageElement {
   return img;
 }
 
-export function SlideViewer({ material, slide, currentPage, blanked, role }: SlideViewerProps) {
+export function SlideViewer({ material, slide, currentPage, blanked, role, onNumPagesDiscovered }: SlideViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const baseIframeSrc = useRef<string | null>(null);
 
@@ -50,44 +54,65 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
     preloadSlideImage(targetGoogleSlideImg);
     return targetGoogleSlideImg;
   });
+  const [useFallbackIframe, setUseFallbackIframe] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(true);
+  const [prefetchQueue, setPrefetchQueue] = useState<number[]>([]);
+  const [prefetchedPages, setPrefetchedPages] = useState<number[]>([]);
+  const [loadingPage, setLoadingPage] = useState<number | null>(null);
 
-  // 1. High-Priority Proximal Pre-fetch Engine (N+1, N+2, N-1) for 0ms transitions
+  // 1. Sequential prefetch: prepare one next slide at a time with a safe delay.
   useEffect(() => {
-    if (!googlePresentationId || !material?.totalPages || material.totalPages <= 0) return;
+    if (!googlePresentationId || !material?.totalPages || material.totalPages <= 1) return;
 
-    // Prioritize immediate next & previous slides first
-    const pagesToPreload = [currentPage + 1, currentPage + 2, currentPage - 1, currentPage + 3].filter(
-      (p) => p >= 1 && p <= material.totalPages
+    const pendingPages = Array.from({ length: material.totalPages }, (_, index) => index + 1).filter(
+      (page) => page !== currentPage && !prefetchedPages.includes(page) && page <= currentPage + MAX_PREFETCH_AHEAD
     );
 
-    pagesToPreload.forEach((p) => {
-      const url = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${p}`;
-      preloadSlideImage(url);
-    });
+    if (pendingPages.length === 0) return;
 
-    // Background pre-fetch remaining deck slides
-    const maxToLoad = Math.min(material.totalPages, 100);
-    for (let page = 1; page <= maxToLoad; page++) {
-      const url = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${page}`;
+    const nextPage = pendingPages[0];
+    if (prefetchQueue[0] === nextPage) return;
+
+    setPrefetchQueue([nextPage]);
+    setLoadingPage(nextPage);
+
+    const timer = window.setTimeout(() => {
+      const url = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${nextPage}`;
       preloadSlideImage(url);
-    }
-  }, [googlePresentationId, currentPage, material?.totalPages]);
+      setPrefetchedPages((prev) => (prev.includes(nextPage) ? prev : [...prev, nextPage]));
+      setLoadingPage(null);
+    }, PREFETCH_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [googlePresentationId, currentPage, material?.totalPages, prefetchedPages, prefetchQueue]);
 
   // 2. Synchronous Instant Image Swap Engine (0ms Lag Response)
   useEffect(() => {
-    if (!targetGoogleSlideImg) return;
+    if (!targetGoogleSlideImg) {
+      setIsImageLoading(false);
+      return;
+    }
 
+    setIsImageLoading(true);
     const cachedImg = preloadSlideImage(targetGoogleSlideImg);
     if (cachedImg.complete) {
       setDisplayedImgUrl(targetGoogleSlideImg);
+      setIsImageLoading(false);
     } else {
       cachedImg.onload = () => {
         setDisplayedImgUrl(targetGoogleSlideImg);
+        setIsImageLoading(false);
+      };
+      cachedImg.onerror = () => {
+        setIsImageLoading(false);
+        setUseFallbackIframe(true);
       };
     }
   }, [targetGoogleSlideImg]);
 
-  // 3. Persistent Base Iframe URL (Avoids iframe re-mounts on slide change)
+  // 3. Persistent Base Iframe URL (used only as a fallback when image export is unavailable)
   if (isGoogleSlides && googlePresentationId && !baseIframeSrc.current) {
     baseIframeSrc.current = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${currentPage}`;
   } else if (isGoogleDrive && googleFileId && !baseIframeSrc.current) {
@@ -95,20 +120,18 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
   }
   const persistentIframeSrc = baseIframeSrc.current || rawUrl;
 
-  // 4. Ultra-Fast Hash & postMessage Update for Control Room Iframe
   useEffect(() => {
-    if (isGoogleSlides && iframeRef.current?.contentWindow) {
-      try {
-        const targetHash = `#slide=id.p${currentPage}`;
-        iframeRef.current.contentWindow.location.hash = targetHash;
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ gslides: "slide", page: currentPage, slide: currentPage }),
-          "*"
-        );
-      } catch {
-        // Cross-origin fallback
+    setUseFallbackIframe(false);
+  }, [googlePresentationId, currentPage]);
+
+  // 4. Reactive fallback iframe update engine for the rare cases where PNG export is blocked.
+  useEffect(() => {
+    if (useFallbackIframe && isGoogleSlides && googlePresentationId && iframeRef.current) {
+      const targetSrc = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false&delayms=60000#slide=id.p${currentPage}`;
+      if (iframeRef.current.src !== targetSrc) {
+        iframeRef.current.src = targetSrc;
       }
-    } else if (isGoogleDrive && googleFileId && iframeRef.current?.contentWindow) {
+    } else if (useFallbackIframe && isGoogleDrive && googleFileId && iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.location.replace(
           `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0`
@@ -117,7 +140,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
         // Cross-origin fallback
       }
     }
-  }, [currentPage, isGoogleSlides, isGoogleDrive, googleFileId]);
+  }, [currentPage, isGoogleSlides, googlePresentationId, isGoogleDrive, googleFileId, useFallbackIframe]);
 
   if (blanked) {
     return (
@@ -148,32 +171,66 @@ export function SlideViewer({ material, slide, currentPage, blanked, role }: Sli
         currentPage={currentPage}
         role={role}
         title={material.name}
+        onNumPagesDiscovered={onNumPagesDiscovered}
       />
     );
   }
 
   if (material.type === "url" || material.type === "canva") {
-    // Audience & Confidence Displays: Render Pre-cached Full Deck HD Image Feed with onLoad Guard
-    if (isGoogleSlides && (displayedImgUrl || targetGoogleSlideImg) && role !== "control") {
+    if (isGoogleSlides && googlePresentationId && !useFallbackIframe) {
+      const activeImgUrl = displayedImgUrl || targetGoogleSlideImg;
       return (
-        <div className="w-full h-full bg-slate-950 flex items-center justify-center p-0 overflow-hidden relative">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={displayedImgUrl || targetGoogleSlideImg || ""}
-            alt={`${material.name} - Slide ${currentPage}`}
-            className="w-full h-full object-contain z-10 transition-opacity duration-150"
-          />
+        <div className="w-full h-full bg-slate-950 relative overflow-hidden flex items-center justify-center">
+          <div className={`w-full h-full relative flex items-center justify-center ${role !== "control" ? "pointer-events-none" : ""}`}>
+            {activeImgUrl ? (
+              <img
+                src={activeImgUrl}
+                alt={material.name}
+                className="max-w-full max-h-full object-contain transition-opacity duration-150"
+                onError={() => setUseFallbackIframe(true)}
+              />
+            ) : (
+              <div className="text-slate-400 text-sm uppercase tracking-widest">Loading slide…</div>
+            )}
+
+            {isImageLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 backdrop-blur-[1px]">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="flex gap-2">
+                    <span className="h-3 w-3 rounded-full bg-purple-400 animate-bounce [animation-delay:-0.2s]" />
+                    <span className="h-3 w-3 rounded-full bg-purple-400 animate-bounce [animation-delay:-0.1s]" />
+                    <span className="h-3 w-3 rounded-full bg-purple-400 animate-bounce" />
+                  </div>
+                  <div className="text-[11px] uppercase tracking-[0.3em] text-slate-400">Preparing slide</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (useFallbackIframe && isGoogleSlides && googlePresentationId) {
+      const embedUrl = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false&delayms=60000#slide=id.p${currentPage}`;
+      return (
+        <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
+          <div className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}>
+            <iframe
+              ref={iframeRef}
+              key={`gslide-iframe-${googlePresentationId}`}
+              src={embedUrl}
+              title={material.name}
+              className="w-full h-full border-0 bg-slate-950 z-10"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            />
+          </div>
         </div>
       );
     }
 
     return (
       <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
-        {/* Container clipping mask crops Google Slides bottom control bar */}
-        <div
-          className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}
-          style={isGoogleSlides ? { clipPath: "inset(0 0 32px 0)" } : undefined}
-        >
+        <div className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}>
           <iframe
             ref={iframeRef}
             src={persistentIframeSrc}

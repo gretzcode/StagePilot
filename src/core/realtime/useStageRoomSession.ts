@@ -98,7 +98,12 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
       socketRef.current = socket;
 
       socket.onopen = () => {
-        if (isMounted) setIsConnected(true);
+        if (isMounted) {
+          setIsConnected(true);
+          try {
+            socket?.send(JSON.stringify({ type: "PING" }));
+          } catch {}
+        }
       };
 
       socket.onmessage = (event) => {
@@ -122,12 +127,13 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
       // Fallback to polling if WebSocket fails
     }
 
-    // 4. HTTP Polling Fallback Timer
+    // 4. HTTP Polling Fallback Timer (Runs ONLY when WebSocket is disconnected)
     const pollInterval = setInterval(() => {
-      if (isMounted && !roomErrorRef.current) {
+      const isWsActive = socketRef.current && socketRef.current.readyState === WebSocket.OPEN;
+      if (isMounted && !roomErrorRef.current && !isWsActive) {
         fetchState();
       }
-    }, 1500);
+    }, 3000);
 
     return () => {
       isMounted = false;

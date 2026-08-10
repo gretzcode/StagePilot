@@ -10,7 +10,24 @@ export class PdfMaterialProvider implements MaterialProvider {
 
   async parse(source: string | File | Blob, name: string, totalPagesInput?: number): Promise<Material> {
     const url = typeof source === "string" ? source : URL.createObjectURL(source);
-    const estimatedPages = totalPagesInput && totalPagesInput > 0 ? totalPagesInput : 12;
+
+    // When given a File/Blob, use PDF.js to count the real page count client-side
+    let estimatedPages = totalPagesInput && totalPagesInput > 0 ? totalPagesInput : 1;
+
+    if (typeof source !== "string" && typeof window !== "undefined") {
+      try {
+        const pdfjsLib = await import("pdfjs-dist");
+        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+        }
+        const doc = await pdfjsLib.getDocument(url).promise;
+        estimatedPages = doc.numPages;
+        // Don't destroy — the shared cache in usePdfDocument will pick this up
+      } catch {
+        // Keep estimatedPages as-is if PDF.js fails
+      }
+    }
+
     const slides: SlideMetadata[] = Array.from({ length: estimatedPages }, (_, i) => ({
       index: i + 1,
       title: `Page ${i + 1}`,

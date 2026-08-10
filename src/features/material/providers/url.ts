@@ -24,7 +24,7 @@ export class UrlMaterialProvider implements MaterialProvider {
       throw new Error(`Invalid URL: ${rawUrl}`);
     }
 
-    const totalPages = totalPagesInput && totalPagesInput > 0 ? totalPagesInput : 24;
+    const totalPages = totalPagesInput && totalPagesInput > 0 ? totalPagesInput : 1;
     const slides: SlideMetadata[] = Array.from({ length: totalPages }, (_, i) => ({
       index: i + 1,
       title: `Slide ${i + 1}`,

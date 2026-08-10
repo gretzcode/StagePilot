@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "build:worker": "opennextjs-cloudflare build && node -e \"const fs=require('fs'); const p='.open-next/worker.js'; let c=fs.readFileSync(p,'utf8'); if(!c.includes('StageRoom')) fs.appendFileSync(p, '\\nexport { StageRoom } from \\\"../workers/stage-room.ts\\\";\\n');\"",
+    "db:migrate:local": "node node_modules/wrangler/bin/wrangler.js d1 execute stagepilot-db --local --file=migrations/0001_initial.sql && node node_modules/wrangler/bin/wrangler.js d1 execute stagepilot-db --local --file=migrations/0002_materials_ttl.sql",
+    "db:migrate:remote": "node node_modules/wrangler/bin/wrangler.js d1 execute stagepilot-db --remote --file=migrations/0001_initial.sql && node node_modules/wrangler/bin/wrangler.js d1 execute stagepilot-db --remote --file=migrations/0002_materials_ttl.sql",
+    "build:worker": "opennextjs-cloudflare build && node scripts/inject-stage-room.js",
     "deploy": "npm run build:worker && npx wrangler deploy"
   },
   "dependencies": {

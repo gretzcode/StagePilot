@@ -1,6 +1,27 @@
 import { StageCommand, StageSessionState } from "../types";
 import { PermissionPolicy } from "../permissions/policy";
 
+function ensureMaterialSlides(material: StageSessionState["materials"][number] | undefined, targetPage: number) {
+  if (!material || !Array.isArray(material.slides)) return;
+
+  const desiredCount = Math.max(material.totalPages || 1, material.slides.length || 1, targetPage);
+  if (desiredCount <= material.slides.length) {
+    material.totalPages = Math.max(material.totalPages || 1, desiredCount);
+    return;
+  }
+
+  material.totalPages = desiredCount;
+  while (material.slides.length < desiredCount) {
+    const idx = material.slides.length + 1;
+    material.slides.push({
+      index: idx,
+      title: `Slide ${idx}`,
+      url: material.url,
+      contentUrl: material.url,
+    });
+  }
+}
+
 export function stageSessionReducer(
   state: StageSessionState,
   command: StageCommand
@@ -110,7 +131,8 @@ export function stageSessionReducer(
     case "PRESENTATION_START": {
       const { materialId, startPage = 1 } = command.payload;
       const material = nextState.materials.find((m) => m.id === materialId);
-      const totalPages = material?.totalPages || material?.slides.length || 1;
+      const totalPages = Math.max(material?.totalPages || 1, material?.slides.length || 1, startPage);
+      ensureMaterialSlides(material, totalPages);
 
       nextState.presentation = {
         isPresenting: true,
@@ -142,30 +164,15 @@ export function stageSessionReducer(
     case "SLIDE_NEXT": {
       if (!nextState.presentation.isPresenting) break;
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
-      const isWebMaterial = material?.type === "url" || material?.type === "canva";
-      const knownMax = isWebMaterial ? 100 : (material?.totalPages || 1);
+      const maxPages = Math.max(material?.totalPages || 1, nextState.presentation.totalPages || 1, nextState.presentation.currentPage + 1);
+      ensureMaterialSlides(material, maxPages);
 
-      const requestedPage = nextState.presentation.currentPage + 1;
-      const currentPage = Math.min(requestedPage, knownMax);
+      const currentPage = Math.min(nextState.presentation.currentPage + 1, maxPages);
 
-      if (material && isWebMaterial && currentPage > material.slides.length) {
-        material.totalPages = Math.max(material.totalPages || 1, currentPage);
-        while (material.slides.length < currentPage) {
-          const idx = material.slides.length + 1;
-          material.slides.push({
-            index: idx,
-            title: `Slide ${idx}`,
-            url: material.url,
-            contentUrl: material.url,
-          });
-        }
-      }
-
-      const totalPages = Math.max(nextState.presentation.totalPages || 1, material?.totalPages || currentPage);
       nextState.presentation.currentPage = currentPage;
-      nextState.presentation.totalPages = totalPages;
+      nextState.presentation.totalPages = maxPages;
       nextState.presentation.currentSlide = material?.slides[currentPage - 1] || { index: currentPage, title: `Slide ${currentPage}` };
-      nextState.presentation.nextSlide = material?.slides[currentPage] || (currentPage < totalPages ? { index: currentPage + 1, title: `Slide ${currentPage + 1}` } : null);
+      nextState.presentation.nextSlide = currentPage < maxPages ? (material?.slides[currentPage] || { index: currentPage + 1, title: `Slide ${currentPage + 1}` }) : null;
       nextState.presentation.updatedAt = now;
       break;
     }
@@ -173,8 +180,9 @@ export function stageSessionReducer(
     case "SLIDE_PREVIOUS": {
       if (!nextState.presentation.isPresenting) break;
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
-      const currentPage = Math.max(nextState.presentation.currentPage - 1, 1);
       const totalPages = Math.max(nextState.presentation.totalPages || 1, material?.totalPages || 1);
+      ensureMaterialSlides(material, totalPages);
+      const currentPage = Math.max(nextState.presentation.currentPage - 1, 1);
 
       nextState.presentation.currentPage = currentPage;
       nextState.presentation.totalPages = totalPages;
@@ -187,22 +195,10 @@ export function stageSessionReducer(
     case "SLIDE_GOTO": {
       if (!nextState.presentation.isPresenting) break;
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
-      const isWebMaterial = material?.type === "url" || material?.type === "canva";
-      const knownMax = isWebMaterial ? 100 : (material?.totalPages || 1);
+      const knownMax = material?.totalPages || 1;
       const targetPage = Math.max(1, Math.min(command.payload.pageNumber, knownMax));
 
-      if (material && isWebMaterial && targetPage > material.slides.length) {
-        material.totalPages = Math.max(material.totalPages || 1, targetPage);
-        while (material.slides.length < targetPage) {
-          const idx = material.slides.length + 1;
-          material.slides.push({
-            index: idx,
-            title: `Slide ${idx}`,
-            url: material.url,
-            contentUrl: material.url,
-          });
-        }
-      }
+      ensureMaterialSlides(material, targetPage);
 
       const totalPages = Math.max(nextState.presentation.totalPages || 1, material?.totalPages || targetPage);
       nextState.presentation.currentPage = targetPage;

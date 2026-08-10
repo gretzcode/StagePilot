@@ -80,14 +80,17 @@ export async function GET(request: Request) {
       env = process.env as Record<string, unknown>;
     }
 
-    if (env && env.STAGE_ROOM && request.headers.get("Upgrade") === "websocket") {
+    if (env && env.STAGE_ROOM) {
       const stageRoomNs = env.STAGE_ROOM as {
         idFromName: (name: string) => { toString: () => string };
         get: (id: unknown) => { fetch: (req: Request) => Promise<Response> };
       };
       const doId = stageRoomNs.idFromName(roomCode);
       const stub = stageRoomNs.get(doId);
-      return await stub.fetch(request);
+      const doUrl = new URL(request.url);
+      doUrl.searchParams.set("hostUserId", roomRecord.hostUserId);
+      doUrl.searchParams.set("title", roomRecord.name);
+      return await stub.fetch(new Request(doUrl.toString(), request));
     }
   } catch {
     // Fall through to local state handler
@@ -179,6 +182,33 @@ export async function POST(request: Request) {
 
     const localRoom = getOrCreateLocalRoom(roomCode, roomRecord.name, roomRecord.hostUserId);
     command.senderDeviceId = deviceId;
+
+    // ── Durable Object Forwarding ───────────────────────────────────────────
+    try {
+      let env: Record<string, unknown> | undefined;
+      try {
+        const cfCtx = await getCloudflareContext({ async: true });
+        env = cfCtx.env as Record<string, unknown>;
+      } catch {
+        env = process.env as Record<string, unknown>;
+      }
+
+      if (env && env.STAGE_ROOM) {
+        const stageRoomNs = env.STAGE_ROOM as {
+          idFromName: (name: string) => { toString: () => string };
+          get: (id: unknown) => { fetch: (req: Request) => Promise<Response> };
+        };
+        const doId = stageRoomNs.idFromName(roomCode);
+        const stub = stageRoomNs.get(doId);
+        const doUrl = new URL(request.url);
+        doUrl.searchParams.set("roomCode", roomCode);
+        doUrl.searchParams.set("hostUserId", roomRecord.hostUserId);
+        doUrl.searchParams.set("title", roomRecord.name);
+        return await stub.fetch(new Request(doUrl.toString(), request));
+      }
+    } catch {
+      // Fall back to local room handling
+    }
 
     localRoom.state = CommandDispatcher.dispatch(localRoom.state, command);
 

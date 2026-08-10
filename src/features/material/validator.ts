@@ -191,7 +191,6 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
       if (match && match[1]) {
         const presentationId = match[1];
 
-        // Try /embed, /pub, and /edit endpoints
         const urlsToTry = [
           `https://docs.google.com/presentation/d/${presentationId}/embed`,
           `https://docs.google.com/presentation/d/${presentationId}/pub`,
@@ -215,13 +214,11 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
             if (res.ok) {
               const html = await res.text();
 
-              // 1. Look for punch-viewer-slide or svgpage DOM elements
               const slideMatches = html.match(/punch-viewer-slide/g) || html.match(/svgpage/g);
               if (slideMatches && slideMatches.length > 0) {
                 return { totalPages: slideMatches.length };
               }
 
-              // 2. Look for slide ID arrays in JSON script data e.g. ["p1","p2","p3"...]
               const scriptSlideMatches = html.match(/["']id["']:\s*["'](p\d+|g[A-Za-z0-9_-]{3,})["']/g);
               if (scriptSlideMatches && scriptSlideMatches.length > 0) {
                 const uniqueIds = new Set<string>();
@@ -236,7 +233,6 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
                 }
               }
 
-              // 3. Look for slide=id.p1, slide=id.p2, etc.
               const hashMatches = html.match(/slide=id\.(p\d+|g[A-Za-z0-9_-]{3,})/g);
               if (hashMatches && hashMatches.length > 0) {
                 const uniqueHashes = new Set<string>();
@@ -247,6 +243,37 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
                 if (uniqueHashes.size > 0) {
                   return { totalPages: uniqueHashes.size, pageIds: Array.from(uniqueHashes) };
                 }
+              }
+
+              let discoveredPages = 0;
+              for (let page = 1; page <= 24; page += 1) {
+                try {
+                  const probeController = new AbortController();
+                  const probeTimeout = setTimeout(() => probeController.abort(), 2000);
+                  const probeRes = await fetch(
+                    `https://docs.google.com/presentation/d/${presentationId}/export/png?id=${presentationId}&pageid=p${page}`,
+                    {
+                      signal: probeController.signal,
+                      headers: {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept-Language": "en-US,en;q=0.9",
+                      },
+                    }
+                  );
+                  clearTimeout(probeTimeout);
+
+                  if (probeRes.ok && probeRes.headers.get("content-type")?.includes("image")) {
+                    discoveredPages = page;
+                  } else {
+                    break;
+                  }
+                } catch {
+                  break;
+                }
+              }
+
+              if (discoveredPages > 0) {
+                return { totalPages: discoveredPages };
               }
             }
           } catch {

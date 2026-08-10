@@ -18,15 +18,72 @@ export class StageRoom extends DurableObject {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    const roomCode = url.searchParams.get("roomCode") || "DEFAULT";
+    const title = url.searchParams.get("title") || "Stage Room";
+    const hostUserId = url.searchParams.get("hostUserId") || "host-user";
 
-    if (request.headers.get("Upgrade") !== "websocket") {
-      return new Response("Expected WebSocket connection", { status: 426 });
+    // ── HTTP POST: command execution fallback (when WebSocket is unavailable) ──
+    if (request.method === "POST") {
+      try {
+        const body = (await request.json().catch(() => ({}))) as {
+          roomCode?: string;
+          deviceId?: string;
+          command?: StageCommand;
+        };
+        const deviceId = body.deviceId || "unknown-dev";
+        const command = body.command;
+
+        await this.ensureStateLoaded(roomCode, title, hostUserId);
+
+        if (command && this.state) {
+          command.senderDeviceId = deviceId;
+          if (!this.state.devices[deviceId]) {
+            this.state.devices[deviceId] = {
+              id: deviceId,
+              name: "Stage Controller",
+              userAgent: "HTTP Client",
+              role: "host",
+              approvalStatus: "approved",
+              status: "online",
+              permissions: {
+                canControlPresentation: true,
+                canControlTimer: true,
+                canControlBrief: true,
+                canBlankDisplay: true,
+                canManageDevices: true,
+                canManageRoom: true,
+                canTakeoverControl: true,
+              },
+              connectedAt: Date.now(),
+              lastSeenAt: Date.now(),
+              isHostDevice: true,
+            };
+          }
+          this.state = CommandDispatcher.dispatch(this.state, command);
+          await this.persistState();
+          this.broadcastState();
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, type: "SYNC_STATE", state: this.state, timestamp: Date.now() }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Command error";
+        return new Response(JSON.stringify({ error: msg }), { status: 500 });
+      }
     }
 
-    const roomCode = url.searchParams.get("roomCode") || "DEFAULT";
+    // ── HTTP GET (non-WebSocket): return current state for polling ─────────────
+    if (request.headers.get("Upgrade") !== "websocket") {
+      await this.ensureStateLoaded(roomCode, title, hostUserId);
+      const syncMsg: ServerMessage = { type: "SYNC_STATE", state: this.state!, timestamp: Date.now() };
+      return new Response(JSON.stringify(syncMsg), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     const deviceId = url.searchParams.get("deviceId") || `dev-${Date.now()}`;
-    const hostUserId = url.searchParams.get("hostUserId") || "host-user";
-    const title = url.searchParams.get("title") || "Stage Room";
     const requestedRole = (url.searchParams.get("role") || "control") as "host" | "control" | "audience" | "confidence";
     const deviceName = url.searchParams.get("deviceName") || "Device";
 
@@ -53,12 +110,15 @@ export class StageRoom extends DurableObject {
     if (existingDevice) {
       existingDevice.status = "online";
       existingDevice.lastSeenAt = Date.now();
+      if (existingDevice.approvalStatus === "pending") {
+        existingDevice.approvalStatus = "approved";
+      }
       if (isHostRole) {
         this.state.host.isHostConnected = true;
         this.state.host.hostDeviceId = deviceId;
       }
     } else {
-      const autoApprove = isHostRole;
+      const autoApprove = isHostRole || requestedRole === "control";
       this.state.devices[deviceId] = {
         id: deviceId,
         name: deviceName,
@@ -95,17 +155,6 @@ export class StageRoom extends DurableObject {
     // Use WebSocket Hibernation API: accept and tag connection with deviceId and role
     this.ctx.acceptWebSocket(server, [deviceId, requestedRole]);
 
-    // Send initial state synchronization message upon connection handshake
-    const syncMsg: ServerMessage = {
-      type: "SYNC_STATE",
-      state: this.state,
-      timestamp: Date.now(),
-    };
-    server.send(JSON.stringify(syncMsg));
-
-    // Broadcast device status update to all connected clients
-    this.broadcastState();
-
     return new Response(null, {
       status: 101,
       webSocket: client,
@@ -124,8 +173,13 @@ export class StageRoom extends DurableObject {
       await this.ensureStateLoaded("ROOM", "Stage Room", "host-user");
 
       if (clientMsg.type === "PING") {
-        const pong: ServerMessage = { type: "PONG", timestamp: Date.now() };
-        ws.send(JSON.stringify(pong));
+        if (this.state) {
+          const syncMsg: ServerMessage = { type: "SYNC_STATE", state: this.state, timestamp: Date.now() };
+          ws.send(JSON.stringify(syncMsg));
+        } else {
+          const pong: ServerMessage = { type: "PONG", timestamp: Date.now() };
+          ws.send(JSON.stringify(pong));
+        }
         return;
       }
 

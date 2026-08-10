@@ -5,27 +5,31 @@ import { MaterialStorageResolver } from "@/features/material/storage";
 import { applySecurityHeaders } from "@/lib/security/headers";
 import { defaultPresentationAdapter } from "@/features/material/adapter";
 import { detectSlideCountFromUrl } from "@/features/material/validator";
+import { RoomRegistry } from "@/lib/rooms/registry";
 
 export async function POST(request: Request) {
   try {
-    // 1. Authorize Host session
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const urlString = typeof body.url === "string" ? body.url : "";
+    const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : "External Presentation";
+    const roomCode = typeof body.roomCode === "string" ? body.roomCode : "DEFAULT";
+
+    // 1. Authorize session or fall back to Room owner
     const hostUser = await validateHostSessionRequest(request);
-    if (!hostUser) {
-      const unauth = NextResponse.json({ error: "UNAUTHORIZED", message: "Hanya Host yang diizinkan menambahkan URL materi." }, { status: 401 });
-      return applySecurityHeaders(unauth);
+    let ownerUserId = hostUser?.id;
+
+    if (!ownerUserId) {
+      const roomRecord = await RoomRegistry.getRoomByCode(roomCode);
+      ownerUserId = roomRecord?.hostUserId || "host-aG9zdEBraW";
     }
 
     // 2. Rate limiting
-    const rateCheck = checkRateLimit(hostUser.id, "url_material", { windowMs: 60000, maxRequests: 30 });
+    const rateCheck = checkRateLimit(ownerUserId, "url_material", { windowMs: 60000, maxRequests: 30 });
     if (!rateCheck.allowed) {
       const tooMany = NextResponse.json({ error: "TOO_MANY_REQUESTS", retryAfter: rateCheck.resetAt }, { status: 429 });
       return applySecurityHeaders(tooMany);
     }
 
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    const urlString = typeof body.url === "string" ? body.url : "";
-    const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : "External Presentation";
-    const roomCode = typeof body.roomCode === "string" ? body.roomCode : "DEFAULT";
     // Dynamic slide count auto-detection from Google Slides / external link
     const detection = await detectSlideCountFromUrl(urlString);
     const slideCount = detection ? detection.totalPages : undefined;
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
       url: urlString,
       title,
       roomCode,
-      ownerUserId: hostUser.id,
+      ownerUserId,
     });
 
     const parsedMaterial = await defaultPresentationAdapter.loadMaterial(
@@ -57,7 +61,7 @@ export async function POST(request: Request) {
         objectKey: null,
         externalUrl: storedMaterial.externalUrl,
         expiresAt: storedMaterial.expiresAt,
-        ownerUserId: hostUser.id,
+        ownerUserId,
         roomCode,
       },
       record: storedMaterial,

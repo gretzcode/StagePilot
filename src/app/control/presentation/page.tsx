@@ -90,7 +90,7 @@ function PresentationControlContent() {
 
   const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
 
-  // Dynamic Slide Boundary Auto-Trimmer Worker (Detects exact end boundary and trims extra empty slides)
+  // Discover the real page count for Google Slides and expand the deck dynamically.
   useEffect(() => {
     if (!activeMaterial || (activeMaterial.type !== "url" && activeMaterial.type !== "canva")) return;
 
@@ -98,69 +98,115 @@ function PresentationControlContent() {
     const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
     const googlePresentationId = match ? match[1] : null;
 
-    if (googlePresentationId && activeMaterial.totalPages > 1) {
-      let isMounted = true;
+    if (!googlePresentationId) return;
 
-      async function findExactEndBoundary() {
-        if (!activeMaterial) return;
-        const checkImage = (page: number): Promise<boolean> => {
-          return new Promise((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-              if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-                resolve(true);
-              } else {
-                resolve(false);
-              }
-            };
-            img.onerror = () => resolve(false);
-            img.src = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${page}`;
-          });
-        };
+    let isMounted = true;
 
-        const maxPagesToScan = activeMaterial.totalPages;
-        let realMax = 1;
-        for (let page = 1; page <= maxPagesToScan; page++) {
-          if (!isMounted) break;
-          const valid = await checkImage(page);
-          if (valid) {
-            realMax = page;
-          } else if (page > 1) {
-            // Found first invalid page! End boundary detected.
-            break;
-          }
+    async function discoverSlideCount() {
+      if (!activeMaterial) return;
+
+      setIsDiscoveringSlides(true);
+      const estimateInitialCount = Math.max(8, activeMaterial.totalPages || activeMaterial.slides?.length || 1, 1);
+      setDiscoveredPlaceholderCount(estimateInitialCount);
+
+      const checkImage = (page: number): Promise<boolean> => {
+        return new Promise((resolve) => {
+          const img = new Image();
+          const timer = window.setTimeout(() => resolve(false), 900);
+          img.onload = () => {
+            window.clearTimeout(timer);
+            resolve(img.naturalWidth > 0 && img.naturalHeight > 0);
+          };
+          img.onerror = () => {
+            window.clearTimeout(timer);
+            resolve(false);
+          };
+          img.src = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${page}`;
+        });
+      };
+
+      const maxPagesToScan = Math.max(24, activeMaterial.totalPages || 1);
+      let discoveredPages = activeMaterial.totalPages || 1;
+      let page = 1;
+
+      while (page <= maxPagesToScan) {
+        if (!isMounted) break;
+
+        const batchSize = 4;
+        const currentBatch = Array.from({ length: Math.min(batchSize, maxPagesToScan - page + 1) }, (_, index) => page + index);
+        const results = await Promise.all(currentBatch.map((targetPage) => checkImage(targetPage)));
+
+        const confirmedInBatch = currentBatch.filter((_, index) => results[index]);
+        if (confirmedInBatch.length > 0) {
+          discoveredPages = confirmedInBatch[confirmedInBatch.length - 1];
+          setDiscoveredPlaceholderCount(Math.max(discoveredPages, estimateInitialCount));
         }
 
-        if (isMounted && activeMaterial && realMax > 0 && realMax !== activeMaterial.totalPages) {
-          const trimmedSlides = Array.from({ length: realMax }, (_, i) => ({
-            index: i + 1,
-            title: `Slide ${i + 1}`,
-            url: rawUrl,
-            contentUrl: rawUrl,
-          }));
-
-          dispatchCommand("MATERIAL_ADD", {
-            material: {
-              ...activeMaterial,
-              totalPages: realMax,
-              slides: trimmedSlides,
-            },
-          });
+        if (confirmedInBatch.length === 0) {
+          break;
         }
+
+        page = currentBatch[currentBatch.length - 1] + 1;
       }
 
-      findExactEndBoundary();
+      if (!isMounted || !activeMaterial) return;
 
-      return () => {
-        isMounted = false;
-      };
+      const shouldUpdate = discoveredPages > 1 && discoveredPages !== activeMaterial.totalPages;
+      if (!shouldUpdate && (activeMaterial.slides?.length || 0) >= discoveredPages) {
+        setDiscoveredPlaceholderCount(discoveredPages || estimateInitialCount);
+        return;
+      }
+
+      const expandedSlides = Array.from({ length: discoveredPages }, (_, i) => ({
+        index: i + 1,
+        title: `Slide ${i + 1}`,
+        url: rawUrl,
+        contentUrl: rawUrl,
+      }));
+
+      dispatchCommand("MATERIAL_ADD", {
+        material: {
+          ...activeMaterial,
+          totalPages: discoveredPages,
+          slides: expandedSlides,
+        },
+      });
+      setDiscoveredPlaceholderCount(discoveredPages || estimateInitialCount);
+      setIsDiscoveringSlides(false);
     }
+
+    void discoverSlideCount();
+
+    return () => {
+      isMounted = false;
+    };
   }, [activeMaterial?.id, dispatchCommand]);
+
+  // ── PDF: update material totalPages when PDF.js discovers the real count ────
+  const handlePdfNumPagesDiscovered = (numPages: number) => {
+    if (!activeMaterial) return;
+    if (numPages <= 1 || numPages === activeMaterial.totalPages) return;
+    const expandedSlides = Array.from({ length: numPages }, (_, i) => ({
+      index: i + 1,
+      title: `Page ${i + 1}`,
+      url: activeMaterial.externalUrl || activeMaterial.url || "",
+      contentUrl: activeMaterial.externalUrl || activeMaterial.url || "",
+    }));
+    dispatchCommand("MATERIAL_ADD", {
+      material: {
+        ...activeMaterial,
+        totalPages: numPages,
+        slides: expandedSlides,
+      },
+    });
+  };
 
 
 
   const [leftTab, setLeftTab] = useState<"playlist" | "slides">("playlist");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [discoveredPlaceholderCount, setDiscoveredPlaceholderCount] = useState<number | null>(null);
+  const [isDiscoveringSlides, setIsDiscoveringSlides] = useState(false);
 
   // Auto-switch sidebar tab to 'slides' whenever GO LIVE / PRESENT is clicked or active
   useEffect(() => {
@@ -429,6 +475,8 @@ function PresentationControlContent() {
                   <ThumbnailList
                     material={activeMaterial}
                     currentPage={state?.presentation.currentPage || 1}
+                    placeholderCount={discoveredPlaceholderCount}
+                    isDiscoveringSlides={isDiscoveringSlides}
                     onSelectSlide={(pageNumber) => {
                       dispatchCommand("SLIDE_GOTO", { pageNumber });
                       if (typeof window !== "undefined" && window.innerWidth < 1024) {
@@ -451,6 +499,7 @@ function PresentationControlContent() {
               currentPage={state?.presentation.currentPage || 1}
               blanked={state?.presentation.blanked}
               role="control"
+              onNumPagesDiscovered={handlePdfNumPagesDiscovered}
             />
           </div>
 

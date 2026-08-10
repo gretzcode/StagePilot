@@ -16,7 +16,7 @@ export class CanvaMaterialProvider implements MaterialProvider {
     const now = Date.now();
     const expiresAt = computeDefaultExpiration(now);
 
-    const totalPages = totalPagesInput && totalPagesInput > 0 ? totalPagesInput : 24;
+    const totalPages = totalPagesInput && totalPagesInput > 0 ? totalPagesInput : 1;
     const slides: SlideMetadata[] = Array.from({ length: totalPages }, (_, i) => ({
       index: i + 1,
       title: `Slide ${i + 1}`,

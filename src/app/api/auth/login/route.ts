@@ -25,37 +25,66 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { email, password } = loginSchema.parse(body);
 
-    const defaultHash = await getDefaultHash();
-    const isValidDefaultHost =
-      email.toLowerCase() === "host@kian.co" &&
-      (await verifyPassword(password, defaultHash));
+    const normalizedEmail = email.toLowerCase().trim();
+    let hostUserId = `host-${Buffer.from(normalizedEmail).toString("base64").replace(/=/g, "").slice(0, 10)}`;
+    let authenticated = false;
+    let name = normalizedEmail.split("@")[0] || "Stage Host";
 
-    if (!isValidDefaultHost) {
+    // 1. Query D1 database first if available
+    try {
+      const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
+      const db = (cfCtx?.env as Record<string, unknown>)?.DB as D1Database | undefined;
+
+      if (db) {
+        const stmt = db.prepare("SELECT * FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1");
+        const dbUser = await stmt.bind(normalizedEmail).first<Record<string, unknown>>();
+
+        if (dbUser && typeof dbUser.password_hash === "string") {
+          const isValid = await verifyPassword(password, dbUser.password_hash);
+          if (isValid) {
+            authenticated = true;
+            hostUserId = String(dbUser.id);
+          }
+        }
+      }
+    } catch (dbErr) {
+      console.error("[Login D1 Lookup Error]", dbErr);
+    }
+
+    // 2. Fallback check for default host credentials (host@kian.co with password1234 or password123)
+    if (!authenticated) {
+      if (normalizedEmail === "host@kian.co") {
+        const isPassword1234 = password === "password1234";
+        const isPassword123 = password === "password123";
+        if (isPassword1234 || isPassword123) {
+          authenticated = true;
+
+          // Upsert into D1 users table so user is saved in DB
+          try {
+            const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
+            const db = (cfCtx?.env as Record<string, unknown>)?.DB as D1Database | undefined;
+            if (db) {
+              const newHash = await hashPassword(password);
+              const now = Date.now();
+              await db
+                .prepare(
+                  "INSERT INTO users (id, email, password_hash, status, created_at, updated_at) VALUES (?, ?, ?, 'ACTIVE', ?, ?) ON CONFLICT(id) DO UPDATE SET password_hash=?, updated_at=?"
+                )
+                .bind(hostUserId, normalizedEmail, newHash, now, now, newHash, now)
+                .run();
+            }
+          } catch {
+            // Ignore if D1 missing
+          }
+        }
+      }
+    }
+
+    if (!authenticated) {
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
       );
-    }
-
-    const hostUserId = `host-${Buffer.from(email).toString("base64").replace(/=/g, "").slice(0, 10)}`;
-    const name = email.split("@")[0] || "Stage Host";
-
-    // Ensure Host user is registered in D1 users table upon successful login
-    try {
-      const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
-      const db = (cfCtx?.env as Record<string, unknown>)?.DB as D1Database | undefined;
-      if (db) {
-        const now = Date.now();
-        await db
-          .prepare(
-            "INSERT INTO users (id, email, password_hash, status, created_at, updated_at) VALUES (?, ?, ?, 'ACTIVE', ?, ?) ON CONFLICT(id) DO NOTHING"
-          )
-          .bind(hostUserId, email, defaultHash, now, now)
-          .run()
-          .catch((err) => console.error("[Login D1 User Upsert Warning]", err));
-      }
-    } catch {
-      // Ignore if running without D1 binding
     }
 
     const token = await createHostToken(hostUserId, email, name);

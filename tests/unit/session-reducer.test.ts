@@ -98,6 +98,48 @@ describe("Stage Session Reducer", () => {
     expect(state.presentation.currentPage).toBe(2);
   });
 
+  it("should expand slide metadata for web materials when jumping to a later page", () => {
+    let state = createInitialSessionState(roomId, roomId, "Test Room", hostUserId, hostDeviceId);
+
+    state.materials = [
+      {
+        id: "mat-web-1",
+        name: "Google Slides Deck",
+        type: "url",
+        url: "https://docs.google.com/presentation/d/test123/embed",
+        externalUrl: "https://docs.google.com/presentation/d/test123/embed",
+        totalPages: 5,
+        slides: [{ index: 1, title: "Slide 1" }, { index: 2, title: "Slide 2" }],
+        uploadedAt: Date.now(),
+        status: "ready",
+      },
+    ];
+
+    const startCmd: StageCommand = {
+      type: "PRESENTATION_START",
+      commandId: "cmd-start-web",
+      senderDeviceId: hostDeviceId,
+      timestamp: Date.now(),
+      payload: { materialId: "mat-web-1", startPage: 1 },
+    };
+
+    state = stageSessionReducer(state, startCmd);
+
+    const gotoCmd: StageCommand = {
+      type: "SLIDE_GOTO",
+      commandId: "cmd-goto-web",
+      senderDeviceId: hostDeviceId,
+      timestamp: Date.now(),
+      payload: { pageNumber: 4 },
+    };
+
+    expect(() => stageSessionReducer(state, gotoCmd)).not.toThrow();
+
+    const nextState = stageSessionReducer(state, gotoCmd);
+    expect(nextState.presentation.currentPage).toBe(4);
+    expect(nextState.materials[0].slides).toHaveLength(4);
+  });
+
   it("should process MATERIAL_ADD command and update state.materials", () => {
     let state = createInitialSessionState(roomId, roomId, "Test Room", hostUserId, hostDeviceId);
 
