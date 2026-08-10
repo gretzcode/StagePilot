@@ -58,6 +58,9 @@ export class RoomRegistry {
   static async getRoomsByHost(hostUserId: string): Promise<StageRoomRecord[]> {
     if (!hostUserId) return [];
 
+    const roomMap = new Map<string, StageRoomRecord>();
+
+    // 1. Load from D1 database first
     try {
       const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
       const db = (cfCtx?.env as Record<string, unknown>)?.DB as D1Database | undefined;
@@ -65,29 +68,32 @@ export class RoomRegistry {
         const stmt = db.prepare("SELECT * FROM rooms WHERE host_user_id = ? AND status = 'ACTIVE' ORDER BY created_at DESC");
         const { results } = await stmt.bind(hostUserId).all<Record<string, unknown>>();
         if (results && results.length > 0) {
-          return results.map((row) => ({
-            roomId: String(row.id),
-            roomCode: String(row.room_code),
-            hostUserId: String(row.host_user_id),
-            name: String(row.name),
-            status: String(row.status) as "ACTIVE" | "CLOSED" | "PAUSED",
-            createdAt: Number(row.created_at),
-            updatedAt: Number(row.updated_at),
-          }));
+          results.forEach((row) => {
+            const r: StageRoomRecord = {
+              roomId: String(row.id),
+              roomCode: String(row.room_code),
+              hostUserId: String(row.host_user_id),
+              name: String(row.name),
+              status: String(row.status) as "ACTIVE" | "CLOSED" | "PAUSED",
+              createdAt: Number(row.created_at),
+              updatedAt: Number(row.updated_at),
+            };
+            roomMap.set(r.roomId, r);
+          });
         }
       }
-    } catch {
-      // Fall back
+    } catch (err) {
+      console.error("[RoomRegistry D1 getRoomsByHost Warning]", err);
     }
 
-    // Return from in-memory map
-    const list: StageRoomRecord[] = [];
+    // 2. Merge with in-memory global map
     for (const record of Array.from(globalRoomsMap.values())) {
       if (record.hostUserId === hostUserId && record.status === "ACTIVE") {
-        list.push(record);
+        roomMap.set(record.roomId, record);
       }
     }
-    return list.sort((a, b) => b.createdAt - a.createdAt);
+
+    return Array.from(roomMap.values()).sort((a, b) => b.createdAt - a.createdAt);
   }
 
   static async createRoom(hostUserId: string, name = "Main Stage — Production Session"): Promise<StageRoomRecord> {
@@ -129,6 +135,15 @@ export class RoomRegistry {
       const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
       const db = (cfCtx?.env as Record<string, unknown>)?.DB as D1Database | undefined;
       if (db) {
+        // Ensure host user exists in users table to satisfy FOREIGN KEY constraint
+        await db
+          .prepare(
+            "INSERT INTO users (id, email, password_hash, status, created_at, updated_at) VALUES (?, ?, ?, 'ACTIVE', ?, ?) ON CONFLICT(id) DO NOTHING"
+          )
+          .bind(record.hostUserId, `${record.hostUserId}@kian.co`, "SYSTEM_HASH", record.createdAt, record.updatedAt)
+          .run()
+          .catch((err) => console.error("[RoomRegistry D1 User Upsert Warning]", err));
+
         await db
           .prepare(
             "INSERT INTO rooms (id, host_user_id, room_code, name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
@@ -136,8 +151,8 @@ export class RoomRegistry {
           .bind(record.roomId, record.hostUserId, record.roomCode, record.name, record.status, record.createdAt, record.updatedAt)
           .run();
       }
-    } catch {
-      // Ignore D1 write error if running in dev without D1 binding
+    } catch (err) {
+      console.error("[RoomRegistry D1 Create Room Error]", err);
     }
 
     return record;
