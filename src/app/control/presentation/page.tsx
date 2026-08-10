@@ -237,23 +237,11 @@ function PresentationControlContent() {
 
 
   const handleStopAndExit = () => {
-    try {
-      const payload = JSON.stringify({
-        type: "EXECUTE_COMMAND",
-        payload: {
-          type: "PRESENTATION_EXIT",
-          commandId: `cmd-${Date.now()}`,
-          timestamp: Date.now(),
-        },
-      });
-      fetch(`/api/ws?roomCode=${encodeURIComponent(roomCode)}&deviceId=${encodeURIComponent(deviceId)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload,
-      }).catch(() => {});
-    } catch {}
+    dispatchCommand("PRESENTATION_EXIT");
 
-    window.location.href = `/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`;
+    setTimeout(() => {
+      window.location.href = `/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`;
+    }, 100);
   };
 
   const handleAddMaterial = (newMaterial: Material) => {
