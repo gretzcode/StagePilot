@@ -164,15 +164,19 @@ export function stageSessionReducer(
     case "SLIDE_NEXT": {
       if (!nextState.presentation.isPresenting) break;
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
-      const maxPages = Math.max(material?.totalPages || 1, nextState.presentation.totalPages || 1, nextState.presentation.currentPage + 1);
-      ensureMaterialSlides(material, maxPages);
+      const totalPages = Math.max(material?.totalPages || 1, material?.slides?.length || 1);
+      ensureMaterialSlides(material, totalPages);
 
-      const currentPage = Math.min(nextState.presentation.currentPage + 1, maxPages);
+      if (nextState.presentation.currentPage >= totalPages) {
+        break;
+      }
+
+      const currentPage = Math.min(nextState.presentation.currentPage + 1, totalPages);
 
       nextState.presentation.currentPage = currentPage;
-      nextState.presentation.totalPages = maxPages;
+      nextState.presentation.totalPages = totalPages;
       nextState.presentation.currentSlide = material?.slides[currentPage - 1] || { index: currentPage, title: `Slide ${currentPage}` };
-      nextState.presentation.nextSlide = currentPage < maxPages ? (material?.slides[currentPage] || { index: currentPage + 1, title: `Slide ${currentPage + 1}` }) : null;
+      nextState.presentation.nextSlide = currentPage < totalPages ? (material?.slides[currentPage] || { index: currentPage + 1, title: `Slide ${currentPage + 1}` }) : null;
       nextState.presentation.updatedAt = now;
       break;
     }
