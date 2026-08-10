@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Material } from "@/core/types";
 import { ThumbnailList } from "@/features/material/components/ThumbnailList";
@@ -90,9 +90,18 @@ function PresentationControlContent() {
 
   const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
 
+  const scannedMaterialsRef = useRef<Set<string>>(new Set());
+
   // Discover the real page count for Google Slides and expand the deck dynamically.
   useEffect(() => {
     if (!activeMaterial || (activeMaterial.type !== "url" && activeMaterial.type !== "canva")) return;
+
+    if (scannedMaterialsRef.current.has(activeMaterial.id)) return;
+    if (activeMaterial.slides && activeMaterial.slides.length > 1) {
+      scannedMaterialsRef.current.add(activeMaterial.id);
+      return;
+    }
+    scannedMaterialsRef.current.add(activeMaterial.id);
 
     const rawUrl = activeMaterial.externalUrl || activeMaterial.url || "";
     const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
