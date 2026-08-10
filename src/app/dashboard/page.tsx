@@ -325,7 +325,7 @@ export default function DashboardPage() {
             <form onSubmit={handleCreateRoomSubmit} className="space-y-5">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                  Nama / Judul Room (Event Title)
+                  Event Title
                 </label>
                 <input
                   type="text"
