@@ -20,24 +20,32 @@ interface ThumbnailItemProps {
   };
   isSelected: boolean;
   thumbnailUrl: string | null;
+  googlePresentationId?: string | null;
   onSelectSlide: (pageNumber: number) => void;
 }
 
-function ThumbnailItem({ slide, isSelected, thumbnailUrl, onSelectSlide }: ThumbnailItemProps) {
+function ThumbnailItem({ slide, isSelected, thumbnailUrl, googlePresentationId, onSelectSlide }: ThumbnailItemProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
+  const [fallbackAttempt, setFallbackAttempt] = useState(0);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  const currentSrc =
+    fallbackAttempt === 1 && googlePresentationId
+      ? `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?slide=id.p${slide.index}`
+      : thumbnailUrl;
 
   useEffect(() => {
     setIsLoading(true);
     setImageError(false);
+    setFallbackAttempt(0);
   }, [slide.index, thumbnailUrl]);
 
   useEffect(() => {
-    if (imgRef.current && imgRef.current.complete && thumbnailUrl) {
+    if (imgRef.current && imgRef.current.complete && currentSrc) {
       setIsLoading(false);
     }
-  }, [thumbnailUrl]);
+  }, [currentSrc]);
 
   return (
     <button
@@ -49,18 +57,22 @@ function ThumbnailItem({ slide, isSelected, thumbnailUrl, onSelectSlide }: Thumb
       }`}
     >
       {/* 16:9 Aspect Ratio Mini Slide Preview Canvas */}
-      <div className={`w-full aspect-video relative flex flex-col justify-between p-3 overflow-hidden border-b border-slate-800/60 ${thumbnailUrl && !imageError ? "bg-slate-950" : "bg-slate-900/80"}`}>
-        {thumbnailUrl && !imageError ? (
+      <div className={`w-full aspect-video relative flex flex-col justify-between p-3 overflow-hidden border-b border-slate-800/60 ${currentSrc && !imageError ? "bg-slate-950" : "bg-slate-900/80"}`}>
+        {currentSrc && !imageError ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               ref={imgRef}
-              src={thumbnailUrl}
+              src={currentSrc}
               alt={slide.title || `Slide ${slide.index}`}
               onLoad={() => setIsLoading(false)}
               onError={() => {
-                setIsLoading(false);
-                setImageError(true);
+                if (fallbackAttempt === 0 && googlePresentationId) {
+                  setFallbackAttempt(1);
+                } else {
+                  setIsLoading(false);
+                  setImageError(true);
+                }
               }}
               className="absolute inset-0 w-full h-full object-cover z-0"
             />
@@ -275,21 +287,10 @@ export function ThumbnailList({
     currentPage + 1
   );
 
-  // Sequential auto-loading: reveal slide thumbnails one by one with 100ms interval
+  // Immediately mark all slides as loaded so all thumbnails render without sequential delays
   useEffect(() => {
-    if (nextSlideToLoad > effectiveCount) return;
-
-    timerRef.current = setTimeout(() => {
-      setLoadedSlides((prev) => new Set([...prev, nextSlideToLoad]));
-      setNextSlideToLoad((prev) => prev + 1);
-    }, LOAD_INTERVAL);
-
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    };
-  }, [nextSlideToLoad, effectiveCount]);
+    setLoadedSlides(new Set(Array.from({ length: effectiveCount }, (_, i) => i + 1)));
+  }, [effectiveCount, material.id]);
 
   const displaySlides = Array.from({ length: effectiveCount }, (_, i) => {
     const slideIdx = i + 1;
@@ -343,6 +344,7 @@ export function ThumbnailList({
               slide={slide}
               isSelected={isSelected}
               thumbnailUrl={thumbnailUrl ?? null}
+              googlePresentationId={googlePresentationId}
               onSelectSlide={onSelectSlide}
             />
           );
