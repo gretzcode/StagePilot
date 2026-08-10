@@ -266,13 +266,21 @@ function PresentationControlContent() {
         </div>
       </header>
 
-      {/* Main Workspace Body: Responsive Flex-col on Mobile/Tablet, 12-Column Grid on Desktop */}
-      <div className="flex-1 flex flex-col lg:grid lg:grid-cols-12 overflow-y-auto lg:overflow-hidden">
-        {/* Left Column: Stage Material Playlist Queue & Slides Deck (Collapsible) */}
+      {/* Main Workspace Body: Off-canvas Mobile Drawer + Docked Desktop Sidebar */}
+      <div className="flex-1 flex flex-col lg:grid lg:grid-cols-12 overflow-hidden relative">
+        {/* Mobile Backdrop Overlay (Tapping outside closes drawer) */}
         {isSidebarOpen && (
-          <div className="col-span-12 lg:col-span-3 border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-900/40 flex flex-col overflow-hidden transition-all duration-200 min-h-[300px] lg:min-h-0">
-            {/* Tab Switcher Header */}
-            <div className="p-3 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+          <div
+            onClick={() => setIsSidebarOpen(false)}
+            className="lg:hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 transition-opacity"
+          />
+        )}
+
+        {/* Left Column: Playlist Queue & Slides Deck (Slide-over Drawer on Mobile, Docked Sidebar on Desktop) */}
+        {isSidebarOpen && (
+          <aside className="fixed inset-y-0 left-0 w-80 max-w-[85vw] lg:w-full bg-slate-900 border-r border-slate-800 shadow-2xl z-50 lg:z-auto flex flex-col overflow-hidden lg:static col-span-12 lg:col-span-3 transition-transform duration-300">
+            {/* Tab Switcher & Mobile Close Header */}
+            <div className="p-3 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between gap-2">
               <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs w-full">
                 <button
                   onClick={() => setLeftTab("playlist")}
@@ -294,6 +302,15 @@ function PresentationControlContent() {
                   <span>SLIDES ({state?.presentation.totalPages || 0})</span>
                 </button>
               </div>
+
+              {/* Close Drawer Button (Mobile Only) */}
+              <button
+                onClick={() => setIsSidebarOpen(false)}
+                className="lg:hidden p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition flex-shrink-0"
+                title="Close Menu"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Left Column Content View */}
@@ -412,12 +429,17 @@ function PresentationControlContent() {
                   <ThumbnailList
                     material={activeMaterial}
                     currentPage={state?.presentation.currentPage || 1}
-                    onSelectSlide={(pageNumber) => dispatchCommand("SLIDE_GOTO", { pageNumber })}
+                    onSelectSlide={(pageNumber) => {
+                      dispatchCommand("SLIDE_GOTO", { pageNumber });
+                      if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                        setIsSidebarOpen(false);
+                      }
+                    }}
                   />
                 </div>
               )}
             </div>
-          </div>
+          </aside>
         )}
 
         {/* Center Column: Live Slide Output Viewer (Expands dynamically to col-span-9 when sidebar is hidden) */}
