@@ -22,10 +22,15 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
   const normalizedRoomCode = (roomCode || "").trim().toUpperCase();
 
   const roomErrorRef = useRef<string | null>(null);
+  const stateRef = useRef<StageSessionState | null>(state);
 
   useEffect(() => {
     roomErrorRef.current = roomError;
   }, [roomError]);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // Reset and reconnect whenever roomCode, deviceId, or role changes (P0-2)
   useEffect(() => {
@@ -86,13 +91,55 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
 
     fetchState();
 
-    // 3. Connect WebSocket for realtime sync
+    // 2. Setup High-Speed Adaptive Smart Heartbeat Polling (1000ms when presenting, 5000ms when idle)
+    let heartbeatTimer: NodeJS.Timeout | null = null;
+
+    const scheduleHeartbeat = () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      const isPresenting = Boolean(stateRef.current?.presentation?.isPresenting);
+      const intervalMs = isPresenting ? 1000 : 5000;
+      heartbeatTimer = setInterval(() => {
+        if (isMounted && !roomErrorRef.current) {
+          fetchState();
+          const currentIsPresenting = Boolean(stateRef.current?.presentation?.isPresenting);
+          if (currentIsPresenting !== isPresenting) {
+            scheduleHeartbeat();
+          }
+        }
+      }, intervalMs);
+    };
+
+    scheduleHeartbeat();
+
+    // 3. Setup HTML5 BroadcastChannel for 0ms Instant Cross-Tab Sync on same machine
+    const broadcastChannel =
+      typeof window !== "undefined" && "BroadcastChannel" in window
+        ? new BroadcastChannel(`stagepilot_sync_${normalizedRoomCode}`)
+        : null;
+
+    if (broadcastChannel) {
+      broadcastChannel.onmessage = (event) => {
+        if (!isMounted) return;
+        try {
+          if (event.data?.type === "SYNC_STATE" && event.data?.state) {
+            setState(event.data.state);
+            setIsConnected(true);
+            setRoomError(null);
+          }
+        } catch {
+          // Ignore
+        }
+      };
+    }
+
+    // 4. Connect WebSocket for realtime sync
     const wsProtocol = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:";
     const socketUrl = `${wsProtocol}//${window.location.host}/api/ws?roomCode=${encodeURIComponent(
       normalizedRoomCode
     )}&deviceId=${encodeURIComponent(deviceId)}&role=${role}&deviceName=${encodeURIComponent(deviceName || "Device")}`;
 
     let reconnectTimer: NodeJS.Timeout | null = null;
+    let pingInterval: NodeJS.Timeout | null = null;
     let socket: WebSocket | null = null;
 
     try {
@@ -108,6 +155,15 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         }
       };
 
+      // 10s Lightweight Keep-Alive PING (0 Cloudflare HTTP Request Quota)
+      pingInterval = setInterval(() => {
+        if (isMounted && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          try {
+            socketRef.current.send(JSON.stringify({ type: "PING" }));
+          } catch {}
+        }
+      }, 10000);
+
       socket.onmessage = (event) => {
         if (!isMounted) return;
         try {
@@ -116,6 +172,11 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
             setState(msg.state);
             setIsConnected(true);
             setRoomError(null);
+
+            // Relay state to local BroadcastChannel for 0ms cross-window sync
+            try {
+              broadcastChannel?.postMessage({ type: "SYNC_STATE", state: msg.state });
+            } catch {}
           }
         } catch {
           // Ignore
@@ -137,15 +198,31 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
       // Fallback
     }
 
+    // Auto-sync when tab becomes visible again after being unfocused/backgrounded
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && isMounted && socketRef.current?.readyState === WebSocket.OPEN) {
+        try {
+          socketRef.current.send(JSON.stringify({ type: "PING" }));
+        } catch {}
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       isMounted = false;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (pingInterval) clearInterval(pingInterval);
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (broadcastChannel) {
+        broadcastChannel.onmessage = null;
+        broadcastChannel.close();
+      }
       if (socket) {
         socket.onclose = null;
         socket.onmessage = null;
         socket.close();
       }
-      socketRef.current = null;
     };
   }, [normalizedRoomCode, deviceId, role, deviceName]);
 

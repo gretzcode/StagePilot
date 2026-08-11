@@ -6,7 +6,7 @@ export const config = {
   matcher: ["/dashboard/:path*", "/control/:path*"],
 };
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const cookieHeader = request.headers.get("cookie");
   const tokenFromCookie = cookieHeader
     ?.split(";")
@@ -36,4 +36,8 @@ export async function middleware(request: NextRequest) {
   }
 
   return NextResponse.next();
+}
+
+export async function middleware(request: NextRequest) {
+  return proxy(request);
 }

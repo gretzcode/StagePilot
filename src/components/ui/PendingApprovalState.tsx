@@ -12,9 +12,9 @@ interface PendingApprovalStateProps {
 
 export function PendingApprovalState({ deviceName, roomCode, role, onCancel }: PendingApprovalStateProps) {
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center select-none">
-      <div className="w-full max-w-md glass-panel p-8 rounded-3xl border border-slate-800 shadow-2xl relative">
-        <div className="w-14 h-14 rounded-3xl bg-purple-950/80 border border-purple-800/60 flex items-center justify-center text-purple-400 mx-auto mb-4 shadow-xl">
+    <div suppressHydrationWarning className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center select-none">
+      <div suppressHydrationWarning className="w-full max-w-md glass-panel p-8 rounded-3xl border border-slate-800 shadow-2xl relative">
+        <div suppressHydrationWarning className="w-14 h-14 rounded-3xl bg-purple-950/80 border border-purple-800/60 flex items-center justify-center text-purple-400 mx-auto mb-4 shadow-xl">
           <div className="w-7 h-7 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
         </div>
 

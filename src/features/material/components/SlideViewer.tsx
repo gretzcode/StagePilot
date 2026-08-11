@@ -193,7 +193,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
               <div className="text-slate-400 text-sm uppercase tracking-widest">Loading slide…</div>
             )}
 
-            {isImageLoading && (
+            {isImageLoading && role === "control" && (
               <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 backdrop-blur-[1px]">
                 <div className="flex flex-col items-center gap-3">
                   <div className="flex gap-2">
