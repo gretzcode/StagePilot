@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "stagepilot",
-  "account_id": "d938fa80fa642dcf97042f4f4ce5f1b3",
+  "account_id": "3dcaa48d7a8dc30aba14ca0bba8d8f04",
   "main": ".open-next/worker.js",
   "compatibility_date": "2025-02-14",
   "compatibility_flags": [
@@ -15,7 +15,7 @@
     {
       "binding": "DB",
       "database_name": "stagepilot-db",
-      "database_id": "70463ee1-f37b-4638-8571-ad236ee28398"
+      "database_id": "1640e6a4-edde-4502-acc2-b04d24593a26"
     }
   ],
   "durable_objects": {
