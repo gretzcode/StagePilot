@@ -4,6 +4,8 @@ import { PdfMaterialProvider } from "@/features/material/providers/pdf";
 import { PptxMaterialProvider } from "@/features/material/providers/pptx";
 import { UrlMaterialProvider } from "@/features/material/providers/url";
 import { ImageMaterialProvider } from "@/features/material/providers/image";
+import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
+import { MaterialStorageResolver } from "@/features/material/storage";
 
 describe("Phase 2 Material Providers Engine", () => {
   it("PDF Provider parses PDF file and generates slide deck metadata", async () => {
@@ -59,5 +61,31 @@ describe("Phase 2 Material Providers Engine", () => {
 
     const imgMat = await defaultPresentationAdapter.loadMaterial("http://example.com/b.png", "Graphic.png", "image");
     expect(imgMat.status).toBe("ready");
+  });
+
+  it("Google Drive provider is available only when operator secrets are configured", async () => {
+    const missingProvider = new GoogleDriveStorageProvider({});
+    await expect(missingProvider.isAvailable()).resolves.toBe(false);
+
+    const configuredProvider = new GoogleDriveStorageProvider({
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret",
+      GOOGLE_REFRESH_TOKEN: "refresh-token",
+    });
+    await expect(configuredProvider.isAvailable()).resolves.toBe(true);
+  });
+
+  it("MaterialStorageResolver prefers Google Drive upload and keeps no-credential startup operational", async () => {
+    const missingResolver = new MaterialStorageResolver({});
+    await expect(missingResolver.isUploadAvailable()).resolves.toBe(false);
+    expect(missingResolver.getUrlProvider().type).toBe("external_url");
+
+    const configuredResolver = new MaterialStorageResolver({
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_CLIENT_SECRET: "client-secret",
+      GOOGLE_REFRESH_TOKEN: "refresh-token",
+    });
+    await expect(configuredResolver.isUploadAvailable()).resolves.toBe(true);
+    await expect(configuredResolver.getUploadProvider()).resolves.toMatchObject({ type: "google_drive" });
   });
 });

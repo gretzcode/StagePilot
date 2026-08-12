@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { validateHostSessionRequest } from "@/lib/auth/session";
 import { applySecurityHeaders } from "@/lib/security/headers";
-import { StorageRegistryResolver } from "@/lib/storage/registry";
+import { MaterialStorageResolver } from "@/features/material/storage";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export async function POST(request: Request) {
@@ -23,9 +23,14 @@ export async function POST(request: Request) {
     const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
     const env = (cfCtx?.env || process.env) as Record<string, unknown>;
 
-    // Hard-delete from database & memory registry
-    const registryResolver = new StorageRegistryResolver(env);
-    await registryResolver.getRegistry().deleteMaterial(materialId);
+    const resolver = new MaterialStorageResolver(env);
+    const provider = await resolver.getProviderForMaterial(materialId);
+    if (provider.delete) {
+      await provider.delete({ materialId, ownerUserId: hostUser.id });
+    } else {
+      const registry = new (await import("@/lib/storage/registry")).MaterialRegistryService(env);
+      await registry.deleteMaterial(materialId);
+    }
 
     const response = NextResponse.json({
       success: true,

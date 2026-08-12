@@ -1,4 +1,4 @@
-export type MaterialStorageProviderType = "external_url" | "r2";
+export type MaterialStorageProviderType = "external_url" | "google_drive" | "r2";
 
 export interface StorageCapabilities {
   upload: boolean;

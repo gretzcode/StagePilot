@@ -5,7 +5,7 @@ import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Radio, Play, Users, Tv, Monitor, LogOut, AlertCircle, Trash2, X, AlertTriangle } from "lucide-react";
+import { Plus, Radio, Play, Users, Tv, Monitor, LogOut, AlertCircle, Trash2, X, AlertTriangle, HardDrive } from "lucide-react";
 
 interface RoomItem {
   roomId: string;
@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [driveStatus, setDriveStatus] = useState<{ connected: boolean; account: string | null } | null>(null);
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -47,6 +48,12 @@ export default function DashboardPage() {
           if (roomsData.success && Array.isArray(roomsData.rooms)) {
             setRooms(roomsData.rooms);
           }
+        }
+
+        const driveRes = await fetch("/api/google-drive/status");
+        if (driveRes.ok) {
+          const driveData = (await driveRes.json()) as { connected?: boolean; account?: string | null };
+          setDriveStatus({ connected: Boolean(driveData.connected), account: driveData.account || null });
         }
       } catch {
         router.push("/login");
@@ -209,6 +216,26 @@ export default function DashboardPage() {
               <span>Create New Room</span>
             </button>
           </div>
+        </div>
+
+        <div className="mb-8 p-5 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center">
+              <HardDrive className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-white">Material Storage</h2>
+              <p className="text-xs text-slate-400">
+                {driveStatus?.connected ? `Google Drive connected: ${driveStatus.account || "Operator"}` : "Google Drive belum tersambung"}
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/api/google-drive/connect"
+            className="px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-sm transition"
+          >
+            {driveStatus?.connected ? "Reconnect" : "Connect Google Drive"}
+          </Link>
         </div>
 
         {/* Room Cards List */}

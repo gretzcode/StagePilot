@@ -6,7 +6,7 @@ export interface MaterialRecord {
   roomCode?: string;
   sourceType: MaterialSourceType;
   materialType: MaterialType;
-  storageProvider?: "external_url" | "r2";
+  storageProvider?: "external_url" | "google_drive" | "r2";
   storageReference?: string;
   title: string;
   originalFileName?: string;
@@ -146,7 +146,7 @@ export class MaterialRegistryService {
       roomCode: (row.room_code as string) || undefined,
       sourceType: row.source_type as MaterialSourceType,
       materialType: row.material_type as MaterialType,
-      storageProvider: (row.storage_provider as "external_url" | "r2") || "external_url",
+      storageProvider: (row.storage_provider as "external_url" | "google_drive" | "r2") || "external_url",
       storageReference: (row.storage_reference as string) || (row.external_url as string) || (row.object_key as string) || "",
       title: row.title as string,
       originalFileName: (row.original_file_name as string) || undefined,

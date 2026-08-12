@@ -1,6 +1,7 @@
 import { MaterialRegistryService } from "@/lib/storage/registry";
 import { getR2Object } from "@/lib/storage/r2";
 import { isMaterialExpired } from "@/core/config/material";
+import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
 
 export async function GET(request: Request) {
   try {
@@ -28,6 +29,21 @@ export async function GET(request: Request) {
         await registry.markExpired(materialId);
       }
       return new Response("Materi tidak tersedia atau sudah kedaluwarsa.", { status: 410 });
+    }
+
+    if (record.storageProvider === "google_drive") {
+      if (!record.storageReference) {
+        return new Response("No Google Drive file associated with this material.", { status: 404 });
+      }
+      const provider = new GoogleDriveStorageProvider(process.env as Record<string, unknown>);
+      const driveAsset = await provider.getFile(record.storageReference);
+      return new Response(driveAsset.data as unknown as BodyInit, {
+        status: 200,
+        headers: {
+          "Content-Type": driveAsset.mimeType || record.mimeType || "application/octet-stream",
+          "Cache-Control": "private, max-age=3600",
+        },
+      });
     }
 
     if (!record.objectKey) {
