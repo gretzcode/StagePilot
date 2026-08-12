@@ -231,6 +231,8 @@ interface ThumbnailListProps {
   isDiscoveringSlides?: boolean;
 }
 
+const LOAD_INTERVAL = 100;
+
 export function ThumbnailList({
   material,
   currentPage,
@@ -238,12 +240,51 @@ export function ThumbnailList({
   placeholderCount,
   isDiscoveringSlides,
 }: ThumbnailListProps) {
-  const [loadedSlides, setLoadedSlides] = useState<Set<number>>(new Set());
-  const [nextSlideToLoad, setNextSlideToLoad] = useState<number>(1);
+  // ── ALL hooks must be declared before any conditional return ──────────────
   const containerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const LOAD_INTERVAL = 100;
 
+  const rawUrl = material?.externalUrl || material?.url || "";
+  const driveMatch =
+    rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/id=([A-Za-z0-9_-]+)/);
+  const googleDriveFileId = driveMatch ? driveMatch[1] : null;
+  const isPdf = material?.type === "pdf" || Boolean(googleDriveFileId);
+
+  const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
+  const googlePresentationId = match ? match[1] : null;
+
+  const effectiveCount = isPdf
+    ? 1
+    : Math.max(
+        placeholderCount || material?.totalPages || 1,
+        material?.totalPages || 1,
+        material?.slides?.length || 1,
+        currentPage + 1
+      );
+
+  // Sequential reveal counter: thumbnails are unlocked one-by-one every
+  // LOAD_INTERVAL ms so they always appear in order 1 → 2 → 3 → …
+  // Resetting revealedCount to 1 on material/count change restarts the sequence.
+  const [revealedCount, setRevealedCount] = useState(1);
+
+  useEffect(() => {
+    setRevealedCount(1);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [material?.id, effectiveCount]);
+
+  useEffect(() => {
+    if (isPdf || revealedCount >= effectiveCount) return;
+    timerRef.current = setTimeout(() => {
+      setRevealedCount((prev) => Math.min(prev + 1, effectiveCount));
+    }, LOAD_INTERVAL);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [revealedCount, effectiveCount, isPdf]);
+
+  // ── Conditional early returns (after all hooks) ───────────────────────────
   if (!material || !material.slides || material.slides.length === 0) {
     return (
       <div className="p-6 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-2xl">
@@ -251,14 +292,6 @@ export function ThumbnailList({
       </div>
     );
   }
-
-  const rawUrl = material.externalUrl || material.url || "";
-
-  // ── Detect if this material is a PDF (uploaded or Google Drive) ───────────
-  const driveMatch =
-    rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/id=([A-Za-z0-9_-]+)/);
-  const googleDriveFileId = driveMatch ? driveMatch[1] : null;
-  const isPdf = material.type === "pdf" || Boolean(googleDriveFileId);
 
   // ── PDF path: delegate to PdfThumbnailList ────────────────────────────────
   if (isPdf) {
@@ -274,23 +307,8 @@ export function ThumbnailList({
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Non-PDF path (Google Slides, PPTX, image, etc.) — original logic below
+  // Non-PDF path (Google Slides, PPTX, image, etc.)
   // ─────────────────────────────────────────────────────────────────────────
-
-  const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
-  const googlePresentationId = match ? match[1] : null;
-
-  const effectiveCount = Math.max(
-    placeholderCount || material.totalPages || 1,
-    material.totalPages || 1,
-    material.slides?.length || 1,
-    currentPage + 1
-  );
-
-  // Immediately mark all slides as loaded so all thumbnails render without sequential delays
-  useEffect(() => {
-    setLoadedSlides(new Set(Array.from({ length: effectiveCount }, (_, i) => i + 1)));
-  }, [effectiveCount, material.id]);
 
   const displaySlides = Array.from({ length: effectiveCount }, (_, i) => {
     const slideIdx = i + 1;
@@ -329,14 +347,16 @@ export function ThumbnailList({
         ref={containerRef}
       >
         {displaySlides.map((slide) => {
+          // A thumbnail URL is only assigned once this slide's index has been
+          // "revealed" by the sequential timer — guaranteeing 1→2→3 order.
+          const isRevealed = slide.index <= revealedCount;
           const isSelected = slide.index === currentPage;
-          const isLoaded = loadedSlides.has(slide.index);
 
           const googleThumbnailUrl =
-            isLoaded && googlePresentationId
+            isRevealed && googlePresentationId
               ? `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${slide.index}`
               : null;
-          const thumbnailUrl = isLoaded ? slide.thumbnailUrl || googleThumbnailUrl : null;
+          const thumbnailUrl = isRevealed ? slide.thumbnailUrl || googleThumbnailUrl : null;
 
           return (
             <ThumbnailItem
