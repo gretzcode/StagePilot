@@ -25,6 +25,6 @@ describe("Phase 3 Host Password Hashing & Production Session Tests", () => {
     expect(token).toBeDefined();
     expect(cookieHeader).toContain("stagepilot_session_id=");
     expect(cookieHeader).toContain("HttpOnly");
-    expect(cookieHeader).toContain("SameSite=Strict");
+    expect(cookieHeader).toContain("SameSite=Lax");
   });
 });

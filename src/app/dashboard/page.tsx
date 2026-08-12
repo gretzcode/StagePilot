@@ -230,12 +230,12 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
-          <Link
+          <a
             href="/api/google-drive/connect"
             className="px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-sm transition"
           >
             {driveStatus?.connected ? "Reconnect" : "Connect Google Drive"}
-          </Link>
+          </a>
         </div>
 
         {/* Room Cards List */}
