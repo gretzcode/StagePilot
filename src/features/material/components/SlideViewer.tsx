@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Material, SlideMetadata } from "@/core/types";
 import { PdfSlideViewer } from "./PdfSlideViewer";
 
@@ -29,6 +29,17 @@ function preloadSlideImage(url: string): HTMLImageElement {
   return img;
 }
 
+// ─── Double-buffer layer state ────────────────────────────────────────────────
+// We maintain exactly two image layers (A and B). One is always "front"
+// (opacity 1, currently displayed). The other is "back" (opacity 0, loading
+// the next slide). On page change, we write the new URL into the back layer
+// and crossfade when it fires onLoad — so the front layer NEVER goes blank.
+interface LayerState {
+  a: string | null;
+  b: string | null;
+  front: "a" | "b";
+}
+
 export function SlideViewer({ material, slide, currentPage, blanked, role, onNumPagesDiscovered }: SlideViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const baseIframeSrc = useRef<string | null>(null);
@@ -43,24 +54,30 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
   const driveMatch = rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/id=([A-Za-z0-9_-]+)/);
   const googleFileId = driveMatch ? driveMatch[1] : null;
 
-  // Target Google Slides PNG export URL
+  // Target Google Slides PNG export URL for the current page
   const targetGoogleSlideImg = googlePresentationId
     ? `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${currentPage}`
     : null;
 
-  // Currently displayed image URL on screen
-  const [displayedImgUrl, setDisplayedImgUrl] = useState<string | null>(() => {
-    if (!targetGoogleSlideImg) return null;
-    preloadSlideImage(targetGoogleSlideImg);
-    return targetGoogleSlideImg;
+  // ── Double-buffer crossfade state ─────────────────────────────────────────
+  const [layers, setLayers] = useState<LayerState>({
+    a: targetGoogleSlideImg,
+    b: null,
+    front: "a",
   });
   const [useFallbackIframe, setUseFallbackIframe] = useState(false);
-  const [isImageLoading, setIsImageLoading] = useState(true);
+
+  // Ref always holds the latest target URL so stale-closure onLoad checks work
+  const latestTargetRef = useRef<string | null>(targetGoogleSlideImg);
+
+  // Prefetch tracking
   const [prefetchQueue, setPrefetchQueue] = useState<number[]>([]);
   const [prefetchedPages, setPrefetchedPages] = useState<number[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [loadingPage, setLoadingPage] = useState<number | null>(null);
 
-  // 1. Sequential prefetch: prepare one next slide at a time with a safe delay.
+  // 1. Sequential prefetch: load upcoming slides into browser cache with a
+  //    safe delay so we don't hammer the API on every page change.
   useEffect(() => {
     if (!googlePresentationId || !material?.totalPages || material.totalPages <= 1) return;
 
@@ -88,41 +105,53 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     };
   }, [googlePresentationId, currentPage, material?.totalPages, prefetchedPages, prefetchQueue]);
 
-  // 2. Synchronous Instant Image Swap Engine (0ms Lag Response)
+  // 2. Double-buffer slide transition engine.
+  //    When targetGoogleSlideImg changes, write the new URL into the BACK layer
+  //    and wait for onLoad. If the image is already cached, onLoad fires
+  //    near-instantly → no visible delay. The FRONT layer remains fully opaque
+  //    throughout, so there is never a black frame.
   useEffect(() => {
-    if (!targetGoogleSlideImg) {
-      setIsImageLoading(false);
-      return;
-    }
+    if (!targetGoogleSlideImg) return;
+    latestTargetRef.current = targetGoogleSlideImg;
+    setUseFallbackIframe(false);
 
-    setIsImageLoading(true);
-    const cachedImg = preloadSlideImage(targetGoogleSlideImg);
-    if (cachedImg.complete) {
-      setDisplayedImgUrl(targetGoogleSlideImg);
-      setIsImageLoading(false);
-    } else {
-      cachedImg.onload = () => {
-        setDisplayedImgUrl(targetGoogleSlideImg);
-        setIsImageLoading(false);
-      };
-      cachedImg.onerror = () => {
-        setIsImageLoading(false);
-        setUseFallbackIframe(true);
-      };
-    }
+    setLayers((prev) => {
+      // Already showing this slide? No-op.
+      if (prev[prev.front] === targetGoogleSlideImg) return prev;
+
+      const back: "a" | "b" = prev.front === "a" ? "b" : "a";
+
+      // Back layer already holds this URL (from a prefetch that just completed)?
+      // → Crossfade immediately without waiting for an onLoad.
+      if (prev[back] === targetGoogleSlideImg) {
+        return { ...prev, front: back };
+      }
+
+      // Otherwise, write the new URL into the back layer and let onLoad trigger
+      // the crossfade once the image is fetched (or served from browser cache).
+      return { ...prev, [back]: targetGoogleSlideImg };
+    });
   }, [targetGoogleSlideImg]);
 
-  // 3. Persistent Base Iframe URL (used only as a fallback when image export is unavailable)
+  // Called when either image layer finishes loading.
+  // If the loaded layer contains the current target slide and is still in the
+  // back position, crossfade it to the front.
+  const handleLayerLoad = useCallback((layer: "a" | "b") => {
+    setLayers((prev) => {
+      if (prev[layer] === latestTargetRef.current && layer !== prev.front) {
+        return { ...prev, front: layer };
+      }
+      return prev;
+    });
+  }, []);
+
+  // 3. Persistent Base Iframe URL (used only as a fallback when PNG export is unavailable)
   if (isGoogleSlides && googlePresentationId && !baseIframeSrc.current) {
     baseIframeSrc.current = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${currentPage}`;
   } else if (isGoogleDrive && googleFileId && !baseIframeSrc.current) {
     baseIframeSrc.current = `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0`;
   }
   const persistentIframeSrc = baseIframeSrc.current || rawUrl;
-
-  useEffect(() => {
-    setUseFallbackIframe(false);
-  }, [googlePresentationId, currentPage]);
 
   // 4. Reactive fallback iframe update engine for the rare cases where PNG export is blocked.
   useEffect(() => {
@@ -177,39 +206,44 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
   }
 
   if (material.type === "url" || material.type === "canva") {
+    // ── Google Slides: double-buffer crossfade rendering ──────────────────────
     if (isGoogleSlides && googlePresentationId && !useFallbackIframe) {
-      const activeImgUrl = displayedImgUrl || targetGoogleSlideImg;
       return (
         <div className="w-full h-full bg-slate-950 relative overflow-hidden flex items-center justify-center">
-          <div className={`w-full h-full relative flex items-center justify-center ${role !== "control" ? "pointer-events-none" : ""}`}>
-            {activeImgUrl ? (
+          <div
+            className={`w-full h-full relative flex items-center justify-center ${
+              role !== "control" ? "pointer-events-none" : ""
+            }`}
+          >
+            {/* Two image layers stacked on top of each other.
+                The "front" layer is fully opaque; the "back" layer is invisible
+                while it loads the next slide. When the back layer fires onLoad,
+                both layers' opacities are swapped — a smooth crossfade with
+                zero black frames between slides. */}
+            {(["a", "b"] as const).map((layer) => (
               <img
-                src={activeImgUrl}
-                alt={material.name}
-                className="max-w-full max-h-full object-contain transition-opacity duration-150"
+                key={layer}
+                src={layers[layer] ?? undefined}
+                alt={layer === layers.front ? material.name : undefined}
+                className="absolute inset-0 w-full h-full object-contain"
+                style={{
+                  opacity: layers.front === layer ? 1 : 0,
+                  // 220ms is imperceptibly short in live presentation but long
+                  // enough to suppress any browser-repaint flicker.
+                  transition: "opacity 220ms ease-in-out",
+                  // Only the front layer should receive pointer events
+                  pointerEvents: layers.front === layer ? "auto" : "none",
+                }}
+                onLoad={() => handleLayerLoad(layer)}
                 onError={() => setUseFallbackIframe(true)}
               />
-            ) : (
-              <div className="text-slate-400 text-sm uppercase tracking-widest">Loading slide…</div>
-            )}
-
-            {isImageLoading && role === "control" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/70 backdrop-blur-[1px]">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="flex gap-2">
-                    <span className="h-3 w-3 rounded-full bg-purple-400 animate-bounce [animation-delay:-0.2s]" />
-                    <span className="h-3 w-3 rounded-full bg-purple-400 animate-bounce [animation-delay:-0.1s]" />
-                    <span className="h-3 w-3 rounded-full bg-purple-400 animate-bounce" />
-                  </div>
-                  <div className="text-[11px] uppercase tracking-[0.3em] text-slate-400">Preparing slide</div>
-                </div>
-              </div>
-            )}
+            ))}
           </div>
         </div>
       );
     }
 
+    // ── Google Slides iframe fallback (when PNG export is blocked) ────────────
     if (useFallbackIframe && isGoogleSlides && googlePresentationId) {
       const embedUrl = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false&delayms=60000#slide=id.p${currentPage}`;
       return (
@@ -228,6 +262,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
       );
     }
 
+    // ── Generic iframe (Canva, other embed URLs) ──────────────────────────────
     return (
       <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
         <div className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}>
