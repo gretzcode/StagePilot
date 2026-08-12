@@ -93,14 +93,14 @@ function PresentationControlContent() {
   const scannedMaterialsRef = useRef<Set<string>>(new Set());
 
   // Discover the real page count for Google Slides and expand the deck dynamically.
+  // NOTE: The old guard (slides.length > 1 → skip) has been removed because a
+  // previous session may have stored a partial count (e.g. 4 slides) in DO state.
+  // We now always re-scan on mount (once per session via scannedMaterialsRef) and
+  // only update the state if the discovered count is *larger* than what is stored.
   useEffect(() => {
     if (!activeMaterial || (activeMaterial.type !== "url" && activeMaterial.type !== "canva")) return;
 
     if (scannedMaterialsRef.current.has(activeMaterial.id)) return;
-    if (activeMaterial.slides && activeMaterial.slides.length > 1) {
-      scannedMaterialsRef.current.add(activeMaterial.id);
-      return;
-    }
     scannedMaterialsRef.current.add(activeMaterial.id);
 
     const rawUrl = activeMaterial.externalUrl || activeMaterial.url || "";
@@ -150,7 +150,10 @@ function PresentationControlContent() {
         });
       };
 
-      const maxPagesToScan = Math.max(40, activeMaterial.totalPages || 1);
+      // Scan from slide 1, in batches of 4. Stop only when an ENTIRE batch has
+      // zero confirmed images. Start the scan from 1 regardless of stored count
+      // so we catch presentations that previously stopped early.
+      const maxPagesToScan = Math.max(60, (activeMaterial.totalPages || 1) + 20);
       let discoveredPages = activeMaterial.totalPages || 1;
       let page = 1;
 
@@ -158,15 +161,21 @@ function PresentationControlContent() {
         if (!isMounted) break;
 
         const batchSize = 4;
-        const currentBatch = Array.from({ length: Math.min(batchSize, maxPagesToScan - page + 1) }, (_, index) => page + index);
-        const results = await Promise.all(currentBatch.map((targetPage) => checkImageWithRetry(targetPage)));
+        const currentBatch = Array.from(
+          { length: Math.min(batchSize, maxPagesToScan - page + 1) },
+          (_, index) => page + index
+        );
+        const results = await Promise.all(
+          currentBatch.map((targetPage) => checkImageWithRetry(targetPage))
+        );
 
-        const confirmedInBatch = currentBatch.filter((_, index) => results[index]);
+        const confirmedInBatch = currentBatch.filter((_, idx) => results[idx]);
         if (confirmedInBatch.length > 0) {
           discoveredPages = confirmedInBatch[confirmedInBatch.length - 1];
           setDiscoveredPlaceholderCount(discoveredPages);
         }
 
+        // Stop only when none in the batch responded — this is the end of the deck.
         if (confirmedInBatch.length === 0) {
           break;
         }
@@ -176,20 +185,27 @@ function PresentationControlContent() {
 
       if (!isMounted || !activeMaterial) return;
 
-      const expandedSlides = Array.from({ length: discoveredPages }, (_, i) => ({
-        index: i + 1,
-        title: `Slide ${i + 1}`,
-        url: rawUrl,
-        contentUrl: rawUrl,
-      }));
+      const currentTotal = activeMaterial.totalPages || 1;
 
-      dispatchCommand("MATERIAL_ADD", {
-        material: {
-          ...activeMaterial,
-          totalPages: discoveredPages,
-          slides: expandedSlides,
-        },
-      });
+      // Only dispatch an update if we found MORE slides than are currently stored.
+      // This prevents clobbering a correct count with a shorter partial result
+      // that may occur during transient network issues.
+      if (discoveredPages > currentTotal) {
+        const expandedSlides = Array.from({ length: discoveredPages }, (_, i) => ({
+          index: i + 1,
+          title: `Slide ${i + 1}`,
+          url: rawUrl,
+          contentUrl: rawUrl,
+        }));
+        dispatchCommand("MATERIAL_ADD", {
+          material: {
+            ...activeMaterial,
+            totalPages: discoveredPages,
+            slides: expandedSlides,
+          },
+        });
+      }
+
       setDiscoveredPlaceholderCount(discoveredPages);
       setIsDiscoveringSlides(false);
     }

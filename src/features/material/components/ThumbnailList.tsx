@@ -264,7 +264,9 @@ export function ThumbnailList({
 
   // Sequential reveal counter: thumbnails are unlocked one-by-one every
   // LOAD_INTERVAL ms so they always appear in order 1 → 2 → 3 → …
-  // Resetting revealedCount to 1 on material/count change restarts the sequence.
+  // Only reset to 1 when the material itself changes (different presentation),
+  // NOT when effectiveCount grows — so a discovery update that expands count
+  // from 4 → 20 continues the reveal from where it left off (e.g. 5,6,...,20).
   const [revealedCount, setRevealedCount] = useState(1);
 
   useEffect(() => {
@@ -272,7 +274,7 @@ export function ThumbnailList({
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [material?.id, effectiveCount]);
+  }, [material?.id]); // Only reset when switching to a different material
 
   useEffect(() => {
     if (isPdf || revealedCount >= effectiveCount) return;
