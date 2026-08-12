@@ -74,15 +74,6 @@ export class StageRoom extends DurableObject {
       }
     }
 
-    // ── HTTP GET (non-WebSocket): return current state for polling ─────────────
-    if (request.headers.get("Upgrade") !== "websocket") {
-      await this.ensureStateLoaded(roomCode, title, hostUserId);
-      const syncMsg: ServerMessage = { type: "SYNC_STATE", state: this.state!, timestamp: Date.now() };
-      return new Response(JSON.stringify(syncMsg), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
     const deviceId = url.searchParams.get("deviceId") || `dev-${Date.now()}`;
     const requestedRole = (url.searchParams.get("role") || "control") as "host" | "control" | "audience" | "confidence";
     const deviceName = url.searchParams.get("deviceName") || "Device";
@@ -110,15 +101,12 @@ export class StageRoom extends DurableObject {
     if (existingDevice) {
       existingDevice.status = "online";
       existingDevice.lastSeenAt = Date.now();
-      if (existingDevice.approvalStatus === "pending") {
-        existingDevice.approvalStatus = "approved";
-      }
       if (isHostRole) {
         this.state.host.isHostConnected = true;
         this.state.host.hostDeviceId = deviceId;
       }
     } else {
-      const autoApprove = isHostRole || requestedRole === "control";
+      const autoApprove = isHostRole;
       this.state.devices[deviceId] = {
         id: deviceId,
         name: deviceName,
@@ -148,6 +136,16 @@ export class StageRoom extends DurableObject {
     }
 
     await this.persistState();
+    this.broadcastState();
+
+    // ── HTTP GET (non-WebSocket): return current state for polling ─────────────
+    if (request.headers.get("Upgrade") !== "websocket") {
+      const syncMsg: ServerMessage = { type: "SYNC_STATE", state: this.state, timestamp: Date.now() };
+      return new Response(JSON.stringify(syncMsg), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
     const pair = new WebSocketPair();
     const client = pair[0];
