@@ -24,11 +24,13 @@ const memoryTransactions = new Map<string, OAuthTransaction>();
 
 export class OAuthTransactionStore {
   private d1: D1Binding | null = null;
+  readonly storageKind: "d1" | "memory";
 
   constructor(env?: Record<string, unknown> | null) {
     if (env?.DB && typeof (env.DB as { prepare?: unknown }).prepare === "function") {
       this.d1 = env.DB as D1Binding;
     }
+    this.storageKind = this.d1 ? "d1" : "memory";
   }
 
   async create(transaction: OAuthTransaction): Promise<void> {
