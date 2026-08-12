@@ -106,7 +106,7 @@ export async function POST(request: Request) {
       value: token,
       httpOnly: true,
       path: "/",
-      sameSite: "strict",
+      sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
       maxAge: SESSION_TTL_SECONDS,
     });
@@ -117,4 +117,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
-

@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { createHostSession, HostSessionUser } from "@/lib/auth/session";
 
@@ -26,5 +28,11 @@ describe("Phase 3 Host Password Hashing & Production Session Tests", () => {
     expect(cookieHeader).toContain("stagepilot_session_id=");
     expect(cookieHeader).toContain("HttpOnly");
     expect(cookieHeader).toContain("SameSite=Lax");
+  });
+
+  it("Login route issues OAuth-compatible Lax session cookies", () => {
+    const loginRoute = readFileSync(join(process.cwd(), "src/app/api/auth/login/route.ts"), "utf8");
+    expect(loginRoute).toContain('sameSite: "lax"');
+    expect(loginRoute).not.toContain('sameSite: "strict"');
   });
 });
