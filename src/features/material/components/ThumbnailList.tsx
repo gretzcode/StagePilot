@@ -262,29 +262,95 @@ export function ThumbnailList({
         currentPage + 1
       );
 
-  // Sequential reveal counter: thumbnails are unlocked one-by-one every
-  // LOAD_INTERVAL ms so they always appear in order 1 → 2 → 3 → …
-  // Only reset to 1 when the material itself changes (different presentation),
-  // NOT when effectiveCount grows — so a discovery update that expands count
-  // from 4 → 20 continues the reveal from where it left off (e.g. 5,6,...,20).
+  // ── Sequential reveal with self-discovering probe ──────────────────────────
+  //
+  // `localMax` is the working effective count local to this component.
+  // It starts at `effectiveCount` (from props/state) and can ONLY grow.
+  // After all `localMax` slides have been revealed, we probe the NEXT slide:
+  // if its export image loads successfully, we expand `localMax` and keep going.
+  // This means thumbnails self-discover the true slide count without relying
+  // on a separate async scan running on a different page/component.
+  //
   const [revealedCount, setRevealedCount] = useState(1);
+  const [localMax, setLocalMax] = useState(() => Math.max(effectiveCount, 1));
+  const probeImgRef = useRef<HTMLImageElement | null>(null);
+  const probeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Sync localMax upward when external effectiveCount grows (e.g. MATERIAL_ADD broadcast)
+  useEffect(() => {
+    setLocalMax((prev) => Math.max(prev, effectiveCount));
+  }, [effectiveCount]);
+
+  // Reset everything when switching to a different material
   useEffect(() => {
     setRevealedCount(1);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [material?.id]); // Only reset when switching to a different material
+    setLocalMax(Math.max(effectiveCount, 1));
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (probeTimeoutRef.current) clearTimeout(probeTimeoutRef.current);
+    if (probeImgRef.current) {
+      probeImgRef.current.onload = null;
+      probeImgRef.current.onerror = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [material?.id]);
 
+  // Sequential reveal timer — increments revealedCount by 1 every LOAD_INTERVAL ms
   useEffect(() => {
-    if (isPdf || revealedCount >= effectiveCount) return;
+    if (isPdf || revealedCount >= localMax) return;
     timerRef.current = setTimeout(() => {
-      setRevealedCount((prev) => Math.min(prev + 1, effectiveCount));
+      setRevealedCount((prev) => Math.min(prev + 1, localMax));
     }, LOAD_INTERVAL);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [revealedCount, effectiveCount, isPdf]);
+  }, [revealedCount, localMax, isPdf]);
+
+  // Self-discovering probe — once all current slides are revealed and this is
+  // a Google Slides presentation, attempt to load the NEXT slide image.
+  // • Load succeeds → there IS a next slide; expand localMax by 1 and continue.
+  // • Load fails / times out → we've reached the end of the deck.
+  useEffect(() => {
+    if (isPdf || !googlePresentationId) return;
+    if (revealedCount < localMax) return; // Still revealing known slides
+
+    const nextPage = localMax + 1;
+    if (nextPage > 120) return; // Absolute safety cap
+
+    // Abort any in-progress probe before starting a new one
+    if (probeTimeoutRef.current) clearTimeout(probeTimeoutRef.current);
+    if (probeImgRef.current) {
+      probeImgRef.current.onload = null;
+      probeImgRef.current.onerror = null;
+    }
+
+    const img = new Image();
+    probeImgRef.current = img;
+
+    probeTimeoutRef.current = window.setTimeout(() => {
+      img.onload = null;
+      img.onerror = null;
+      // Probe timed out → treat as end of deck
+    }, 6000) as unknown as NodeJS.Timeout;
+
+    img.onload = () => {
+      if (probeTimeoutRef.current) clearTimeout(probeTimeoutRef.current);
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        // Slide exists — expand local max so the reveal timer picks it up
+        setLocalMax((prev) => Math.max(prev, nextPage));
+      }
+    };
+    img.onerror = () => {
+      if (probeTimeoutRef.current) clearTimeout(probeTimeoutRef.current);
+      // Image failed → no slide at nextPage, stop probing
+    };
+    img.src = `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${nextPage}`;
+
+    return () => {
+      if (probeTimeoutRef.current) clearTimeout(probeTimeoutRef.current);
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [revealedCount, localMax, googlePresentationId, isPdf]);
 
   // ── Conditional early returns (after all hooks) ───────────────────────────
   if (!material || !material.slides || material.slides.length === 0) {
@@ -312,7 +378,7 @@ export function ThumbnailList({
   // Non-PDF path (Google Slides, PPTX, image, etc.)
   // ─────────────────────────────────────────────────────────────────────────
 
-  const displaySlides = Array.from({ length: effectiveCount }, (_, i) => {
+  const displaySlides = Array.from({ length: localMax }, (_, i) => {
     const slideIdx = i + 1;
     return (
       material.slides?.[i] || {
