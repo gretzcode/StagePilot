@@ -38,6 +38,12 @@ GOOGLE_CLIENT_SECRET="..."
 GOOGLE_OAUTH_STATE_SECRET="isi-random-panjang"
 ```
 
+Jalankan migration agar tabel OAuth transaction tersedia:
+
+```bash
+npm run db:migrate:local
+```
+
 Jalankan aplikasi lokal:
 
 ```bash
@@ -61,6 +67,12 @@ npx wrangler secret put GOOGLE_CLIENT_ID
 npx wrangler secret put GOOGLE_CLIENT_SECRET
 npx wrangler secret put GOOGLE_OAUTH_STATE_SECRET
 npx wrangler secret put GOOGLE_REFRESH_TOKEN
+```
+
+Jalankan migration remote setelah deploy konfigurasi database:
+
+```bash
+npm run db:migrate:remote
 ```
 
 Jangan simpan nilai tersebut di `wrangler.jsonc`, source code, browser storage, atau D1.

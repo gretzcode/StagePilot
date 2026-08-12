@@ -12,7 +12,7 @@ export const SESSION_TTL_SECONDS = 86400; // 24 Hours
 
 export async function createHostSession(user: HostSessionUser): Promise<{ token: string; cookieHeader: string }> {
   const token = await createHostToken(user.id, user.email, user.name);
-  const cookieHeader = `${SESSION_COOKIE_NAME}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_TTL_SECONDS}`;
+  const cookieHeader = `${SESSION_COOKIE_NAME}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`;
   return { token, cookieHeader };
 }
 
