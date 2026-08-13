@@ -5,12 +5,25 @@
  * To prevent URL sharing security vulnerabilities (where copying an approved URL bypasses approval in Incognito Mode),
  * each browser instance generates and persists its OWN device ID in local storage.
  */
-export function getPersistentDeviceId(role: string, roomCode: string, _searchParamDeviceId?: string | null): string {
+export function getPersistentDeviceId(role: string, roomCode: string, searchParamDeviceId?: string | null): string {
+  if (searchParamDeviceId && searchParamDeviceId.trim()) {
+    const trimmed = searchParamDeviceId.trim();
+    if (typeof window !== "undefined") {
+      const groupRole = role === "host" || role === "control" ? "control" : role;
+      const storageKey = `stagepilot_dev_id_${groupRole}_${(roomCode || "default").toUpperCase()}`;
+      try {
+        localStorage.setItem(storageKey, trimmed);
+      } catch {}
+    }
+    return trimmed;
+  }
+
   if (typeof window === "undefined") {
     return `dev-${role}-${Date.now().toString(36)}`;
   }
 
-  const storageKey = `stagepilot_dev_id_${role}_${(roomCode || "default").toUpperCase()}`;
+  const groupRole = role === "host" || role === "control" ? "control" : role;
+  const storageKey = `stagepilot_dev_id_${groupRole}_${(roomCode || "default").toUpperCase()}`;
   try {
     const existing = localStorage.getItem(storageKey);
     if (existing && existing.trim()) {

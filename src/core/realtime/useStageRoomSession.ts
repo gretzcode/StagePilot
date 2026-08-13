@@ -91,14 +91,19 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
 
     fetchState();
 
-    // 2. Setup High-Speed Adaptive Smart Heartbeat Polling (1000ms when presenting, 5000ms when idle)
+    // 2. Setup Adaptive Heartbeat Polling Fallback (active ONLY when WebSocket is disconnected)
     let heartbeatTimer: NodeJS.Timeout | null = null;
 
     const scheduleHeartbeat = () => {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
       const isPresenting = Boolean(stateRef.current?.presentation?.isPresenting);
-      const intervalMs = isPresenting ? 1000 : 5000;
+      const intervalMs = isPresenting ? 2000 : 8000;
       heartbeatTimer = setInterval(() => {
+        // Skip HTTP polling if active WebSocket connection is open and receiving updates
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+          return;
+        }
+
         if (isMounted && !roomErrorRef.current) {
           fetchState();
           const currentIsPresenting = Boolean(stateRef.current?.presentation?.isPresenting);

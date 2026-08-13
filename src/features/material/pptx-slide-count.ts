@@ -30,8 +30,6 @@ export function estimatePptxSlideCountFromBytes(buffer: ArrayBuffer): number | n
   const view = new DataView(buffer);
 
   // ── 1. Locate the End-of-Central-Directory record ─────────────────────────
-  // It lives in the last 65,558 bytes of the file. Scan backwards for its
-  // 4-byte signature (0x06054b50, stored little-endian).
   const searchStart = Math.max(0, buffer.byteLength - 65558);
   let eocdOffset = -1;
 
@@ -42,17 +40,21 @@ export function estimatePptxSlideCountFromBytes(buffer: ArrayBuffer): number | n
     }
   }
 
-  if (eocdOffset === -1) return null; // Not a ZIP file
+  if (eocdOffset === -1) return null;
 
-  // ── 2. Read the central directory location from the EOCD record ────────────
-  const cdSize = view.getUint32(eocdOffset + 12, true);   // Total size of central dir
-  const cdOffset = view.getUint32(eocdOffset + 16, true); // Offset of central dir
+  // ── 2. Read central directory location ────────────────────────────────────
+  const cdSize = view.getUint32(eocdOffset + 12, true);
+  const cdOffset = view.getUint32(eocdOffset + 16, true);
 
-  if (cdOffset + cdSize > buffer.byteLength) return null; // Truncated
+  if (cdOffset + cdSize > buffer.byteLength) return null;
 
-  // ── 3. Walk every central directory entry ─────────────────────────────────
+  // ── 3. Fast Byte-level Matching for "ppt/slides/slide" ────────────────────
+  // ASCII bytes: 'p'=112, 'p'=112, 't'=116, '/'=47, 's'=115, 'l'=108, 'i'=105, 'd'=100, 'e'=101, 's'=115, '/'=47, 's'=115, 'l'=108, 'i'=105, 'd'=100, 'e'=101
+  const PREFIX_BYTES = [112, 112, 116, 47, 115, 108, 105, 100, 101, 115, 47, 115, 108, 105, 100, 101];
+
   let pos = cdOffset;
   let slideCount = 0;
+  const uint8View = new Uint8Array(buffer);
 
   while (pos + 46 <= cdOffset + cdSize) {
     if (view.getUint32(pos, true) !== ZIP_CENTRAL_DIR_SIG) break;
@@ -61,13 +63,26 @@ export function estimatePptxSlideCountFromBytes(buffer: ArrayBuffer): number | n
     const extraFieldLength = view.getUint16(pos + 30, true);
     const commentLength = view.getUint16(pos + 32, true);
 
-    // Decode the filename (UTF-8)
-    if (pos + 46 + fileNameLength > buffer.byteLength) break;
-    const fileNameBytes = new Uint8Array(buffer, pos + 46, fileNameLength);
-    const fileName = new TextDecoder("utf-8").decode(fileNameBytes);
-
-    if (SLIDE_FILE_PATTERN.test(fileName)) {
-      slideCount++;
+    if (fileNameLength >= 20 && pos + 46 + fileNameLength <= buffer.byteLength) {
+      const nameStart = pos + 46;
+      let matchesPrefix = true;
+      for (let k = 0; k < 16; k++) {
+        if (uint8View[nameStart + k] !== PREFIX_BYTES[k]) {
+          matchesPrefix = false;
+          break;
+        }
+      }
+      if (matchesPrefix) {
+        // Check if ends with ".xml"
+        if (
+          uint8View[nameStart + fileNameLength - 4] === 46 && // '.'
+          uint8View[nameStart + fileNameLength - 3] === 120 && // 'x'
+          uint8View[nameStart + fileNameLength - 2] === 109 && // 'm'
+          uint8View[nameStart + fileNameLength - 1] === 108 // 'l'
+        ) {
+          slideCount++;
+        }
+      }
     }
 
     pos += 46 + fileNameLength + extraFieldLength + commentLength;

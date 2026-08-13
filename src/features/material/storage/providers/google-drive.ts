@@ -62,10 +62,14 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     const folderId = await this.ensureRoomFolder(input.roomCode);
     const fileId = await this.uploadFile(folderId, input.fileName, validation.mimeType || input.mimeType, input.file);
     let slideCount = 1;
-    if (validation.materialType === "pdf") {
-      slideCount = (await estimatePdfPageCountFromBlob(input.file)) || 1;
-    } else if (validation.materialType === "pptx") {
-      slideCount = (await estimatePptxSlideCountFromBlob(input.file)) || 1;
+    try {
+      if (validation.materialType === "pdf") {
+        slideCount = (await estimatePdfPageCountFromBlob(input.file)) || 1;
+      } else if (validation.materialType === "pptx") {
+        slideCount = (await estimatePptxSlideCountFromBlob(input.file)) || 1;
+      }
+    } catch {
+      slideCount = 1;
     }
 
     const registry = new MaterialRegistryService(this.env);

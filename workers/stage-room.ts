@@ -226,7 +226,14 @@ export class StageRoom extends DurableObject {
           timestamp: Date.now(),
         };
         ws.send(JSON.stringify(ack));
+        return;
       }
+
+      console.warn("[STAGE-ROOM-UNKNOWN-EVENT]", {
+        type: (clientMsg as { type?: string })?.type || "RAW_UNKNOWN",
+        senderDeviceId,
+        timestamp: Date.now(),
+      });
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Internal command error";
       const errResponse: ServerMessage = {
