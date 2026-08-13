@@ -30,9 +30,10 @@ export function PdfSlideViewer({
   // Track active render task so we can cancel on page change
   const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
 
-  // Extract Google Drive File ID if present
-  const driveMatch =
-    url.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || url.match(/id=([A-Za-z0-9_-]+)/);
+  // Extract Google Drive File ID if present in direct Google Drive link
+  const driveMatch = url.includes("drive.google.com")
+    ? url.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || url.match(/[?&]id=([A-Za-z0-9_-]+)/)
+    : null;
   const googleFileId = driveMatch ? driveMatch[1] : null;
 
   const { pdfDoc, numPages, loading: docLoading, error: docError } = usePdfDocument(

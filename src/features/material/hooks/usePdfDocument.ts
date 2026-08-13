@@ -8,6 +8,9 @@ const pdfDocCache = new Map<string, PDFDocumentProxy>();
 const pdfLoadingPromises = new Map<string, Promise<PDFDocumentProxy>>();
 
 function buildFetchTarget(url: string, googleFileId: string | null): string {
+  if (url.startsWith("/api/material/asset")) {
+    return url;
+  }
   if (googleFileId) {
     return `/api/material/asset?url=${encodeURIComponent(
       `https://drive.google.com/uc?export=download&id=${googleFileId}`

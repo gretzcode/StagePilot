@@ -142,6 +142,13 @@ function ThumbnailItem({ slide, isSelected, thumbnailUrl, googlePresentationId, 
   );
 }
 
+function appendAssetAccessParams(url: string, deviceId?: string): string {
+  if (!deviceId || !url.startsWith("/api/material/asset")) return url;
+  const [path, hash = ""] = url.split("#");
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}deviceId=${encodeURIComponent(deviceId)}${hash ? `#${hash}` : ""}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PdfThumbnailList — dedicated sidebar for PDF materials
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,12 +157,14 @@ interface PdfThumbnailListProps {
   material: Material;
   currentPage: number;
   onSelectSlide: (pageNumber: number) => void;
+  deviceId?: string;
 }
 
-function PdfThumbnailList({ material, currentPage, onSelectSlide }: PdfThumbnailListProps) {
-  const rawUrl = material.externalUrl || material.url || "";
-  const driveMatch =
-    rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/id=([A-Za-z0-9_-]+)/);
+function PdfThumbnailList({ material, currentPage, onSelectSlide, deviceId }: PdfThumbnailListProps) {
+  const rawUrl = appendAssetAccessParams(material.externalUrl || material.url || "", deviceId);
+  const driveMatch = rawUrl.includes("drive.google.com")
+    ? rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/[?&]id=([A-Za-z0-9_-]+)/)
+    : null;
   const googleFileId = driveMatch ? driveMatch[1] : null;
 
   const { pdfDoc, numPages, loading, error } = usePdfDocument(rawUrl, googleFileId);
@@ -229,6 +238,7 @@ interface ThumbnailListProps {
   onSelectSlide: (pageNumber: number) => void;
   placeholderCount?: number | null;
   isDiscoveringSlides?: boolean;
+  deviceId?: string;
 }
 
 const LOAD_INTERVAL = 100;
@@ -239,14 +249,16 @@ export function ThumbnailList({
   onSelectSlide,
   placeholderCount,
   isDiscoveringSlides,
+  deviceId,
 }: ThumbnailListProps) {
   // ── ALL hooks must be declared before any conditional return ──────────────
   const containerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const rawUrl = material?.externalUrl || material?.url || "";
-  const driveMatch =
-    rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/id=([A-Za-z0-9_-]+)/);
+  const rawUrl = appendAssetAccessParams(material?.externalUrl || material?.url || "", deviceId);
+  const driveMatch = rawUrl.includes("drive.google.com")
+    ? rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/[?&]id=([A-Za-z0-9_-]+)/)
+    : null;
   const googleDriveFileId = driveMatch ? driveMatch[1] : null;
   const isPdf = material?.type === "pdf" || material?.type === "pptx" || Boolean(googleDriveFileId);
 
@@ -371,6 +383,7 @@ export function ThumbnailList({
           material={material}
           currentPage={currentPage}
           onSelectSlide={onSelectSlide}
+          deviceId={deviceId}
         />
       </div>
     );

@@ -516,6 +516,7 @@ function PresentationControlContent() {
                     currentPage={state?.presentation.currentPage || 1}
                     placeholderCount={discoveredPlaceholderCount}
                     isDiscoveringSlides={isDiscoveringSlides}
+                    deviceId={deviceId}
                     onSelectSlide={(pageNumber) => {
                       dispatchCommand("SLIDE_GOTO", { pageNumber });
                       if (typeof window !== "undefined" && window.innerWidth < 1024) {
