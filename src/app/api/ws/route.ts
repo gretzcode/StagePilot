@@ -16,6 +16,11 @@ interface LocalRoomInstance {
 const globalRoomsMap = ((globalThis as Record<string, unknown>).__STAGEPILOT_LOCAL_ROOMS__ ||=
   new Map<string, LocalRoomInstance>()) as Map<string, LocalRoomInstance>;
 
+export function getLocalRoomStateReadOnly(roomCode: string): StageSessionState | null {
+  const instance = globalRoomsMap.get(roomCode.toUpperCase());
+  return instance ? instance.state : null;
+}
+
 export async function syncLocalRoomMaterials(roomCode: string): Promise<void> {
   const upperCode = roomCode.toUpperCase();
   const instance = globalRoomsMap.get(upperCode);

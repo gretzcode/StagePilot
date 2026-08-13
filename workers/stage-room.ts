@@ -22,8 +22,29 @@ export class StageRoom extends DurableObject {
     const title = url.searchParams.get("title") || "Stage Room";
     const hostUserId = url.searchParams.get("hostUserId") || "host-user";
 
+    // ── READ-ONLY state query (used by asset authorization) ──────────────────
+    // DOES NOT register devices, mutate state, persist, or broadcast.
+    if (url.searchParams.get("action") === "readonly_state") {
+      if (!this.state) {
+        const savedStateStr = await this.ctx.storage.get<string>("state");
+        if (savedStateStr) {
+          this.state = JSON.parse(savedStateStr) as import("../src/core/types").StageSessionState;
+        } else {
+          return new Response(JSON.stringify({ error: "ROOM_NOT_INITIALIZED" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+      return new Response(
+        JSON.stringify({ type: "SYNC_STATE", state: this.state, timestamp: Date.now() }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     // ── HTTP POST: command execution fallback (when WebSocket is unavailable) ──
     if (request.method === "POST") {
+
       try {
         const body = (await request.json().catch(() => ({}))) as {
           roomCode?: string;

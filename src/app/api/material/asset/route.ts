@@ -1,103 +1,85 @@
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getLocalRoomStateReadOnly } from "@/app/api/ws/route";
 import { MaterialRegistryService } from "@/lib/storage/registry";
 import { getR2Object } from "@/lib/storage/r2";
 import { isMaterialExpired } from "@/core/config/material";
 import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
-import { StageSessionState } from "@/core/types";
+import { StageSessionState, Material } from "@/core/types";
 
-// ─── DIAGNOSTIC LOGGING (TEMPORARY – REMOVE AFTER ROOT CAUSE CONFIRMED) ───────
-function diagLog(label: string, data: Record<string, unknown>) {
-  console.log(`[ASSET-DIAG] ${label}:`, JSON.stringify(data, null, 2));
+async function getReadOnlyRoomState(request: Request, roomCode: string): Promise<StageSessionState | null> {
+  const upperCode = roomCode.toUpperCase();
+
+  if (process.env.NODE_ENV === "production") {
+    try {
+      let env: Record<string, unknown> | undefined;
+      try {
+        const cfCtx = await getCloudflareContext({ async: true });
+        env = cfCtx.env as Record<string, unknown>;
+      } catch {
+        env = process.env as Record<string, unknown>;
+      }
+
+      if (env && env.STAGE_ROOM) {
+        const stageRoomNs = env.STAGE_ROOM as {
+          idFromName: (name: string) => { toString: () => string };
+          get: (id: unknown) => { fetch: (req: Request) => Promise<Response> };
+        };
+        const doId = stageRoomNs.idFromName(upperCode);
+        const stub = stageRoomNs.get(doId);
+        const doUrl = new URL(request.url);
+        doUrl.pathname = "/";
+        doUrl.searchParams.set("roomCode", upperCode);
+        doUrl.searchParams.set("action", "readonly_state");
+
+        const res = await stub.fetch(new Request(doUrl.toString(), { method: "GET" }));
+        if (res.ok) {
+          const data = (await res.json().catch(() => null)) as { state?: StageSessionState } | null;
+          return data?.state || null;
+        }
+      }
+    } catch {
+      // Fallback to local state if DO query fails
+    }
+  }
+
+  return getLocalRoomStateReadOnly(upperCode);
 }
 
 async function validateMaterialAssetAccess(request: Request, materialId: string, roomCode: string | null, deviceId: string | null) {
   if (!roomCode) {
-    diagLog("FAIL:no_roomCode", { materialId, deviceId });
     return { ok: false, response: new Response("Room code required", { status: 403 }) };
   }
 
   if (!deviceId) {
-    diagLog("FAIL:no_deviceId", { materialId, roomCode });
     return { ok: false, response: new Response("Device authorization required", { status: 403 }) };
   }
 
-  const url = new URL(request.url);
   const normalizedCode = roomCode.toUpperCase();
-  const stateUrl = new URL("/api/ws", url.origin);
-  stateUrl.searchParams.set("roomCode", normalizedCode);
-  stateUrl.searchParams.set("deviceId", deviceId);
-  stateUrl.searchParams.set("role", "control");
-  stateUrl.searchParams.set("deviceName", "Material Asset Reader");
+  const state = await getReadOnlyRoomState(request, normalizedCode);
 
-  diagLog("FETCH_STATE_REQUEST", {
-    normalizedCode,
-    deviceId,
-    role: "control",
-    stateUrl: stateUrl.toString(),
-  });
-
-  const stateResponse = await fetch(stateUrl.toString(), {
-    headers: {
-      cookie: request.headers.get("cookie") || "",
-      authorization: request.headers.get("authorization") || "",
-    },
-  }).catch(() => null);
-
-  diagLog("FETCH_STATE_RESPONSE", {
-    ok: stateResponse?.ok ?? null,
-    status: stateResponse?.status ?? null,
-  });
-
-  if (!stateResponse?.ok) {
-    diagLog("FAIL:ws_non_ok", { status: stateResponse?.status, normalizedCode, deviceId });
+  if (!state) {
     return { ok: false, response: new Response("Room access denied", { status: 403 }) };
   }
 
-  const sync = (await stateResponse.json().catch(() => null)) as { state?: StageSessionState } | null;
-  const state = sync?.state;
-  const device = state?.devices?.[deviceId];
-
-  const materialInRoom = state?.materials?.some((m) => m.id === materialId) ?? false;
-  const presentationMaterialId = state?.presentation?.materialId ?? null;
-  const isPresenting = state?.presentation?.isPresenting ?? false;
+  const device = state.devices?.[deviceId];
+  if (!device) {
+    return { ok: false, response: new Response("Device authorization required", { status: 403 }) };
+  }
 
   const isApproved =
-    device?.approvalStatus === "approved" ||
-    device?.role === "host" ||
-    device?.role === "control" ||
-    device?.isHostDevice;
+    device.approvalStatus === "approved" ||
+    device.role === "host" ||
+    device.isHostDevice;
 
-  diagLog("AUTH_CHECK", {
-    // Device identity
-    deviceId,
-    deviceFound: !!device,
-    deviceRole: device?.role ?? null,
-    approvalStatus: device?.approvalStatus ?? null,
-    isHostDevice: device?.isHostDevice ?? null,
-    isApproved: !!isApproved,
-    // Material identity
-    materialId,
-    materialInRoom,
-    presentationMaterialId,
-    isPresenting,
-    // Room state
-    normalizedCode,
-    totalMaterials: state?.materials?.length ?? null,
-    materialIds: state?.materials?.map((m) => m.id) ?? [],
-    stateExists: !!state,
-  });
-
-  if (!state || !device || !isApproved) {
-    diagLog("FAIL:device_not_approved", {
-      stateExists: !!state,
-      deviceFound: !!device,
-      isApproved: !!isApproved,
-      deviceRole: device?.role,
-      approvalStatus: device?.approvalStatus,
-    });
+  if (!isApproved) {
     return { ok: false, response: new Response("Device is not approved for this room", { status: 403 }) };
   }
 
-  diagLog("SUCCESS:access_granted", { deviceId, materialId, normalizedCode });
+  const materialInRoom = state.materials.some((m: Material) => m.id === materialId);
+  if (!materialInRoom) {
+    return { ok: false, response: new Response("Material is not active in this room", { status: 403 }) };
+  }
+
   return { ok: true };
 }
 
@@ -108,13 +90,6 @@ export async function GET(request: Request) {
     const roomCode = searchParams.get("roomCode");
     const deviceId = searchParams.get("deviceId");
 
-    diagLog("GET_REQUEST", {
-      materialId,
-      roomCode,
-      deviceId,
-      url: request.url,
-    });
-
     if (!materialId) {
       return new Response("Material ID required", { status: 400 });
     }
@@ -122,33 +97,11 @@ export async function GET(request: Request) {
     const registry = new MaterialRegistryService(process.env as Record<string, unknown>);
     const record = await registry.getMaterialById(materialId);
 
-    diagLog("REGISTRY_RECORD", {
-      materialId,
-      recordFound: !!record,
-      recordRoomCode: record?.roomCode ?? null,
-      recordStatus: record?.status ?? null,
-      recordStorageProvider: record?.storageProvider ?? null,
-      recordMaterialType: record?.materialType ?? null,
-    });
-
     if (!record || record.status === "deleted") {
       return new Response("Material not found", { status: 404 });
     }
 
-    const roomCodeMatch = !roomCode || (record.roomCode && record.roomCode.toUpperCase() !== roomCode.toUpperCase());
-    diagLog("ROOMCODE_CHECK", {
-      requestRoomCode: roomCode,
-      requestRoomCodeUpper: roomCode?.toUpperCase() ?? null,
-      recordRoomCode: record.roomCode,
-      recordRoomCodeUpper: record.roomCode?.toUpperCase() ?? null,
-      mismatch: roomCodeMatch,
-    });
-
     if (!roomCode || (record.roomCode && record.roomCode.toUpperCase() !== roomCode.toUpperCase())) {
-      diagLog("FAIL:roomcode_mismatch", {
-        requestRoomCode: roomCode,
-        recordRoomCode: record.roomCode,
-      });
       return new Response("Unauthorized room access", { status: 403 });
     }
 
