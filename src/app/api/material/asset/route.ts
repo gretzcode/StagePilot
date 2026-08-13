@@ -4,12 +4,19 @@ import { isMaterialExpired } from "@/core/config/material";
 import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
 import { StageSessionState } from "@/core/types";
 
+// ─── DIAGNOSTIC LOGGING (TEMPORARY – REMOVE AFTER ROOT CAUSE CONFIRMED) ───────
+function diagLog(label: string, data: Record<string, unknown>) {
+  console.log(`[ASSET-DIAG] ${label}:`, JSON.stringify(data, null, 2));
+}
+
 async function validateMaterialAssetAccess(request: Request, materialId: string, roomCode: string | null, deviceId: string | null) {
   if (!roomCode) {
+    diagLog("FAIL:no_roomCode", { materialId, deviceId });
     return { ok: false, response: new Response("Room code required", { status: 403 }) };
   }
 
   if (!deviceId) {
+    diagLog("FAIL:no_deviceId", { materialId, roomCode });
     return { ok: false, response: new Response("Device authorization required", { status: 403 }) };
   }
 
@@ -21,6 +28,13 @@ async function validateMaterialAssetAccess(request: Request, materialId: string,
   stateUrl.searchParams.set("role", "control");
   stateUrl.searchParams.set("deviceName", "Material Asset Reader");
 
+  diagLog("FETCH_STATE_REQUEST", {
+    normalizedCode,
+    deviceId,
+    role: "control",
+    stateUrl: stateUrl.toString(),
+  });
+
   const stateResponse = await fetch(stateUrl.toString(), {
     headers: {
       cookie: request.headers.get("cookie") || "",
@@ -28,7 +42,13 @@ async function validateMaterialAssetAccess(request: Request, materialId: string,
     },
   }).catch(() => null);
 
+  diagLog("FETCH_STATE_RESPONSE", {
+    ok: stateResponse?.ok ?? null,
+    status: stateResponse?.status ?? null,
+  });
+
   if (!stateResponse?.ok) {
+    diagLog("FAIL:ws_non_ok", { status: stateResponse?.status, normalizedCode, deviceId });
     return { ok: false, response: new Response("Room access denied", { status: 403 }) };
   }
 
@@ -36,16 +56,48 @@ async function validateMaterialAssetAccess(request: Request, materialId: string,
   const state = sync?.state;
   const device = state?.devices?.[deviceId];
 
+  const materialInRoom = state?.materials?.some((m) => m.id === materialId) ?? false;
+  const presentationMaterialId = state?.presentation?.materialId ?? null;
+  const isPresenting = state?.presentation?.isPresenting ?? false;
+
   const isApproved =
     device?.approvalStatus === "approved" ||
     device?.role === "host" ||
     device?.role === "control" ||
     device?.isHostDevice;
 
+  diagLog("AUTH_CHECK", {
+    // Device identity
+    deviceId,
+    deviceFound: !!device,
+    deviceRole: device?.role ?? null,
+    approvalStatus: device?.approvalStatus ?? null,
+    isHostDevice: device?.isHostDevice ?? null,
+    isApproved: !!isApproved,
+    // Material identity
+    materialId,
+    materialInRoom,
+    presentationMaterialId,
+    isPresenting,
+    // Room state
+    normalizedCode,
+    totalMaterials: state?.materials?.length ?? null,
+    materialIds: state?.materials?.map((m) => m.id) ?? [],
+    stateExists: !!state,
+  });
+
   if (!state || !device || !isApproved) {
+    diagLog("FAIL:device_not_approved", {
+      stateExists: !!state,
+      deviceFound: !!device,
+      isApproved: !!isApproved,
+      deviceRole: device?.role,
+      approvalStatus: device?.approvalStatus,
+    });
     return { ok: false, response: new Response("Device is not approved for this room", { status: 403 }) };
   }
 
+  diagLog("SUCCESS:access_granted", { deviceId, materialId, normalizedCode });
   return { ok: true };
 }
 
@@ -56,6 +108,13 @@ export async function GET(request: Request) {
     const roomCode = searchParams.get("roomCode");
     const deviceId = searchParams.get("deviceId");
 
+    diagLog("GET_REQUEST", {
+      materialId,
+      roomCode,
+      deviceId,
+      url: request.url,
+    });
+
     if (!materialId) {
       return new Response("Material ID required", { status: 400 });
     }
@@ -63,11 +122,33 @@ export async function GET(request: Request) {
     const registry = new MaterialRegistryService(process.env as Record<string, unknown>);
     const record = await registry.getMaterialById(materialId);
 
+    diagLog("REGISTRY_RECORD", {
+      materialId,
+      recordFound: !!record,
+      recordRoomCode: record?.roomCode ?? null,
+      recordStatus: record?.status ?? null,
+      recordStorageProvider: record?.storageProvider ?? null,
+      recordMaterialType: record?.materialType ?? null,
+    });
+
     if (!record || record.status === "deleted") {
       return new Response("Material not found", { status: 404 });
     }
 
+    const roomCodeMatch = !roomCode || (record.roomCode && record.roomCode.toUpperCase() !== roomCode.toUpperCase());
+    diagLog("ROOMCODE_CHECK", {
+      requestRoomCode: roomCode,
+      requestRoomCodeUpper: roomCode?.toUpperCase() ?? null,
+      recordRoomCode: record.roomCode,
+      recordRoomCodeUpper: record.roomCode?.toUpperCase() ?? null,
+      mismatch: roomCodeMatch,
+    });
+
     if (!roomCode || (record.roomCode && record.roomCode.toUpperCase() !== roomCode.toUpperCase())) {
+      diagLog("FAIL:roomcode_mismatch", {
+        requestRoomCode: roomCode,
+        recordRoomCode: record.roomCode,
+      });
       return new Response("Unauthorized room access", { status: 403 });
     }
 
