@@ -10,6 +10,7 @@ import {
   ResolvedMaterial,
 } from "../provider-types";
 import { validateUploadedFile } from "../../validator";
+import { estimatePdfPageCountFromBlob } from "../../pdf-page-count";
 import { buildMaterialObjectKey, putR2Object, deleteR2Object } from "@/lib/storage/r2";
 import { MaterialRegistryService } from "@/lib/storage/registry";
 import { computeDefaultExpiration, isMaterialExpired } from "@/core/config/material";
@@ -60,7 +61,10 @@ export class R2StorageProvider implements MaterialStorageProvider {
 
     await putR2Object(this.env, objectKey, fileBuffer, validation.mimeType || input.mimeType, expiresAt);
 
-    const slideCount = 1;
+    const slideCount =
+      validation.materialType === "pdf"
+        ? (await estimatePdfPageCountFromBlob(input.file)) || 1
+        : 1;
 
     const registry = new MaterialRegistryService(this.env);
     const record = await registry.createMaterial({

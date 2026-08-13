@@ -3,7 +3,7 @@
 import { useState, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ShieldCheck, Users, CheckCircle, XCircle, Play, Trash2, Radio, Tv, Monitor, Sparkles, ListVideo, Plus } from "lucide-react";
+import { ShieldCheck, Users, CheckCircle, XCircle, Play, Trash2, Tv, Monitor, ListVideo, Plus } from "lucide-react";
 import { useStageRoomSession } from "@/core/realtime/useStageRoomSession";
 import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";

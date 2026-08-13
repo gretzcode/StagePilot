@@ -17,13 +17,18 @@ export async function POST(request: Request) {
       roomCode = (formData.get("roomCode") as string) || "DEFAULT";
     }
 
-    // 1. Authorize session or fall back to Room owner
+    // 1. Authorize host session and room ownership
     const hostUser = await validateHostSessionRequest(request);
-    let ownerUserId = hostUser?.id;
+    if (!hostUser) {
+      const unauth = NextResponse.json({ error: "UNAUTHORIZED", message: "Hanya Host yang diizinkan mengunggah file materi." }, { status: 401 });
+      return applySecurityHeaders(unauth);
+    }
+    const ownerUserId = hostUser.id;
 
-    if (!ownerUserId) {
-      const roomRecord = await RoomRegistry.getRoomByCode(roomCode);
-      ownerUserId = roomRecord?.hostUserId || "host-aG9zdEBraW";
+    const roomRecord = await RoomRegistry.getRoomByCode(roomCode);
+    if (roomRecord && roomRecord.hostUserId !== ownerUserId) {
+      const forbidden = NextResponse.json({ error: "ROOM_ACCESS_DENIED", message: "Room ini bukan milik Host yang sedang login." }, { status: 403 });
+      return applySecurityHeaders(forbidden);
     }
 
     // 2. Enforce Rate Limiting

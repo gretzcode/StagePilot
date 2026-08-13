@@ -2,12 +2,56 @@ import { MaterialRegistryService } from "@/lib/storage/registry";
 import { getR2Object } from "@/lib/storage/r2";
 import { isMaterialExpired } from "@/core/config/material";
 import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
+import { StageSessionState } from "@/core/types";
+
+async function validateMaterialAssetAccess(request: Request, materialId: string, roomCode: string | null, deviceId: string | null) {
+  if (!roomCode) {
+    return { ok: false, response: new Response("Room code required", { status: 403 }) };
+  }
+
+  if (!deviceId) {
+    return { ok: false, response: new Response("Device authorization required", { status: 403 }) };
+  }
+
+  const url = new URL(request.url);
+  const stateUrl = new URL("/api/ws", url.origin);
+  stateUrl.searchParams.set("roomCode", roomCode);
+  stateUrl.searchParams.set("deviceId", deviceId);
+  stateUrl.searchParams.set("role", "audience");
+  stateUrl.searchParams.set("deviceName", "Material Asset Reader");
+
+  const stateResponse = await fetch(stateUrl.toString(), {
+    headers: {
+      cookie: request.headers.get("cookie") || "",
+      authorization: request.headers.get("authorization") || "",
+    },
+  }).catch(() => null);
+
+  if (!stateResponse?.ok) {
+    return { ok: false, response: new Response("Room access denied", { status: 403 }) };
+  }
+
+  const sync = (await stateResponse.json().catch(() => null)) as { state?: StageSessionState } | null;
+  const state = sync?.state;
+  const device = state?.devices?.[deviceId];
+
+  if (!state || !device || device.approvalStatus !== "approved") {
+    return { ok: false, response: new Response("Device is not approved for this room", { status: 403 }) };
+  }
+
+  if (!state.materials.some((material) => material.id === materialId)) {
+    return { ok: false, response: new Response("Material is not active in this room", { status: 403 }) };
+  }
+
+  return { ok: true };
+}
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const materialId = searchParams.get("materialId") || searchParams.get("id");
     const roomCode = searchParams.get("roomCode");
+    const deviceId = searchParams.get("deviceId");
 
     if (!materialId) {
       return new Response("Material ID required", { status: 400 });
@@ -20,9 +64,12 @@ export async function GET(request: Request) {
       return new Response("Material not found", { status: 404 });
     }
 
-    if (record.roomCode && roomCode && record.roomCode.toUpperCase() !== roomCode.toUpperCase()) {
+    if (!roomCode || (record.roomCode && record.roomCode.toUpperCase() !== roomCode.toUpperCase())) {
       return new Response("Unauthorized room access", { status: 403 });
     }
+
+    const access = await validateMaterialAssetAccess(request, materialId, roomCode, deviceId);
+    if (!access.ok) return access.response;
 
     if (record.status === "expired" || isMaterialExpired(record.expiresAt)) {
       if (record.status !== "expired") {
@@ -36,7 +83,30 @@ export async function GET(request: Request) {
         return new Response("No Google Drive file associated with this material.", { status: 404 });
       }
       const provider = new GoogleDriveStorageProvider(process.env as Record<string, unknown>);
-      const driveAsset = await provider.getFile(record.storageReference);
+
+      // PPTX files: use Google Drive's server-side PDF export so that
+      // PdfSlideViewer can render slides without any client-side PPTX library.
+      if (record.materialType === "pptx") {
+        const pdfAsset = await provider.getFileAsPdf(record.storageReference).catch(() => null);
+        if (!pdfAsset) {
+          return new Response(
+            "Konversi PPTX ke PDF gagal. Periksa koneksi storage Google Drive atau unggah ulang materi.",
+            { status: 502 }
+          );
+        }
+        return new Response(pdfAsset.data as unknown as BodyInit, {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Cache-Control": "private, max-age=3600",
+          },
+        });
+      }
+
+      const driveAsset = await provider.getFile(record.storageReference).catch(() => null);
+      if (!driveAsset) {
+        return new Response("Materi Google Drive tidak tersedia. Periksa koneksi storage atau unggah ulang materi.", { status: 502 });
+      }
       return new Response(driveAsset.data as unknown as BodyInit, {
         status: 200,
         headers: {
@@ -45,6 +115,7 @@ export async function GET(request: Request) {
         },
       });
     }
+
 
     if (!record.objectKey) {
       return new Response("No binary asset associated with this material.", { status: 404 });

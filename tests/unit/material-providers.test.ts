@@ -25,9 +25,10 @@ describe("Phase 2 Material Providers Engine", () => {
     const provider = new PptxMaterialProvider();
     expect(provider.supports("pptx")).toBe(true);
 
-    const material = await provider.parse("http://example.com/deck.pptx", "National Seminar.pptx");
+    // Pass a server-supplied slideCount (as the upload route does).
+    const material = await provider.parse("http://example.com/deck.pptx", "National Seminar.pptx", 5);
     expect(material.type).toBe("pptx");
-    expect(material.totalPages).toBeGreaterThan(0);
+    expect(material.totalPages).toBe(5);
 
     const slide2 = await provider.getSlide(material, 2);
     expect(slide2.index).toBe(2);

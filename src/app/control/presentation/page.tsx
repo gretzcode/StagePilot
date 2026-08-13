@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState, useRef } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Material } from "@/core/types";
 import { ThumbnailList } from "@/features/material/components/ThumbnailList";
 import { SlideViewer } from "@/features/material/components/SlideViewer";
@@ -17,7 +17,6 @@ import {
   LogOut,
   Tv,
   Layers,
-  Sparkles,
   X,
   ListVideo,
   Plus,
@@ -34,7 +33,6 @@ import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
 
 function PresentationControlContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const rawRoomCode = searchParams.get("roomCode");
   const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
   const requestedRole = (searchParams.get("role") || "control") as "host" | "control";
@@ -91,6 +89,10 @@ function PresentationControlContent() {
   const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
 
   const scannedMaterialsRef = useRef<Set<string>>(new Set());
+  const [leftTab, setLeftTab] = useState<"playlist" | "slides">("playlist");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [discoveredPlaceholderCount, setDiscoveredPlaceholderCount] = useState<number | null>(null);
+  const [isDiscoveringSlides, setIsDiscoveringSlides] = useState(false);
 
   // Discover the real page count for Google Slides and expand the deck dynamically.
   // NOTE: The old guard (slides.length > 1 → skip) has been removed because a
@@ -235,14 +237,6 @@ function PresentationControlContent() {
       },
     });
   };
-
-
-
-  const [leftTab, setLeftTab] = useState<"playlist" | "slides">("playlist");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [discoveredPlaceholderCount, setDiscoveredPlaceholderCount] = useState<number | null>(null);
-  const [isDiscoveringSlides, setIsDiscoveringSlides] = useState(false);
-
   // Auto-switch sidebar tab to 'slides' whenever GO LIVE / PRESENT is clicked or active
   useEffect(() => {
     if (state?.presentation.isPresenting && state.presentation.materialId) {
@@ -544,6 +538,7 @@ function PresentationControlContent() {
               currentPage={state?.presentation.currentPage || 1}
               blanked={state?.presentation.blanked}
               role="control"
+              deviceId={deviceId}
               onNumPagesDiscovered={handlePdfNumPagesDiscovered}
             />
           </div>

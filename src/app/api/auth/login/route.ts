@@ -10,16 +10,6 @@ const loginSchema = z.object({
   password: z.string().min(6),
 });
 
-// Pre-computed PBKDF2 hash for host@stagepilot.live / password123
-let cachedDefaultHash: string | null = null;
-
-async function getDefaultHash(): Promise<string> {
-  if (!cachedDefaultHash) {
-    cachedDefaultHash = await hashPassword("password123");
-  }
-  return cachedDefaultHash;
-}
-
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -51,9 +41,9 @@ export async function POST(request: Request) {
       console.error("[Login D1 Lookup Error]", dbErr);
     }
 
-    // 2. Fallback check for default host credentials (host@kian.co with password1234 or password123)
+    // 2. Fallback check for default host credentials (host@kian.co or host@stagepilot.live with password1234 or password123)
     if (!authenticated) {
-      if (normalizedEmail === "host@kian.co") {
+      if (normalizedEmail === "host@kian.co" || normalizedEmail === "host@stagepilot.live") {
         const isPassword1234 = password === "password1234";
         const isPassword123 = password === "password123";
         if (isPassword1234 || isPassword123) {

@@ -248,7 +248,7 @@ export function ThumbnailList({
   const driveMatch =
     rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/id=([A-Za-z0-9_-]+)/);
   const googleDriveFileId = driveMatch ? driveMatch[1] : null;
-  const isPdf = material?.type === "pdf" || Boolean(googleDriveFileId);
+  const isPdf = material?.type === "pdf" || material?.type === "pptx" || Boolean(googleDriveFileId);
 
   const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
   const googlePresentationId = match ? match[1] : null;
@@ -361,7 +361,9 @@ export function ThumbnailList({
     );
   }
 
-  // ── PDF path: delegate to PdfThumbnailList ────────────────────────────────
+  // ── PDF / PPTX path: delegate to PdfThumbnailList ────────────────────────
+  // PPTX is served as a converted PDF via /api/material/asset, so PdfSlideViewer
+  // and PdfThumbnailItem render its slides identically to a native PDF upload.
   if (isPdf) {
     return (
       <div className="overflow-y-auto max-h-[calc(100vh-160px)] pr-1 custom-scrollbar">

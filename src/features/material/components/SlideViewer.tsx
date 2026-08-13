@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Material, SlideMetadata } from "@/core/types";
 import { PdfSlideViewer } from "./PdfSlideViewer";
 
@@ -12,6 +12,7 @@ interface SlideViewerProps {
   role?: "control" | "audience" | "confidence";
   /** Called when the real PDF page count is discovered from PDF.js */
   onNumPagesDiscovered?: (numPages: number) => void;
+  deviceId?: string;
 }
 
 // Global Memory-Mapped RAM Cache for Slide Images (0ms Sync Retrieval)
@@ -40,11 +41,17 @@ interface LayerState {
   front: "a" | "b";
 }
 
-export function SlideViewer({ material, slide, currentPage, blanked, role, onNumPagesDiscovered }: SlideViewerProps) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const baseIframeSrc = useRef<string | null>(null);
+function appendAssetAccessParams(url: string, deviceId?: string): string {
+  if (!deviceId || !url.startsWith("/api/material/asset")) return url;
+  const [path, hash = ""] = url.split("#");
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}deviceId=${encodeURIComponent(deviceId)}${hash ? `#${hash}` : ""}`;
+}
 
-  const rawUrl = material?.externalUrl || material?.url || "";
+export function SlideViewer({ material, slide, currentPage, blanked, role, onNumPagesDiscovered, deviceId }: SlideViewerProps) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const rawUrl = appendAssetAccessParams(material?.externalUrl || material?.url || "", deviceId);
   const isGoogleSlides = rawUrl.includes("docs.google.com/presentation");
   const isGoogleDrive = rawUrl.includes("drive.google.com");
 
@@ -145,13 +152,15 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     });
   }, []);
 
-  // 3. Persistent Base Iframe URL (used only as a fallback when PNG export is unavailable)
-  if (isGoogleSlides && googlePresentationId && !baseIframeSrc.current) {
-    baseIframeSrc.current = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${currentPage}`;
-  } else if (isGoogleDrive && googleFileId && !baseIframeSrc.current) {
-    baseIframeSrc.current = `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0`;
-  }
-  const persistentIframeSrc = baseIframeSrc.current || rawUrl;
+  const persistentIframeSrc = useMemo(() => {
+    if (isGoogleSlides && googlePresentationId) {
+      return `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${currentPage}`;
+    }
+    if (isGoogleDrive && googleFileId) {
+      return `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0`;
+    }
+    return rawUrl;
+  }, [currentPage, googleFileId, googlePresentationId, isGoogleDrive, isGoogleSlides, rawUrl]);
 
   // 4. Reactive fallback iframe update engine for the rare cases where PNG export is blocked.
   useEffect(() => {
@@ -193,7 +202,10 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     );
   }
 
-  if (material.type === "pdf" || isGoogleDrive) {
+  // PDF and PPTX: both served as PDF binary via /api/material/asset.
+  // For PPTX, the asset route fetches the Google Drive PDF-export endpoint
+  // so PdfSlideViewer renders PPTX slides identically to PDF pages.
+  if (material.type === "pdf" || material.type === "pptx" || isGoogleDrive) {
     return (
       <PdfSlideViewer
         url={rawUrl}
@@ -204,6 +216,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
       />
     );
   }
+
 
   if (material.type === "url" || material.type === "canva") {
     // ── Google Slides: double-buffer crossfade rendering ──────────────────────
@@ -291,23 +304,5 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     );
   }
 
-  // Default PDF/PPTX Normalized Slide Renderer Surface
-  return (
-    <div className="w-full h-full bg-slate-900 border border-slate-800 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
-      <div className="absolute top-4 left-4 text-[10px] font-mono uppercase tracking-widest bg-slate-800/80 px-2.5 py-1 rounded text-purple-300">
-        {material.type.toUpperCase()} • PAGE {currentPage} OF {material.totalPages}
-      </div>
-
-      <div className="max-w-2xl w-full">
-        <span className="text-6xl font-extrabold text-purple-400 block mb-3">{currentPage}</span>
-        <h2 className="text-3xl font-extrabold text-white tracking-tight">{slide?.title || `${material.name} — Slide ${currentPage}`}</h2>
-        {slide?.notes && role !== "audience" && (
-          <p className="mt-4 p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-300 text-xs leading-relaxed text-left font-sans">
-            <strong className="text-purple-400 block mb-1 uppercase tracking-wider text-[10px]">Speaker Note:</strong>
-            {slide.notes}
-          </p>
-        )}
-      </div>
-    </div>
-  );
 }
+

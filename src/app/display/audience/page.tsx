@@ -15,8 +15,7 @@ function AudienceDisplayContent() {
   const rawRoomCode = searchParams.get("roomCode");
   const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
   const [deviceId] = useState(() => getPersistentDeviceId("audience", roomCode, searchParams.get("deviceId")));
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const showControls = useAutoHideCursor(2500);
+  useAutoHideCursor(2500);
 
   const { state, roomError, approvalStatus, roomName } = useStageRoomSession({
     roomCode,
@@ -28,10 +27,8 @@ function AudienceDisplayContent() {
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
     } else {
       document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
     }
   };
 
@@ -83,6 +80,7 @@ function AudienceDisplayContent() {
           currentPage={state?.presentation.currentPage || 1}
           blanked={state?.presentation.blanked}
           role="audience"
+          deviceId={deviceId}
         />
       ) : (
         /* Waiting for presentation UI */

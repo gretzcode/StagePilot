@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { SlideViewer } from "@/features/material/components/SlideViewer";
-import { Clock, MessageSquare, AlertCircle, Monitor } from "lucide-react";
+import { Clock, MessageSquare, AlertCircle } from "lucide-react";
 import { useStageRoomSession } from "@/core/realtime/useStageRoomSession";
 import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
@@ -25,10 +25,9 @@ function ConfidenceDisplayContent() {
   const rawRoomCode = searchParams.get("roomCode");
   const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
   const [deviceId] = useState(() => getPersistentDeviceId("confidence", roomCode, searchParams.get("deviceId")));
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const showControls = useAutoHideCursor(2500);
+  useAutoHideCursor(2500);
 
-  const { state, roomError, approvalStatus, roomName } = useStageRoomSession({
+  const { state, roomError, approvalStatus } = useStageRoomSession({
     roomCode,
     role: "confidence",
     deviceId,
@@ -40,10 +39,8 @@ function ConfidenceDisplayContent() {
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
     } else {
       document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
     }
   };
 
@@ -108,6 +105,7 @@ function ConfidenceDisplayContent() {
               currentPage={state?.presentation.currentPage || 1}
               blanked={state?.presentation.blanked}
               role="confidence"
+              deviceId={deviceId}
             />
           </div>
 

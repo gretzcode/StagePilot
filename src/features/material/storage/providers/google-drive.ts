@@ -10,6 +10,8 @@ import {
   StoredMaterial,
 } from "../provider-types";
 import { validateUploadedFile } from "../../validator";
+import { estimatePdfPageCountFromBlob } from "../../pdf-page-count";
+import { estimatePptxSlideCountFromBlob } from "../../pptx-slide-count";
 import { computeDefaultExpiration, isMaterialExpired } from "@/core/config/material";
 import { MaterialRegistryService, MaterialRecord } from "@/lib/storage/registry";
 
@@ -59,7 +61,12 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     const expiresAt = computeDefaultExpiration(now);
     const folderId = await this.ensureRoomFolder(input.roomCode);
     const fileId = await this.uploadFile(folderId, input.fileName, validation.mimeType || input.mimeType, input.file);
-    const slideCount = 1;
+    let slideCount = 1;
+    if (validation.materialType === "pdf") {
+      slideCount = (await estimatePdfPageCountFromBlob(input.file)) || 1;
+    } else if (validation.materialType === "pptx") {
+      slideCount = (await estimatePptxSlideCountFromBlob(input.file)) || 1;
+    }
 
     const registry = new MaterialRegistryService(this.env);
     const record = await registry.createMaterial({
@@ -127,6 +134,24 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
       throw new Error("File Google Drive tidak tersedia.");
     }
     return { data: await response.arrayBuffer(), mimeType: response.headers.get("content-type") };
+  }
+
+  /**
+   * Fetch a PPTX (or any supported file) from Google Drive as a PDF.
+   * Uses the Drive export endpoint which converts OOXML presentations to PDF
+   * on the fly, enabling PdfSlideViewer to render PPTX files without any
+   * additional client-side library.
+   */
+  async getFileAsPdf(fileId: string): Promise<{ data: ArrayBuffer; mimeType: string }> {
+    const token = await this.getAccessToken();
+    const exportUrl = `${DRIVE_API}/files/${encodeURIComponent(fileId)}/export?mimeType=application%2Fpdf`;
+    const response = await fetch(exportUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+      throw new Error("Konversi PPTX ke PDF di Google Drive gagal. Pastikan file masih aktif dan tidak kedaluwarsa.");
+    }
+    return { data: await response.arrayBuffer(), mimeType: "application/pdf" };
   }
 
   private async getReadyRecord(input: MaterialResolveInput): Promise<MaterialRecord> {

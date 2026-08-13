@@ -15,13 +15,16 @@ test.describe("StagePilot Room Lifecycle & Core Runtime E2E Suite", () => {
     await expect(hostPage.locator("h1")).toContainText("Host Authentication");
 
     // Login with Host credentials
-    await hostPage.fill('input[type="email"]', "host@stagepilot.live");
-    await hostPage.fill('input[type="password"]', "password123");
-    await hostPage.click('button[type="submit"]');
+    await hostPage.fill('input[type="email"]', "host@kian.co");
+    await hostPage.fill('input[type="password"]', "password1234");
+    await Promise.all([
+      hostPage.waitForURL(/\/dashboard/, { timeout: 15000 }),
+      hostPage.click('button[type="submit"]'),
+    ]);
 
     // Should redirect to Dashboard
     await expect(hostPage).toHaveURL(/\/dashboard/);
-    await expect(hostPage.locator("header")).toContainText("host@stagepilot.live", { timeout: 15000 });
+    await expect(hostPage.locator("header")).toContainText("host@kian.co", { timeout: 15000 });
 
     // Get initial room count and Room A code
     const roomCodeElements = hostPage.locator('button:has-text("ROOM:")');
@@ -34,10 +37,12 @@ test.describe("StagePilot Room Lifecycle & Core Runtime E2E Suite", () => {
     // Create Room B via Modal
     await hostPage.click("text=Create New Room");
     await hostPage.waitForTimeout(300);
+    await hostPage.fill('input[type="text"]', "Secondary Room B");
     await hostPage.click('button:has-text("Buat Room")');
     await hostPage.waitForTimeout(500);
 
     // Verify Room B is created and room count increased by 1
+    await expect(roomCodeElements).toHaveCount(initialCount + 1, { timeout: 10000 });
     const newCount = await roomCodeElements.count();
     expect(newCount).toBe(initialCount + 1);
 
@@ -48,7 +53,7 @@ test.describe("StagePilot Room Lifecycle & Core Runtime E2E Suite", () => {
     // Enter Room A Control Room
     await hostPage.locator(`a[href*="/control?roomCode=${roomCodeA}"]`).first().click();
     await expect(hostPage).toHaveURL(new RegExp(`/control\\?roomCode=${roomCodeA}`));
-    await expect(hostPage.locator("h1")).toContainText("Stage Master Control");
+    await expect(hostPage.locator("header")).toContainText(roomCodeA);
 
     // 2. Context B: GUEST CONTROL (Joining Room A)
     const guestContext = await browser.newContext();
@@ -79,7 +84,7 @@ test.describe("StagePilot Room Lifecycle & Core Runtime E2E Suite", () => {
     // 4. Context B (Guest Control): Should be approved and redirected to Master Control Room
     await guestPage.bringToFront();
     await expect(guestPage).toHaveURL(new RegExp(`/control\\?roomCode=${roomCodeA}`), { timeout: 10000 });
-    await expect(guestPage.locator("header")).toContainText("StagePilot");
+    await expect(guestPage.locator("header")).toContainText("SP");
 
     // 5. Context C: AUDIENCE DISPLAY (Joining Room A) - Requires Approval (P0-1)
     const audienceContext = await browser.newContext();
@@ -123,7 +128,7 @@ test.describe("StagePilot Room Lifecycle & Core Runtime E2E Suite", () => {
 
     // Confidence enters approved HUD surface
     await confidencePage.bringToFront();
-    await expect(confidencePage.locator("header")).toContainText("CONFIDENCE DISPLAY HUD", { timeout: 10000 });
+    await expect(confidencePage.locator("text=STAGE COUNTDOWN TIMER")).toBeVisible({ timeout: 10000 });
 
     // 7. Context B (Guest Control): Send Brief Cue
     await guestPage.bringToFront();

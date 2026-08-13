@@ -1,6 +1,18 @@
 import { Material, MaterialType, SlideMetadata } from "@/core/types";
 import { MaterialProvider } from "../contract";
 
+/**
+ * PptxMaterialProvider — client-side metadata adapter for PPTX materials.
+ *
+ * This provider does NOT parse PPTX binary on the client. Actual rendering is
+ * handled by PdfSlideViewer after the asset route converts the PPTX to PDF via
+ * Google Drive's server-side export endpoint. This provider is responsible only
+ * for constructing the normalized Material metadata object from information
+ * supplied by the server (upload route, registry).
+ *
+ * @param slideCount - Number of slides, extracted by the server during upload
+ *   via estimatePptxSlideCountFromBlob (ZIP central-directory scanner).
+ */
 export class PptxMaterialProvider implements MaterialProvider {
   readonly type: MaterialType = "pptx";
 
@@ -8,14 +20,18 @@ export class PptxMaterialProvider implements MaterialProvider {
     return type === "pptx";
   }
 
-  async parse(source: string | File | Blob, name: string): Promise<Material> {
+  async parse(source: string | File | Blob, name: string, slideCount?: number): Promise<Material> {
     const url = typeof source === "string" ? source : URL.createObjectURL(source);
-    // PPTX slide parser extracts slide structures into normalized slides
-    const slideCount = 15;
-    const slides: SlideMetadata[] = Array.from({ length: slideCount }, (_, i) => ({
+
+    // Use server-supplied slide count when available.
+    // Fall back to 1 only as a last resort — the real count will be
+    // discovered by PdfSlideViewer via onNumPagesDiscovered once the
+    // converted PDF is loaded by PDF.js.
+    const totalPages = (slideCount && slideCount > 0) ? slideCount : 1;
+
+    const slides: SlideMetadata[] = Array.from({ length: totalPages }, (_, i) => ({
       index: i + 1,
       title: `Slide ${i + 1}`,
-      notes: `PPTX Speaker Note for Slide ${i + 1}`,
       contentUrl: url,
     }));
 
@@ -24,13 +40,13 @@ export class PptxMaterialProvider implements MaterialProvider {
       name,
       type: "pptx",
       url,
-      totalPages: slideCount,
+      totalPages,
       slides,
       uploadedAt: Date.now(),
       status: "ready",
       metadata: {
         title: name,
-        pageCount: slideCount,
+        pageCount: totalPages,
         mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       },
     };

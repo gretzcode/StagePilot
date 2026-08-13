@@ -2,6 +2,19 @@
 
 Panduan ini menyiapkan Google Drive sebagai storage utama StagePilot V1. Host tetap memakai tombol Upload Material biasa; detail Google Drive hanya untuk operator aplikasi.
 
+## Status Presentation Support
+
+- PDF: SUPPORTED untuk upload Google Drive, registry D1, asset proxy StagePilot, dan rendering PDF.js di Control, Audience, dan Confidence.
+- PPTX: STORAGE SUPPORTED, PRESENTATION NOT YET SUPPORTED. File dapat tersimpan sebagai material, tetapi rendering slide PPTX belum menjadi bagian Phase 3.3A.
+
+## Google Drive PDF Flow
+
+Upload PDF berjalan melalui `/api/material/upload`, divalidasi sebagai PDF, disimpan oleh `GoogleDriveStorageProvider`, lalu metadata disimpan di `material_registry`. Registry menyimpan `storage_provider = google_drive`, `storage_reference = Google Drive file ID`, `material_type = pdf`, `room_code`, `owner_user_id`, `mime_type`, `size_bytes`, `slide_count`, status, dan TTL.
+
+StagePilot tidak membuat file Google Drive menjadi publik. `Material.url` menggunakan endpoint StagePilot `/api/material/asset?materialId=...&roomCode=...`; display menambahkan `deviceId` saat render agar endpoint dapat memvalidasi room dan device approval. PDF bytes mengalir dari Google Drive ke endpoint asset lalu ke PDF.js client. PDF binary tidak disimpan di D1, Durable Object, atau WebSocket.
+
+Jika material kedaluwarsa, room salah, device belum approved, koneksi Google Drive gagal, atau file Drive terhapus, endpoint asset menolak akses dengan error StagePilot yang aman tanpa mengekspos credential Google.
+
 ## 1. Buat Google Cloud Project
 
 1. Buka Google Cloud Console.
