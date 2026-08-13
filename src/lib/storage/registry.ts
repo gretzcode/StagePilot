@@ -105,6 +105,20 @@ export class MaterialRegistryService {
     );
   }
 
+  async getMaterialsByRoomCode(roomCode: string): Promise<MaterialRecord[]> {
+    if (!roomCode) return [];
+    const upper = roomCode.toUpperCase();
+    if (this.d1Binding) {
+      const sql = `SELECT * FROM material_registry WHERE UPPER(room_code) = ? AND status != 'deleted' ORDER BY created_at ASC`;
+      const { results } = await this.d1Binding.prepare(sql).bind(upper).all<Record<string, unknown>>();
+      return results.map((r) => this.mapRowToRecord(r));
+    }
+
+    return Array.from(memoryD1Registry.values()).filter(
+      (r) => r.roomCode?.toUpperCase() === upper && r.status !== "deleted"
+    );
+  }
+
   async markExpired(materialId: string): Promise<void> {
     if (this.d1Binding) {
       const sql = `UPDATE material_registry SET status = 'expired' WHERE id = ?`;

@@ -5,6 +5,8 @@ import { MaterialStorageResolver } from "@/features/material/storage";
 import { applySecurityHeaders } from "@/lib/security/headers";
 import { RoomRegistry } from "@/lib/rooms/registry";
 
+import { registerLocalRoomMaterial } from "@/app/api/ws/route";
+
 export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") || "";
@@ -74,35 +76,39 @@ export async function POST(request: Request) {
     const assetUrl = `/api/material/asset?materialId=${storedMaterial.id}&roomCode=${encodeURIComponent(roomCode)}`;
     const totalPages = storedMaterial.slideCount || 1;
 
+    const newMaterial = {
+      id: storedMaterial.id,
+      name: storedMaterial.title || file.name,
+      type: storedMaterial.materialType,
+      sourceType: storedMaterial.sourceType,
+      url: assetUrl,
+      objectKey: storedMaterial.objectKey,
+      externalUrl: storedMaterial.externalUrl,
+      sizeBytes: file.size,
+      totalPages,
+      slides: Array.from({ length: totalPages }, (_, index) => ({
+        index: index + 1,
+        title: `Slide ${index + 1}`,
+        contentUrl: assetUrl,
+      })),
+      uploadedAt: storedMaterial.createdAt,
+      expiresAt: storedMaterial.expiresAt,
+      ownerUserId,
+      roomCode,
+      status: storedMaterial.status,
+      metadata: {
+        title: storedMaterial.title || file.name,
+        pageCount: totalPages,
+        fileSize: file.size,
+        mimeType: storedMaterial.mimeType,
+      },
+    };
+
+    registerLocalRoomMaterial(roomCode, newMaterial);
+
     const response = NextResponse.json({
       success: true,
-      material: {
-        id: storedMaterial.id,
-        name: storedMaterial.title || file.name,
-        type: storedMaterial.materialType,
-        sourceType: storedMaterial.sourceType,
-        url: assetUrl,
-        objectKey: storedMaterial.objectKey,
-        externalUrl: storedMaterial.externalUrl,
-        sizeBytes: file.size,
-        totalPages,
-        slides: Array.from({ length: totalPages }, (_, index) => ({
-          index: index + 1,
-          title: `Slide ${index + 1}`,
-          contentUrl: assetUrl,
-        })),
-        uploadedAt: storedMaterial.createdAt,
-        expiresAt: storedMaterial.expiresAt,
-        ownerUserId,
-        roomCode,
-        status: storedMaterial.status,
-        metadata: {
-          title: storedMaterial.title || file.name,
-          pageCount: totalPages,
-          fileSize: file.size,
-          mimeType: storedMaterial.mimeType,
-        },
-      },
+      material: newMaterial,
       record: storedMaterial,
     });
 

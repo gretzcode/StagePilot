@@ -6,6 +6,9 @@ import { StageCommand, StageSessionState } from "@/core/types";
 import { RoomRegistry } from "@/lib/rooms/registry";
 import { verifyHostToken } from "@/lib/auth/jwt";
 
+import { MaterialRegistryService } from "@/lib/storage/registry";
+import { Material } from "@/core/types";
+
 interface LocalRoomInstance {
   state: StageSessionState;
 }
@@ -13,13 +16,70 @@ interface LocalRoomInstance {
 const globalRoomsMap = ((globalThis as Record<string, unknown>).__STAGEPILOT_LOCAL_ROOMS__ ||=
   new Map<string, LocalRoomInstance>()) as Map<string, LocalRoomInstance>;
 
+export async function syncLocalRoomMaterials(roomCode: string): Promise<void> {
+  const upperCode = roomCode.toUpperCase();
+  const instance = globalRoomsMap.get(upperCode);
+  if (!instance) return;
+
+  const registry = new MaterialRegistryService(process.env as Record<string, unknown>);
+  const records = await registry.getMaterialsByRoomCode(upperCode);
+
+  for (const record of records) {
+    if (record.status === "ready" && !instance.state.materials.some((m) => m.id === record.id)) {
+      const assetUrl = `/api/material/asset?materialId=${record.id}&roomCode=${encodeURIComponent(upperCode)}`;
+      const totalPages = record.slideCount || 1;
+      instance.state.materials.push({
+        id: record.id,
+        name: record.title,
+        type: record.materialType,
+        sourceType: record.sourceType,
+        url: assetUrl,
+        objectKey: record.objectKey,
+        externalUrl: record.externalUrl,
+        sizeBytes: record.sizeBytes,
+        totalPages,
+        slides: Array.from({ length: totalPages }, (_, index) => ({
+          index: index + 1,
+          title: `Slide ${index + 1}`,
+          contentUrl: assetUrl,
+        })),
+        uploadedAt: record.createdAt,
+        expiresAt: record.expiresAt,
+        ownerUserId: record.ownerUserId,
+        roomCode: upperCode,
+        status: record.status,
+        metadata: {
+          title: record.title,
+          pageCount: totalPages,
+          fileSize: record.sizeBytes,
+          mimeType: record.mimeType,
+        },
+      });
+    }
+  }
+}
+
+export function registerLocalRoomMaterial(roomCode: string, material: Material): void {
+  const upperCode = roomCode.toUpperCase();
+  const instance = globalRoomsMap.get(upperCode);
+  if (!instance) return;
+
+  const existingIdx = instance.state.materials.findIndex((m) => m.id === material.id);
+  if (existingIdx >= 0) {
+    instance.state.materials[existingIdx] = material;
+  } else {
+    instance.state.materials.push(material);
+  }
+}
+
 function getOrCreateLocalRoom(roomCode: string, title: string, hostUserId: string): LocalRoomInstance {
-  let instance = globalRoomsMap.get(roomCode);
+  const upperCode = roomCode.toUpperCase();
+  let instance = globalRoomsMap.get(upperCode);
   if (!instance) {
     instance = {
-      state: createInitialSessionState(roomCode, roomCode, title, hostUserId),
+      state: createInitialSessionState(upperCode, upperCode, title, hostUserId),
     };
-    globalRoomsMap.set(roomCode, instance);
+    globalRoomsMap.set(upperCode, instance);
   }
   return instance;
 }
@@ -100,6 +160,7 @@ export async function GET(request: Request) {
 
   // 4. Local Dev / HTTP Fallback Handler
   const localRoom = getOrCreateLocalRoom(roomCode, roomRecord.name, roomRecord.hostUserId);
+  await syncLocalRoomMaterials(roomCode);
   const isHostRole = requestedRole === "host";
 
   if (isHostRole) {

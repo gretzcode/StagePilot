@@ -7,6 +7,8 @@ import { defaultPresentationAdapter } from "@/features/material/adapter";
 import { detectSlideCountFromUrl } from "@/features/material/validator";
 import { RoomRegistry } from "@/lib/rooms/registry";
 
+import { registerLocalRoomMaterial } from "@/app/api/ws/route";
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -52,18 +54,22 @@ export async function POST(request: Request) {
       slideCount
     );
 
+    const newMaterial = {
+      ...parsedMaterial,
+      id: storedMaterial.id,
+      sourceType: storedMaterial.sourceType,
+      objectKey: null,
+      externalUrl: storedMaterial.externalUrl,
+      expiresAt: storedMaterial.expiresAt,
+      ownerUserId,
+      roomCode,
+    };
+
+    registerLocalRoomMaterial(roomCode, newMaterial);
+
     const response = NextResponse.json({
       success: true,
-      material: {
-        ...parsedMaterial,
-        id: storedMaterial.id,
-        sourceType: storedMaterial.sourceType,
-        objectKey: null,
-        externalUrl: storedMaterial.externalUrl,
-        expiresAt: storedMaterial.expiresAt,
-        ownerUserId,
-        roomCode,
-      },
+      material: newMaterial,
       record: storedMaterial,
     });
 
