@@ -12,6 +12,7 @@ interface MaterialUploaderProps {
 }
 
 export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: MaterialUploaderProps) {
+  const [activeTab, setActiveTab] = useState<"link" | "file">("link");
   const [urlInput, setUrlInput] = useState("");
   const [urlTitle, setUrlTitle] = useState("");
   const [loading, setLoading] = useState(false);
@@ -103,7 +104,7 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
               } else {
                 reject(new Error("Upload gagal atau tidak ada response material"));
               }
-            } catch (e) {
+            } catch {
               reject(new Error("Respons server tidak valid"));
             }
           } else {
@@ -158,60 +159,34 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
 
   return (
     <div className="space-y-4">
-      {/* File Upload Section */}
-      <div
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
-        className={`p-4 sm:p-5 rounded-3xl border-2 border-dashed transition cursor-pointer ${
-          dragActive
-            ? "bg-purple-950/80 border-purple-500 shadow-lg shadow-purple-500/20"
-            : "bg-slate-900/50 border-slate-700 hover:border-slate-600"
-        }`}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          onChange={handleFileInputChange}
-          disabled={loading}
-          accept=".pdf,.pptx,.ppt,.odp"
-          className="hidden"
-        />
-
-        <div className="flex flex-col items-center justify-center space-y-3 py-6">
-          <Upload className="w-8 h-8 text-purple-400" />
-          <div className="text-center">
-            <p className="text-xs font-bold text-slate-300 mb-1">Drag & drop file presentasi</p>
-            <p className="text-[11px] text-slate-500">PDF, PPTX, atau ODP</p>
-          </div>
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold transition"
-          >
-            Pilih File
-          </button>
-        </div>
-
-        {uploadProgress !== null && (
-          <div className="mt-4 space-y-2">
-            <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-purple-500 transition-all duration-300"
-                style={{ width: `${uploadProgress}%` }}
-              />
-            </div>
-            <p className="text-[11px] text-slate-400 text-center">{uploadProgress}% selesai</p>
-          </div>
-        )}
-      </div>
-
-      {/* URL Upload Section */}
       <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl backdrop-blur">
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300">Add Stage Material (Link URL)</h4>
+          <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300">Add Stage Material</h4>
+        </div>
+
+        <div className="mb-4 grid grid-cols-2 rounded-xl bg-slate-950/80 p-1 border border-slate-800">
+          <button
+            type="button"
+            onClick={() => setActiveTab("link")}
+            disabled={loading}
+            className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition ${
+              activeTab === "link" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <LinkIcon className="w-4 h-4" />
+            Link
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("file")}
+            disabled={loading}
+            className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition ${
+              activeTab === "file" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Upload className="w-4 h-4" />
+            File Upload
+          </button>
         </div>
 
         {error && (
@@ -221,6 +196,7 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
           </div>
         )}
 
+        {activeTab === "link" ? (
         <form onSubmit={handleUrlSubmit} className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-slate-400 mb-1">Presentation Title</label>
@@ -256,6 +232,56 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
             {loading ? "Processing Material..." : "Add Link Material"}
           </button>
         </form>
+        ) : (
+          <div
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            className={`rounded-2xl border-2 border-dashed p-5 transition ${
+              dragActive
+                ? "bg-purple-950/80 border-purple-500 shadow-lg shadow-purple-500/20"
+                : "bg-slate-950/50 border-slate-700 hover:border-slate-600"
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileInputChange}
+              disabled={loading}
+              accept=".pdf,.pptx,.ppt,.odp"
+              className="hidden"
+            />
+
+            <div className="flex flex-col items-center justify-center space-y-3 py-6">
+              <Upload className="w-8 h-8 text-purple-400" />
+              <div className="text-center">
+                <p className="text-xs font-bold text-slate-300 mb-1">Drag & drop file presentasi</p>
+                <p className="text-[11px] text-slate-500">PDF, PPTX, atau ODP via Google Drive storage</p>
+              </div>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => fileInputRef.current?.click()}
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold transition"
+              >
+                {loading ? "Uploading..." : "Pilih File"}
+              </button>
+            </div>
+
+            {uploadProgress !== null && (
+              <div className="mt-4 space-y-2">
+                <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-purple-500 transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 text-center">{uploadProgress}% selesai</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

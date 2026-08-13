@@ -13,7 +13,6 @@ import { validateUploadedFile } from "../../validator";
 import { buildMaterialObjectKey, putR2Object, deleteR2Object } from "@/lib/storage/r2";
 import { MaterialRegistryService } from "@/lib/storage/registry";
 import { computeDefaultExpiration, isMaterialExpired } from "@/core/config/material";
-import { defaultPresentationAdapter } from "../../adapter";
 
 export class R2StorageProvider implements MaterialStorageProvider {
   readonly type: MaterialStorageProviderType = "r2";
@@ -61,7 +60,7 @@ export class R2StorageProvider implements MaterialStorageProvider {
 
     await putR2Object(this.env, objectKey, fileBuffer, validation.mimeType || input.mimeType, expiresAt);
 
-    const parsed = await defaultPresentationAdapter.loadMaterial(input.file, input.fileName, validation.materialType);
+    const slideCount = 1;
 
     const registry = new MaterialRegistryService(this.env);
     const record = await registry.createMaterial({
@@ -78,7 +77,7 @@ export class R2StorageProvider implements MaterialStorageProvider {
       sizeBytes: input.sizeBytes,
       objectKey,
       externalUrl: null,
-      slideCount: parsed.totalPages || 1,
+      slideCount,
       status: "ready",
       createdAt: now,
       expiresAt,

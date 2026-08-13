@@ -10,7 +10,6 @@ import {
   StoredMaterial,
 } from "../provider-types";
 import { validateUploadedFile } from "../../validator";
-import { defaultPresentationAdapter } from "../../adapter";
 import { computeDefaultExpiration, isMaterialExpired } from "@/core/config/material";
 import { MaterialRegistryService, MaterialRecord } from "@/lib/storage/registry";
 
@@ -60,7 +59,7 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     const expiresAt = computeDefaultExpiration(now);
     const folderId = await this.ensureRoomFolder(input.roomCode);
     const fileId = await this.uploadFile(folderId, input.fileName, validation.mimeType || input.mimeType, input.file);
-    const parsed = await defaultPresentationAdapter.loadMaterial(input.file, input.fileName, validation.materialType);
+    const slideCount = 1;
 
     const registry = new MaterialRegistryService(this.env);
     const record = await registry.createMaterial({
@@ -77,7 +76,7 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
       sizeBytes: input.sizeBytes,
       objectKey: null,
       externalUrl: null,
-      slideCount: parsed.totalPages || 1,
+      slideCount,
       status: "ready",
       createdAt: now,
       expiresAt,
