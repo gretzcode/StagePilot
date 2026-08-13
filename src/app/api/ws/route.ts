@@ -173,7 +173,7 @@ export async function GET(request: Request) {
   }
 
   if (!localRoom.state.devices[deviceId]) {
-    const autoApprove = isHostRole;
+    const autoApprove = isHostRole || requestedRole === "control";
     localRoom.state.devices[deviceId] = {
       id: deviceId,
       name: deviceName,

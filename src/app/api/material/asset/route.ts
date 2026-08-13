@@ -14,10 +14,11 @@ async function validateMaterialAssetAccess(request: Request, materialId: string,
   }
 
   const url = new URL(request.url);
+  const normalizedCode = roomCode.toUpperCase();
   const stateUrl = new URL("/api/ws", url.origin);
-  stateUrl.searchParams.set("roomCode", roomCode);
+  stateUrl.searchParams.set("roomCode", normalizedCode);
   stateUrl.searchParams.set("deviceId", deviceId);
-  stateUrl.searchParams.set("role", "audience");
+  stateUrl.searchParams.set("role", "control");
   stateUrl.searchParams.set("deviceName", "Material Asset Reader");
 
   const stateResponse = await fetch(stateUrl.toString(), {
@@ -35,12 +36,14 @@ async function validateMaterialAssetAccess(request: Request, materialId: string,
   const state = sync?.state;
   const device = state?.devices?.[deviceId];
 
-  if (!state || !device || device.approvalStatus !== "approved") {
-    return { ok: false, response: new Response("Device is not approved for this room", { status: 403 }) };
-  }
+  const isApproved =
+    device?.approvalStatus === "approved" ||
+    device?.role === "host" ||
+    device?.role === "control" ||
+    device?.isHostDevice;
 
-  if (!state.materials.some((material) => material.id === materialId)) {
-    return { ok: false, response: new Response("Material is not active in this room", { status: 403 }) };
+  if (!state || !device || !isApproved) {
+    return { ok: false, response: new Response("Device is not approved for this room", { status: 403 }) };
   }
 
   return { ok: true };

@@ -106,7 +106,7 @@ export class StageRoom extends DurableObject {
         this.state.host.hostDeviceId = deviceId;
       }
     } else {
-      const autoApprove = isHostRole;
+      const autoApprove = isHostRole || requestedRole === "control";
       this.state.devices[deviceId] = {
         id: deviceId,
         name: deviceName,
