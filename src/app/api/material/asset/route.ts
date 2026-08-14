@@ -121,25 +121,6 @@ export async function GET(request: Request) {
       }
       const provider = new GoogleDriveStorageProvider(process.env as Record<string, unknown>);
 
-      // PPTX files: use Google Drive's server-side PDF export so that
-      // PdfSlideViewer can render slides without any client-side PPTX library.
-      if (record.materialType === "pptx") {
-        const pdfAsset = await provider.getFileAsPdf(record.storageReference).catch(() => null);
-        if (!pdfAsset) {
-          return new Response(
-            "Konversi PPTX ke PDF gagal. Periksa koneksi storage Google Drive atau unggah ulang materi.",
-            { status: 502 }
-          );
-        }
-        return new Response(pdfAsset.data as unknown as BodyInit, {
-          status: 200,
-          headers: {
-            "Content-Type": "application/pdf",
-            "Cache-Control": "private, max-age=3600",
-          },
-        });
-      }
-
       const driveAsset = await provider.getFile(record.storageReference).catch(() => null);
       if (!driveAsset) {
         return new Response("Materi Google Drive tidak tersedia. Periksa koneksi storage atau unggah ulang materi.", { status: 502 });

@@ -4,14 +4,26 @@ Panduan ini menyiapkan Google Drive sebagai storage utama StagePilot V1. Host te
 
 ## Status Presentation Support
 
-- PDF: SUPPORTED untuk upload Google Drive, registry D1, asset proxy StagePilot, dan rendering PDF.js di Control, Audience, dan Confidence.
-- PPTX: STORAGE SUPPORTED, PRESENTATION NOT YET SUPPORTED. File dapat tersimpan sebagai material, tetapi rendering slide PPTX belum menjadi bagian Phase 3.3A.
+Saat ini StagePilot mendukung media berikut untuk upload file:
+- **PDF**: SUPPORTED untuk upload Google Drive, registry D1, asset proxy StagePilot, dan rendering PDF.js di Control, Audience, dan Confidence.
+- **Gambar** (PNG, JPEG, WebP, GIF, SVG): SUPPORTED untuk upload Google Drive dan rendering langsung di viewer.
+- **Video** (MP4, WebM, MOV, dll): SUPPORTED untuk upload Google Drive dan streaming via `<video>` tag.
 
-## Google Drive PDF Flow
+Untuk input URL eksternal, StagePilot mendukung:
+- **PDF** dari Google Drive atau URL publik
+- **Video** dari YouTube, Vimeo, atau URL streaming publik
+- **Canva** designs via embed URL
+- **Google Slides** presentations via Google Docs embed
 
-Upload PDF berjalan melalui `/api/material/upload`, divalidasi sebagai PDF, disimpan oleh `GoogleDriveStorageProvider`, lalu metadata disimpan di `material_registry`. Registry menyimpan `storage_provider = google_drive`, `storage_reference = Google Drive file ID`, `material_type = pdf`, `room_code`, `owner_user_id`, `mime_type`, `size_bytes`, `slide_count`, status, dan TTL.
+Catatan: PPTX tidak lagi didukung untuk upload file. Konversi PPTX ke PDF melalui Google Drive tidak stabil dan mudah gagal.
 
-StagePilot tidak membuat file Google Drive menjadi publik. `Material.url` menggunakan endpoint StagePilot `/api/material/asset?materialId=...&roomCode=...`; display menambahkan `deviceId` saat render agar endpoint dapat memvalidasi room dan device approval. PDF bytes mengalir dari Google Drive ke endpoint asset lalu ke PDF.js client. PDF binary tidak disimpan di D1, Durable Object, atau WebSocket.
+## Google Drive Storage Flow
+
+Upload file berjalan melalui `/api/material/upload`, divalidasi berdasarkan tipe file (PDF, gambar, atau video), disimpan oleh `GoogleDriveStorageProvider`, lalu metadata disimpan di `material_registry`. Registry menyimpan `storage_provider = google_drive`, `storage_reference = Google Drive file ID`, `material_type` (pdf/image/video), `room_code`, `owner_user_id`, `mime_type`, `size_bytes`, `slide_count`, status, dan TTL.
+
+StagePilot tidak membuat file Google Drive menjadi publik. `Material.url` menggunakan endpoint StagePilot `/api/material/asset?materialId=...&roomCode=...`; display menambahkan `deviceId` saat render agar endpoint dapat memvalidasi room dan device approval. File bytes mengalir dari Google Drive ke endpoint asset lalu ke client (PDF.js untuk PDF, `<img>` untuk gambar, atau `<video>` untuk video). File binary tidak disimpan di D1, Durable Object, atau WebSocket.
+
+Untuk input URL eksternal, flow berbeda: `/api/material/url` menerima URL, memvalidasi tipe (Canva, YouTube, Google Slides, Google Drive PDF, atau URL publik), mengekstrak metadata, lalu menyimpan referensi URL di D1 tanpa meng-copy file.
 
 Jika material kedaluwarsa, room salah, device belum approved, koneksi Google Drive gagal, atau file Drive terhapus, endpoint asset menolak akses dengan error StagePilot yang aman tanpa mengekspos credential Google.
 
@@ -95,15 +107,16 @@ Jangan simpan nilai tersebut di `wrangler.jsonc`, source code, browser storage, 
 1. Buka dashboard StagePilot.
 2. Pastikan Material Storage menampilkan Google Drive connected.
 3. Buat room.
-4. Upload PDF, PPTX, PNG, JPEG, atau WebP dari Control Room.
-5. Cek Google Drive operator:
+4. Upload PDF atau gambar (PNG, JPEG, WebP) dari Control Room.
+5. Cek Google Drive operator folder structure:
 
 ```text
 StagePilot/Rooms/{ROOM_CODE}/
 ```
 
 6. Pastikan D1 hanya menyimpan metadata dan `storage_reference` berupa Google Drive file ID.
-7. Buka Audience, Confidence, dan Control Presentation untuk memastikan material bisa dimuat.
+7. Buka Audience, Confidence, dan Control Presentation untuk memastikan material bisa dimuat dan dirender dengan benar.
+8. Test URL input dengan link Canva atau Google Slides untuk memastikan external URL registration bekerja.
 
 ## 6. Troubleshooting
 

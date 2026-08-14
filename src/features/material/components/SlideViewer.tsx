@@ -202,10 +202,10 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     );
   }
 
-  // PDF and PPTX: both served as PDF binary via /api/material/asset.
-  // For PPTX, the asset route fetches the Google Drive PDF-export endpoint
-  // so PdfSlideViewer renders PPTX slides identically to PDF pages.
-  if (material.type === "pdf" || material.type === "pptx" || isGoogleDrive) {
+  const resolvedMediaType = material.mediaType ?? material.type;
+
+  // PDF files are served as PDF binary via /api/material/asset.
+  if (resolvedMediaType === "pdf" || material.type === "pdf" || isGoogleDrive) {
     return (
       <PdfSlideViewer
         url={rawUrl}
@@ -217,6 +217,21 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     );
   }
 
+  if (resolvedMediaType === "video" || material.type === "video") {
+    return (
+      <div className="w-full h-full bg-slate-950 flex items-center justify-center overflow-hidden">
+        <video
+          src={slide?.contentUrl || material.url || rawUrl}
+          className="max-w-full max-h-full object-contain"
+          controls={role === "control"}
+          autoPlay
+          loop={material.type === "video"}
+          muted={role !== "control"}
+          playsInline
+        />
+      </div>
+    );
+  }
 
   if (material.type === "url" || material.type === "canva") {
     // ── Google Slides: double-buffer crossfade rendering ──────────────────────
@@ -291,12 +306,12 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     );
   }
 
-  if (material.type === "image") {
+  if (resolvedMediaType === "image" || material.type === "image") {
     return (
       <div className="w-full h-full bg-slate-950 flex items-center justify-center p-4 overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={slide?.contentUrl || material.url}
+          src={slide?.contentUrl || material.url || rawUrl}
           alt={material.name}
           className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-150"
         />
@@ -304,5 +319,11 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     );
   }
 
+  return (
+    <div className="w-full h-full bg-slate-950 flex items-center justify-center p-6 text-slate-300">
+      <span className="text-sm uppercase tracking-[0.25em]">Unsupported material type: {resolvedMediaType}</span>
+    </div>
+  );
 }
+
 

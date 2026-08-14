@@ -40,7 +40,7 @@ export interface StoredMaterial {
   ownerUserId: string;
   roomCode: string;
   sourceType: "UPLOADED_FILE" | "EXTERNAL_URL" | "CANVA_LINK";
-  materialType: "pdf" | "pptx" | "image" | "url" | "canva";
+  materialType: "pdf" | "image" | "video" | "url" | "canva";
   storageProvider: MaterialStorageProviderType;
   storageReference: string;
   title: string;
@@ -57,7 +57,7 @@ export interface StoredMaterial {
 
 export interface ResolvedMaterial {
   materialId: string;
-  materialType: "pdf" | "pptx" | "image" | "url" | "canva";
+  materialType: "pdf" | "image" | "video" | "url" | "canva";
   sourceUrl: string;
   provider: MaterialStorageProviderType;
   title: string;

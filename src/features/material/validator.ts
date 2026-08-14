@@ -16,14 +16,13 @@ export function validateUploadedFile(
 ): ValidationResult {
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
 
-  // 1. Determine material type from extension
   let materialType: MaterialType | null = null;
   if (MATERIAL_CONFIG.SUPPORTED_EXTENSIONS.pdf.includes(ext)) {
     materialType = "pdf";
-  } else if (MATERIAL_CONFIG.SUPPORTED_EXTENSIONS.pptx.includes(ext)) {
-    materialType = "pptx";
   } else if (MATERIAL_CONFIG.SUPPORTED_EXTENSIONS.image.includes(ext)) {
     materialType = "image";
+  } else if (MATERIAL_CONFIG.SUPPORTED_EXTENSIONS.video.includes(ext)) {
+    materialType = "video";
   }
 
   if (!materialType) {
@@ -33,22 +32,19 @@ export function validateUploadedFile(
     };
   }
 
-  // 2. Validate MIME type if present
-  const validMimes = MATERIAL_CONFIG.SUPPORTED_MIME_TYPES[materialType as "pdf" | "pptx" | "image"] || [];
+  const validMimes = MATERIAL_CONFIG.SUPPORTED_MIME_TYPES[materialType as "pdf" | "image" | "video"] || [];
   if (declaredMimeType && declaredMimeType !== "application/octet-stream" && !validMimes.includes(declaredMimeType.toLowerCase())) {
-    const isImageMime = declaredMimeType.startsWith("image/");
-    if (materialType === "image" && !isImageMime) {
+    if (materialType === "image" && !declaredMimeType.toLowerCase().startsWith("image/")) {
+      return { valid: false, error: "Format file belum didukung." };
+    }
+    if (materialType === "video" && !declaredMimeType.toLowerCase().startsWith("video/")) {
       return { valid: false, error: "Format file belum didukung." };
     }
   }
 
-  // 3. Enforce maximum file size
   let maxBytes = MATERIAL_CONFIG.PDF_MAX_SIZE_BYTES;
-  if (materialType === "image") {
-    maxBytes = MATERIAL_CONFIG.IMAGE_MAX_SIZE_BYTES;
-  } else if (materialType === "pptx") {
-    maxBytes = MATERIAL_CONFIG.PPTX_MAX_SIZE_BYTES;
-  }
+  if (materialType === "image") maxBytes = MATERIAL_CONFIG.IMAGE_MAX_SIZE_BYTES;
+  if (materialType === "video") maxBytes = MATERIAL_CONFIG.VIDEO_MAX_SIZE_BYTES;
 
   if (sizeBytes > maxBytes) {
     return {
@@ -93,9 +89,15 @@ export function validateExternalUrl(urlString: string): ValidationResult {
     }
 
     const isCanva = parsed.hostname.includes("canva.com");
+    const isYoutube = parsed.hostname.includes("youtube.com") || parsed.hostname.includes("youtu.be");
+    const isVimeo = parsed.hostname.includes("vimeo.com");
     const isGoogleDrive = parsed.hostname.includes("drive.google.com");
     const sourceType: MaterialSourceType = isCanva ? "CANVA_LINK" : "EXTERNAL_URL";
-    const materialType: MaterialType = isCanva ? "canva" : isGoogleDrive ? "pdf" : "url";
+
+    let materialType: MaterialType = "url";
+    if (isCanva) materialType = "canva";
+    else if (isYoutube || isVimeo) materialType = "video";
+    else if (isGoogleDrive) materialType = "pdf";
 
     return {
       valid: true,

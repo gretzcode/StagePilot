@@ -210,7 +210,7 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">HTTPS / Canva / Google Slides Link</label>
+            <label className="block text-xs font-medium text-slate-400 mb-1">HTTPS / Canva / PDF / Video / Image Link</label>
             <div className="relative">
               <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
               <input
@@ -218,7 +218,7 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
                 required
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="https://docs.google.com/presentation/d/..."
+                placeholder="https://example.com/file.pdf / youtube.com/watch?v=... / canva.com/design/..."
                 className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:border-purple-500 font-mono transition"
               />
             </div>
@@ -249,15 +249,15 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
               type="file"
               onChange={handleFileInputChange}
               disabled={loading}
-              accept=".pdf,.pptx,.ppt,.odp"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.svg,.mp4,.mov,.webm,.mkv,.avi,.mpeg,.mpg"
               className="hidden"
             />
 
             <div className="flex flex-col items-center justify-center space-y-3 py-6">
               <Upload className="w-8 h-8 text-purple-400" />
               <div className="text-center">
-                <p className="text-xs font-bold text-slate-300 mb-1">Drag & drop file presentasi</p>
-                <p className="text-[11px] text-slate-500">PDF, PPTX, atau ODP via Google Drive storage</p>
+                <p className="text-xs font-bold text-slate-300 mb-1">Drag & drop file media</p>
+                <p className="text-[11px] text-slate-500">PDF, gambar, atau video via Google Drive storage</p>
               </div>
               <button
                 type="button"

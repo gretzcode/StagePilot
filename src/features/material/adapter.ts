@@ -1,7 +1,6 @@
 import { Material, MaterialType } from "@/core/types";
 import { MaterialProvider, MaterialRenderer, PresentationAdapter } from "./contract";
 import { PdfMaterialProvider } from "./providers/pdf";
-import { PptxMaterialProvider } from "./providers/pptx";
 import { UrlMaterialProvider } from "./providers/url";
 import { ImageMaterialProvider } from "./providers/image";
 import { CanvaMaterialProvider } from "./providers/canva";
@@ -13,7 +12,6 @@ export class PresentationAdapterImpl implements PresentationAdapter {
   constructor() {
     // Register default built-in providers
     this.registerProvider(new PdfMaterialProvider());
-    this.registerProvider(new PptxMaterialProvider());
     this.registerProvider(new UrlMaterialProvider());
     this.registerProvider(new ImageMaterialProvider());
     this.registerProvider(new CanvaMaterialProvider());

@@ -7,5 +7,5 @@ export const APP_CONFIG = {
   heartbeatIntervalMs: 15000,
   maxReconnectAttempts: 10,
   supportedRoles: ["host", "control", "audience", "confidence"] as const,
-  supportedMaterialTypes: ["pdf", "pptx", "url", "image"] as const,
+  supportedMaterialTypes: ["pdf", "url", "image"] as const,
 };

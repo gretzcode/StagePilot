@@ -1,6 +1,7 @@
 export type MaterialSourceType = "UPLOADED_FILE" | "EXTERNAL_URL" | "CANVA_LINK";
-
-export type MaterialType = "pdf" | "pptx" | "image" | "url" | "canva";
+export type MaterialSource = "file" | "url";
+export type MaterialMediaType = "pdf" | "image" | "video" | "canva";
+export type MaterialType = "pdf" | "image" | "video" | "url" | "canva";
 
 export type MaterialStatus = "ready" | "expired" | "deleted" | "uploading" | "error";
 
@@ -26,6 +27,8 @@ export interface Material {
   id: string;
   name: string;
   type: MaterialType;
+  source?: MaterialSource;
+  mediaType?: MaterialMediaType;
   sourceType?: MaterialSourceType;
   url: string;
   objectKey?: string | null;

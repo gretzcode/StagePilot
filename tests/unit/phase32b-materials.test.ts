@@ -59,10 +59,10 @@ describe("StagePilot Phase 3.2B Material Storage & Asset Pipeline Tests", () => 
     expect(res.sourceType).toBe("UPLOADED_FILE");
   });
 
-  it("TEST-02: Validates supported PPTX file upload", () => {
-    const res = validateUploadedFile("keynote.pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation", 10 * 1024 * 1024);
+  it("TEST-02: Validates supported image upload", () => {
+    const res = validateUploadedFile("slide.png", "image/png", 2 * 1024 * 1024);
     expect(res.valid).toBe(true);
-    expect(res.materialType).toBe("pptx");
+    expect(res.materialType).toBe("image");
   });
 
   it("TEST-03: Validates supported PNG/JPEG/WebP image upload", () => {

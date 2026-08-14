@@ -15,14 +15,15 @@ describe("Material Engine Abstraction", () => {
     expect(material.slides.length).toBe(material.totalPages);
   });
 
-  it("should parse PPTX material contract", async () => {
+  it("should parse image material contract", async () => {
     const material = await defaultPresentationAdapter.loadMaterial(
-      "http://example.com/deck.pptx",
-      "PowerPoint Presentation",
-      "pptx"
+      "http://example.com/slide.png",
+      "Event Poster",
+      "image"
     );
 
-    expect(material.type).toBe("pptx");
-    expect(material.name).toBe("PowerPoint Presentation");
+    expect(material.type).toBe("image");
+    expect(material.name).toBe("Event Poster");
+    expect(material.totalPages).toBe(1);
   });
 });

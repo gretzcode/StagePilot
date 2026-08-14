@@ -7,7 +7,7 @@ import { usePdfDocument } from "../hooks/usePdfDocument";
 import { PdfThumbnailItem } from "./PdfThumbnailItem";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ThumbnailItem — used for non-PDF materials (Google Slides, PPTX, image, etc.)
+// ThumbnailItem — used for non-PDF materials (Google Slides, Canva, image, video, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ThumbnailItemProps {
@@ -260,7 +260,7 @@ export function ThumbnailList({
     ? rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/[?&]id=([A-Za-z0-9_-]+)/)
     : null;
   const googleDriveFileId = driveMatch ? driveMatch[1] : null;
-  const isPdf = material?.type === "pdf" || material?.type === "pptx" || Boolean(googleDriveFileId);
+  const isPdf = material?.type === "pdf" || Boolean(googleDriveFileId);
 
   const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
   const googlePresentationId = match ? match[1] : null;
@@ -373,9 +373,7 @@ export function ThumbnailList({
     );
   }
 
-  // ── PDF / PPTX path: delegate to PdfThumbnailList ────────────────────────
-  // PPTX is served as a converted PDF via /api/material/asset, so PdfSlideViewer
-  // and PdfThumbnailItem render its slides identically to a native PDF upload.
+  // ── PDF path: delegate to PdfThumbnailList ────────────────────────
   if (isPdf) {
     return (
       <div className="overflow-y-auto max-h-[calc(100vh-160px)] pr-1 custom-scrollbar">
@@ -390,7 +388,7 @@ export function ThumbnailList({
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Non-PDF path (Google Slides, PPTX, image, etc.)
+  // Non-PDF path (Google Slides, image, etc.)
   // ─────────────────────────────────────────────────────────────────────────
 
   const displaySlides = Array.from({ length: localMax }, (_, i) => {

@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { defaultPresentationAdapter } from "@/features/material/adapter";
 import { PdfMaterialProvider } from "@/features/material/providers/pdf";
-import { PptxMaterialProvider } from "@/features/material/providers/pptx";
 import { UrlMaterialProvider } from "@/features/material/providers/url";
 import { ImageMaterialProvider } from "@/features/material/providers/image";
 import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
@@ -19,19 +18,6 @@ describe("Phase 2 Material Providers Engine", () => {
 
     const slide1 = await provider.getSlide(material, 1);
     expect(slide1.index).toBe(1);
-  });
-
-  it("PPTX Provider parses presentation file into normalized slide metadata", async () => {
-    const provider = new PptxMaterialProvider();
-    expect(provider.supports("pptx")).toBe(true);
-
-    // Pass a server-supplied slideCount (as the upload route does).
-    const material = await provider.parse("http://example.com/deck.pptx", "National Seminar.pptx", 5);
-    expect(material.type).toBe("pptx");
-    expect(material.totalPages).toBe(5);
-
-    const slide2 = await provider.getSlide(material, 2);
-    expect(slide2.index).toBe(2);
   });
 
   it("URL Provider validates HTTPS scheme and handles web page materials", async () => {
