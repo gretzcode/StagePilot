@@ -299,7 +299,18 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
 
     return (
       <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
-        <div className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}>
+        <div
+          className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}
+          style={
+            role === "audience" && iframeCanvaEnabled
+              ? {
+                  overflow: "hidden",
+                  // Clip to hide Canva toolbar at the top
+                  clipPath: "inset(60px 0 0 0)",
+                }
+              : undefined
+          }
+        >
           <iframe
             ref={iframeRef}
             src={persistentIframeSrc}
