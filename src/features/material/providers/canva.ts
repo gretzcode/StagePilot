@@ -10,9 +10,26 @@ export class CanvaMaterialProvider implements MaterialProvider {
     return type === "canva";
   }
 
+  /**
+   * Generate thumbnail URL for Canva design
+   * Uses a preview service to capture the Canva design preview
+   */
+  private generateThumbnailUrl(designUrl: string): string | null {
+    try {
+      // Use Microlink API to extract Open Graph image from Canva design page
+      // This is free and requires no authentication
+      const encoded = encodeURIComponent(designUrl);
+      return `https://api.microlink.io/?url=${encoded}&screenshot=true&meta=false&codeStyle=github`;
+    } catch {
+      return null;
+    }
+  }
+
   async parse(source: string | File | Blob, name: string, totalPagesInput?: number): Promise<Material> {
     const rawUrl = typeof source === "string" ? source.trim() : "";
     const externalUrl = normalizeEmbedUrl(rawUrl);
+    const thumbnailUrl = this.generateThumbnailUrl(rawUrl);
+    
     const now = Date.now();
     const expiresAt = computeDefaultExpiration(now);
 
@@ -22,6 +39,7 @@ export class CanvaMaterialProvider implements MaterialProvider {
       title: `Slide ${i + 1}`,
       contentUrl: externalUrl,
       url: externalUrl,
+      thumbnailUrl, // Add thumbnail URL to each slide
     }));
 
     return {
