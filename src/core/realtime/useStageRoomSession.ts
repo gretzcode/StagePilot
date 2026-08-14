@@ -78,7 +78,15 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
 
         const data = (await res.json()) as { type?: string; state?: StageSessionState };
         if (data.type === "SYNC_STATE" && data.state) {
-          setState(data.state);
+          // Prevent old state from overwriting newer local state via version check
+          setState((currentState) => {
+            if (currentState && data.state && data.state.version <= currentState.version) {
+              // Incoming state is same or older → skip update to preserve optimistic updates
+              return currentState;
+            }
+            // Incoming state is newer → update
+            return data.state;
+          });
           setIsConnected(true);
           setRoomError(null);
         }
@@ -127,7 +135,15 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         if (!isMounted) return;
         try {
           if (event.data?.type === "SYNC_STATE" && event.data?.state) {
-            setState(event.data.state);
+            // Prevent old state from overwriting newer local state via version check
+            setState((currentState) => {
+              if (currentState && event.data.state && event.data.state.version <= currentState.version) {
+                // Incoming state is same or older → skip update to preserve optimistic updates
+                return currentState;
+              }
+              // Incoming state is newer → update
+              return event.data.state;
+            });
             setIsConnected(true);
             setRoomError(null);
           }
@@ -174,7 +190,15 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         try {
           const msg: ServerMessage = JSON.parse(event.data);
           if (msg.type === "SYNC_STATE" && msg.state) {
-            setState(msg.state);
+            // Prevent old state from overwriting newer local state via version check
+            setState((currentState) => {
+              if (currentState && msg.state && msg.state.version <= currentState.version) {
+                // Incoming state is same or older → skip update to preserve optimistic updates
+                return currentState;
+              }
+              // Incoming state is newer → update
+              return msg.state;
+            });
             setIsConnected(true);
             setRoomError(null);
 
