@@ -106,7 +106,7 @@ export class StageRoom extends DurableObject {
       return new Response("Failed to initialize room state", { status: 500 });
     }
 
-    const isHostRole = requestedRole === "host" || hostUserId === this.state.host.hostUserId;
+    const isHostRole = requestedRole === "host";
 
     if (isHostRole) {
       // Purge any stale previous host device entries so host count never increments on refresh/reconnect
@@ -127,7 +127,7 @@ export class StageRoom extends DurableObject {
         this.state.host.hostDeviceId = deviceId;
       }
     } else {
-      const autoApprove = isHostRole || requestedRole === "control";
+      const autoApprove = isHostRole;
       this.state.devices[deviceId] = {
         id: deviceId,
         name: deviceName,
