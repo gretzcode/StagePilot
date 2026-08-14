@@ -50,6 +50,7 @@ function appendAssetAccessParams(url: string, deviceId?: string): string {
 
 export function SlideViewer({ material, slide, currentPage, blanked, role, onNumPagesDiscovered, deviceId }: SlideViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
 
   const rawUrl = appendAssetAccessParams(material?.externalUrl || material?.url || "", deviceId);
   const isGoogleSlides = rawUrl.includes("docs.google.com/presentation");
@@ -385,6 +386,16 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
           alt={material.name}
           className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-150"
         />
+      </div>
+    );
+  }
+
+  if (renderError) {
+    return (
+      <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-8 text-center text-rose-400">
+        <span className="text-xs uppercase font-mono tracking-widest mb-3">ERROR</span>
+        <p className="text-sm">{renderError}</p>
+        <p className="text-xs text-slate-500 mt-4">Please try a different presentation or reload the page</p>
       </div>
     );
   }

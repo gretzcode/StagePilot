@@ -49,6 +49,8 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
         throw new Error(validation.error || "Link materi tidak valid. Gunakan URL HTTPS yang lengkap.");
       }
 
+      console.log("[MaterialUploader] URL validation passed:", { type: validation.materialType, url: urlInput });
+
       const res = await fetch("/api/material/url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -62,18 +64,23 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
       const json = (await res.json().catch(() => ({}))) as { success?: boolean; material?: Material; message?: string };
 
       if (res.ok && json.success && json.material) {
+        console.log("[MaterialUploader] Server returned material:", { id: json.material.id, type: json.material.type });
         onMaterialAdded(json.material);
         setUrlInput("");
         setUrlTitle("");
         return;
       }
 
+      console.log("[MaterialUploader] Server response not ok or missing material, using fallback adapter");
       const fallbackMat = await defaultPresentationAdapter.loadMaterial(urlInput.trim(), title, validation.materialType);
+      console.log("[MaterialUploader] Fallback material created:", { id: fallbackMat.id, type: fallbackMat.type });
       onMaterialAdded(fallbackMat);
       setUrlInput("");
       setUrlTitle("");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Gagal memproses link presentasi.");
+      const errMsg = err instanceof Error ? err.message : "Gagal memproses link presentasi.";
+      console.error("[MaterialUploader] Error:", errMsg, err);
+      setError(errMsg);
     } finally {
       setLoading(false);
     }

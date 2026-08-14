@@ -256,9 +256,11 @@ function PresentationControlContent() {
 
   const handleAddMaterial = (newMaterial: Material) => {
     setShowUploader(false);
+    console.log("[handleAddMaterial] Material added:", { id: newMaterial.id, type: newMaterial.type, name: newMaterial.name });
     dispatchCommand("MATERIAL_ADD", { material: newMaterial });
 
     if (!state?.presentation.isPresenting) {
+      console.log("[handleAddMaterial] Starting presentation with material:", newMaterial.id);
       dispatchCommand("PRESENTATION_START", { materialId: newMaterial.id, startPage: 1 });
       setLeftTab("slides");
     }
