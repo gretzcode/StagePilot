@@ -14,14 +14,14 @@ export class CanvaMaterialProvider implements MaterialProvider {
    * Generate thumbnail URL for Canva design
    * Uses a preview service to capture the Canva design preview
    */
-  private generateThumbnailUrl(designUrl: string): string | null {
+  private generateThumbnailUrl(designUrl: string): string | undefined {
     try {
       // Use Microlink API to extract Open Graph image from Canva design page
       // This is free and requires no authentication
       const encoded = encodeURIComponent(designUrl);
       return `https://api.microlink.io/?url=${encoded}&screenshot=true&meta=false&codeStyle=github`;
     } catch {
-      return null;
+      return undefined;
     }
   }
 
