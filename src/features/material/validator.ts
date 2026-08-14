@@ -1,5 +1,6 @@
 import { MATERIAL_CONFIG } from "@/core/config/material";
 import { MaterialType, MaterialSourceType } from "@/core/types";
+import { estimatePdfPageCountFromBytes } from "./pdf-page-count";
 
 export interface ValidationResult {
   valid: boolean;
@@ -92,12 +93,13 @@ export function validateExternalUrl(urlString: string): ValidationResult {
     const isYoutube = parsed.hostname.includes("youtube.com") || parsed.hostname.includes("youtu.be");
     const isVimeo = parsed.hostname.includes("vimeo.com");
     const isGoogleDrive = parsed.hostname.includes("drive.google.com");
+    const isPdfUrl = parsed.pathname.toLowerCase().endsWith(".pdf");
     const sourceType: MaterialSourceType = isCanva ? "CANVA_LINK" : "EXTERNAL_URL";
 
     let materialType: MaterialType = "url";
     if (isCanva) materialType = "canva";
     else if (isYoutube || isVimeo) materialType = "video";
-    else if (isGoogleDrive) materialType = "pdf";
+    else if (isGoogleDrive || isPdfUrl) materialType = "pdf";
 
     return {
       valid: true,
@@ -138,18 +140,12 @@ export function normalizeEmbedUrl(urlString: string): string {
     const host = parsed.hostname.toLowerCase();
 
     if (host.includes("canva.com")) {
-      const match = parsed.pathname.match(/\/design\/([A-Za-z0-9_-]+)/);
-      if (match && match[1]) {
-        const designId = match[1];
-        if (parsed.pathname.includes("/watch")) {
-          return `https://www.canva.com/design/${designId}/watch?embed`;
-        }
-        return `https://www.canva.com/design/${designId}/view?embed`;
-      }
       if (!parsed.searchParams.has("embed")) {
         parsed.searchParams.set("embed", "true");
-        return parsed.toString();
       }
+      parsed.protocol = "https:";
+      parsed.hostname = "www.canva.com";
+      return parsed.toString();
     }
 
     if (host.includes("drive.google.com")) {
@@ -186,6 +182,32 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
   try {
     const parsed = new URL(normalized);
     const host = parsed.hostname.toLowerCase();
+    const isPdfUrl = parsed.pathname.toLowerCase().endsWith(".pdf");
+
+    if (isPdfUrl) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(normalized, {
+          signal: controller.signal,
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Accept: "application/pdf,*/*",
+          },
+        });
+        clearTimeout(timeout);
+
+        if (res.ok) {
+          const count = estimatePdfPageCountFromBytes(await res.arrayBuffer());
+          if (count && count > 0) {
+            return { totalPages: count };
+          }
+        }
+      } catch {
+        // Silently fall back to default page count
+      }
+    }
 
     // Google Slides Dynamic Auto-Detection
     if (host.includes("docs.google.com") && parsed.pathname.includes("/presentation/d/")) {

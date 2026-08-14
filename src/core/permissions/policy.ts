@@ -100,6 +100,7 @@ export class PermissionPolicy {
       "TIMER_PAUSE",
       "TIMER_RESET",
       "BRIEF_UPDATE",
+      "BRIEF_CLEAR",
       "DISPLAY_BLANK",
       "DISPLAY_SHOW",
       "CONTROL_TAKEOVER",

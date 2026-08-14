@@ -271,6 +271,7 @@ function ControlRoomContent() {
               <div className="pt-2">
                 <MaterialUploader
                   roomCode={roomCode}
+                  deviceId={deviceId}
                   onMaterialAdded={handleMaterialAdd}
                 />
               </div>

@@ -95,15 +95,27 @@ export async function POST(request: Request) {
       slideCount
     );
 
+    const assetUrl = `/api/material/asset?materialId=${storedMaterial.id}&roomCode=${encodeURIComponent(upperRoomCode)}`;
+    const materialUrl = storedMaterial.materialType === "pdf" ? assetUrl : parsedMaterial.url;
+
     const newMaterial: Material = {
       ...parsedMaterial,
       id: storedMaterial.id,
       sourceType: storedMaterial.sourceType,
       objectKey: null,
+      url: materialUrl,
       externalUrl: storedMaterial.externalUrl,
       expiresAt: storedMaterial.expiresAt,
       ownerUserId,
       roomCode: upperRoomCode,
+      slides:
+        storedMaterial.materialType === "pdf"
+          ? Array.from({ length: slideCount || parsedMaterial.totalPages || 1 }, (_, index) => ({
+              index: index + 1,
+              title: `Page ${index + 1}`,
+              contentUrl: assetUrl,
+            }))
+          : parsedMaterial.slides,
     };
 
     // 4. Dispatch MATERIAL_ADD to the room state (Durable Object in production,

@@ -294,7 +294,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     // Determine sandbox attributes based on material type
     const iframeCanvaEnabled = material.type === "canva";
     const sandboxAttrs = iframeCanvaEnabled
-      ? "allow-scripts allow-popups allow-forms allow-pointer-lock"
+      ? "allow-scripts allow-same-origin allow-popups allow-forms allow-pointer-lock"
       : "allow-scripts allow-same-origin allow-popups allow-forms";
 
     return (
@@ -307,7 +307,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
             className="w-full h-full border-0 bg-slate-950 z-10"
             sandbox={sandboxAttrs}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerPolicy="no-referrer-when-downgrade"
+            referrerPolicy="strict-origin-when-cross-origin"
           />
         </div>
       </div>
@@ -333,5 +333,4 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     </div>
   );
 }
-
 

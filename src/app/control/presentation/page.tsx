@@ -421,7 +421,7 @@ function PresentationControlContent() {
                       >
                         <X className="w-4 h-4" />
                       </button>
-                      <MaterialUploader roomCode={roomCode} onMaterialAdded={handleAddMaterial} />
+                      <MaterialUploader roomCode={roomCode} deviceId={deviceId} onMaterialAdded={handleAddMaterial} />
                     </div>
                   )}
 
@@ -652,7 +652,7 @@ function PresentationControlContent() {
             >
               <X className="w-5 h-5" />
             </button>
-            <MaterialUploader roomCode={roomCode} onMaterialAdded={handleAddMaterial} />
+            <MaterialUploader roomCode={roomCode} deviceId={deviceId} onMaterialAdded={handleAddMaterial} />
           </div>
         </div>
       )}

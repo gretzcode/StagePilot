@@ -115,6 +115,33 @@ export async function GET(request: Request) {
       return new Response("Materi tidak tersedia atau sudah kedaluwarsa.", { status: 410 });
     }
 
+    if (record.storageProvider === "external_url" && record.materialType === "pdf") {
+      const pdfUrl = record.externalUrl || record.storageReference;
+      if (!pdfUrl) {
+        return new Response("No external PDF URL associated with this material.", { status: 404 });
+      }
+
+      const upstream = await fetch(pdfUrl, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "application/pdf,*/*",
+        },
+      });
+
+      if (!upstream.ok) {
+        return new Response("PDF URL tidak dapat diakses dari server StagePilot.", { status: 502 });
+      }
+
+      return new Response(upstream.body, {
+        status: 200,
+        headers: {
+          "Content-Type": upstream.headers.get("content-type") || record.mimeType || "application/pdf",
+          "Cache-Control": "private, max-age=3600",
+        },
+      });
+    }
+
     if (record.storageProvider === "google_drive") {
       if (!record.storageReference) {
         return new Response("No Google Drive file associated with this material.", { status: 404 });

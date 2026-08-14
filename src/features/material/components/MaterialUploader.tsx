@@ -8,6 +8,7 @@ import { Link as LinkIcon, AlertCircle, Upload } from "lucide-react";
 
 interface MaterialUploaderProps {
   roomCode?: string;
+  deviceId?: string;
   onMaterialAdded: (material: Material) => void;
 }
 
@@ -21,7 +22,7 @@ interface UploadProgressData {
   remainingSeconds: string;
 }
 
-export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: MaterialUploaderProps) {
+export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdded }: MaterialUploaderProps) {
   const [activeTab, setActiveTab] = useState<"link" | "file">("link");
   const [urlInput, setUrlInput] = useState("");
   const [urlTitle, setUrlTitle] = useState("");
@@ -92,6 +93,9 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
       const formData = new FormData();
       formData.append("file", file);
       formData.append("roomCode", roomCode);
+      if (deviceId) {
+        formData.append("deviceId", deviceId);
+      }
 
       const xhr = new XMLHttpRequest();
 

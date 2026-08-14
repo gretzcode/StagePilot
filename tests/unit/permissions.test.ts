@@ -83,6 +83,15 @@ describe("PermissionPolicy", () => {
     };
     expect(PermissionPolicy.canExecuteCommand(state, controlDevId, slideCmd).allowed).toBe(true);
 
+    const briefClearCmd: StageCommand = {
+      type: "BRIEF_CLEAR",
+      commandId: "c2b",
+      senderDeviceId: controlDevId,
+      timestamp: Date.now(),
+      payload: {},
+    };
+    expect(PermissionPolicy.canExecuteCommand(state, controlDevId, briefClearCmd).allowed).toBe(true);
+
     const approveCmd: StageCommand = {
       type: "DEVICE_APPROVE",
       commandId: "c3",
