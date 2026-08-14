@@ -277,6 +277,12 @@ export function stageSessionReducer(
       break;
     }
 
+    case "BRIEF_CLEAR": {
+      nextState.brief.activeMessage = null;
+      nextState.brief.updatedAt = now;
+      break;
+    }
+
     case "DISPLAY_BLANK": {
       const { targetDisplayId, blank } = command.payload;
       if (targetDisplayId && nextState.displays[targetDisplayId]) {

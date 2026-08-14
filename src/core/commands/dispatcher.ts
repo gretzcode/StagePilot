@@ -3,6 +3,7 @@ import { stageSessionReducer } from "../session/reducer";
 import { InvalidCommandError } from "../errors/domain-error";
 import {
   BriefUpdateSchema,
+  BriefClearSchema,
   ControlTakeoverSchema,
   DeviceApproveSchema,
   DeviceRejectSchema,
@@ -45,6 +46,9 @@ export class CommandDispatcher {
           break;
         case "BRIEF_UPDATE":
           BriefUpdateSchema.parse(command.payload);
+          break;
+        case "BRIEF_CLEAR":
+          BriefClearSchema.parse(command.payload);
           break;
         case "DISPLAY_BLANK":
           DisplayBlankSchema.parse(command.payload);

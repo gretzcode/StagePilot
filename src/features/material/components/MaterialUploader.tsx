@@ -11,15 +11,27 @@ interface MaterialUploaderProps {
   onMaterialAdded: (material: Material) => void;
 }
 
+interface UploadProgressData {
+  percentage: number;
+  uploadedBytes: number;
+  totalBytes: number;
+  uploadedMB: string;
+  totalMB: string;
+  speedMBps: string;
+  remainingSeconds: string;
+}
+
 export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: MaterialUploaderProps) {
   const [activeTab, setActiveTab] = useState<"link" | "file">("link");
   const [urlInput, setUrlInput] = useState("");
   const [urlTitle, setUrlTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressData | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadStartTimeRef = useRef<number | null>(null);
+  const lastProgressRef = useRef<{ loaded: number; time: number } | null>(null);
 
   const handleUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +84,9 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
     const file = files[0];
     setError(null);
     setLoading(true);
-    setUploadProgress(0);
+    setUploadProgress(null);
+    uploadStartTimeRef.current = Date.now();
+    lastProgressRef.current = null;
 
     try {
       const formData = new FormData();
@@ -81,11 +95,56 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
 
       const xhr = new XMLHttpRequest();
 
-      // Track upload progress
+      // Track upload progress with speed and data info
       xhr.upload.addEventListener("progress", (e) => {
         if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 100);
-          setUploadProgress(progress);
+          const now = Date.now();
+          const elapsedSeconds = (now - (uploadStartTimeRef.current || now)) / 1000;
+          
+          // Calculate speed
+          let speedMBps = "0 MB/s";
+          if (lastProgressRef.current && elapsedSeconds > 0) {
+            const bytesSinceLastUpdate = e.loaded - lastProgressRef.current.loaded;
+            const timeSinceLastUpdate = (now - lastProgressRef.current.time) / 1000;
+            if (timeSinceLastUpdate > 0) {
+              const speedBytes = bytesSinceLastUpdate / timeSinceLastUpdate;
+              speedMBps = (speedBytes / (1024 * 1024)).toFixed(2) + " MB/s";
+            }
+          }
+          
+          // Calculate remaining time
+          let remainingSeconds = "0s";
+          if (lastProgressRef.current && elapsedSeconds > 0.5) {
+            const bytesRemaining = e.total - e.loaded;
+            const avgSpeedBytes = e.loaded / elapsedSeconds;
+            if (avgSpeedBytes > 0) {
+              const secondsRemaining = Math.ceil(bytesRemaining / avgSpeedBytes);
+              if (secondsRemaining > 60) {
+                const minutes = Math.floor(secondsRemaining / 60);
+                const secs = secondsRemaining % 60;
+                remainingSeconds = `${minutes}m ${secs}s`;
+              } else {
+                remainingSeconds = `${secondsRemaining}s`;
+              }
+            }
+          }
+
+          // Format data sizes
+          const uploadedMB = (e.loaded / (1024 * 1024)).toFixed(2);
+          const totalMB = (e.total / (1024 * 1024)).toFixed(2);
+          const percentage = Math.round((e.loaded / e.total) * 100);
+
+          lastProgressRef.current = { loaded: e.loaded, time: now };
+
+          setUploadProgress({
+            percentage,
+            uploadedBytes: e.loaded,
+            totalBytes: e.total,
+            uploadedMB,
+            totalMB,
+            speedMBps,
+            remainingSeconds,
+          });
         }
       });
 
@@ -274,10 +333,27 @@ export function MaterialUploader({ roomCode = "DEFAULT", onMaterialAdded }: Mate
                 <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-purple-500 transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
+                    style={{ width: `${uploadProgress.percentage}%` }}
                   />
                 </div>
-                <p className="text-[11px] text-slate-400 text-center">{uploadProgress}% selesai</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] text-slate-400">{uploadProgress.percentage}% selesai</p>
+                  <p className="text-[11px] text-slate-400">{uploadProgress.remainingSeconds}</p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-400 pt-1">
+                  <div className="text-center">
+                    <p className="font-semibold text-slate-300">{uploadProgress.uploadedMB}MB / {uploadProgress.totalMB}MB</p>
+                    <p className="text-slate-500">Data</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-semibold text-slate-300">{uploadProgress.speedMBps}</p>
+                    <p className="text-slate-500">Speed</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-semibold text-slate-300">{uploadProgress.remainingSeconds}</p>
+                    <p className="text-slate-500">ETA</p>
+                  </div>
+                </div>
               </div>
             )}
           </div>

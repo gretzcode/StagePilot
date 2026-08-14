@@ -603,6 +603,7 @@ function PresentationControlContent() {
             <BriefControl
               brief={state.brief}
               onSendBrief={(text, urgency) => dispatchCommand("BRIEF_UPDATE", { text, urgency })}
+              onResetBrief={() => dispatchCommand("BRIEF_CLEAR", {})}
             />
           )}
 

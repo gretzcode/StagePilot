@@ -21,6 +21,7 @@ export type StageCommandType =
   | "TIMER_PAUSE"
   | "TIMER_RESET"
   | "BRIEF_UPDATE"
+  | "BRIEF_CLEAR"
   | "DISPLAY_BLANK"
   | "DISPLAY_SHOW"
   | "CONTROL_TAKEOVER";
@@ -140,6 +141,11 @@ export interface BriefUpdateCommand extends BaseCommand {
   };
 }
 
+export interface BriefClearCommand extends BaseCommand {
+  type: "BRIEF_CLEAR";
+  payload: Record<string, never>;
+}
+
 export interface DisplayBlankCommand extends BaseCommand {
   type: "DISPLAY_BLANK";
   payload: {
@@ -187,6 +193,7 @@ export type StageCommand =
   | TimerPauseCommand
   | TimerResetCommand
   | BriefUpdateCommand
+  | BriefClearCommand
   | DisplayBlankCommand
   | DisplayShowCommand
   | ControlTakeoverCommand;

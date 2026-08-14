@@ -291,6 +291,12 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     }
 
     // ── Generic iframe (Canva, other embed URLs) ──────────────────────────────
+    // Determine sandbox attributes based on material type
+    const iframeCanvaEnabled = material.type === "canva";
+    const sandboxAttrs = iframeCanvaEnabled
+      ? "allow-scripts allow-popups allow-forms allow-pointer-lock"
+      : "allow-scripts allow-same-origin allow-popups allow-forms";
+
     return (
       <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
         <div className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}>
@@ -299,7 +305,9 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
             src={persistentIframeSrc}
             title={material.name}
             className="w-full h-full border-0 bg-slate-950 z-10"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+            sandbox={sandboxAttrs}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="no-referrer-when-downgrade"
           />
         </div>
       </div>

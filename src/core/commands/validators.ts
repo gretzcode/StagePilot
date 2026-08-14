@@ -48,6 +48,8 @@ export const BriefUpdateSchema = z.object({
   urgency: BriefUrgencySchema,
 });
 
+export const BriefClearSchema = z.object({});
+
 export const DisplayBlankSchema = z.object({
   targetDisplayId: z.string().optional(),
   blank: z.boolean(),

@@ -93,12 +93,7 @@ export class RoomRegistry {
       }
     }
 
-    // 3. Auto-seed initial default room if host has 0 active rooms
-    if (roomMap.size === 0) {
-      const defaultRoom = await this.createRoom(hostUserId, "Main Stage — Production Session");
-      roomMap.set(defaultRoom.roomId, defaultRoom);
-    }
-
+    // 3. Return rooms as-is (no auto-seed) — allow empty state when all rooms deleted
     return Array.from(roomMap.values()).sort((a, b) => b.createdAt - a.createdAt);
   }
 

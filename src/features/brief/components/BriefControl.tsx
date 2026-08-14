@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { BriefState, BriefUrgency } from "@/core/types";
-import { MessageSquare, Send, AlertTriangle } from "lucide-react";
+import { MessageSquare, Send, AlertTriangle, X } from "lucide-react";
 
 interface BriefControlProps {
   brief: BriefState;
   onSendBrief: (text: string, urgency: BriefUrgency) => void;
+  onResetBrief?: () => void;
 }
 
-export function BriefControl({ brief, onSendBrief }: BriefControlProps) {
+export function BriefControl({ brief, onSendBrief, onResetBrief }: BriefControlProps) {
   const [text, setText] = useState("");
   const [urgency, setUrgency] = useState<BriefUrgency>("info");
 
@@ -20,14 +21,31 @@ export function BriefControl({ brief, onSendBrief }: BriefControlProps) {
     setText("");
   };
 
+  const handleReset = () => {
+    onResetBrief?.();
+  };
+
   return (
     <div className="glass-panel p-5 rounded-3xl border border-slate-800">
       <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
         <h4 className="text-xs font-bold text-slate-300 flex items-center space-x-1.5 uppercase tracking-wider">
           <MessageSquare className="w-3.5 h-3.5 text-purple-400" />
-          <span>Stage Brief / Speaker Note</span>
+          <span>Stage Brief</span>
         </h4>
-        <span className="text-[10px] text-slate-500 font-mono uppercase">CONFIDENCE ONLY</span>
+        {brief.activeMessage && (
+          <button
+            type="button"
+            onClick={handleReset}
+            className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[10px] font-semibold uppercase transition flex items-center space-x-1"
+            title="Clear stage brief"
+          >
+            <X className="w-3 h-3" />
+            <span>Clear</span>
+          </button>
+        )}
+        {!brief.activeMessage && (
+          <span className="text-[10px] text-slate-500 font-mono uppercase">CONFIDENCE ONLY</span>
+        )}
       </div>
 
       {brief.activeMessage ? (
