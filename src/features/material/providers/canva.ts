@@ -10,41 +10,30 @@ export class CanvaMaterialProvider implements MaterialProvider {
     return type === "canva";
   }
 
-  /**
-   * Generate thumbnail URL for Canva design
-   * Uses a preview service to capture the Canva design preview
-   */
-  private generateThumbnailUrl(designUrl: string): string | undefined {
-    try {
-      // Use Microlink API to extract Open Graph image from Canva design page
-      // This is free and requires no authentication
-      const encoded = encodeURIComponent(designUrl);
-      return `https://api.microlink.io/?url=${encoded}&screenshot=true&meta=false&codeStyle=github`;
-    } catch {
-      return undefined;
-    }
-  }
-
   async parse(source: string | File | Blob, name: string, totalPagesInput?: number): Promise<Material> {
     const rawUrl = typeof source === "string" ? source.trim() : "";
     const externalUrl = normalizeEmbedUrl(rawUrl);
-    const thumbnailUrl = this.generateThumbnailUrl(rawUrl);
     
     const now = Date.now();
     const expiresAt = computeDefaultExpiration(now);
 
-    const totalPages = totalPagesInput && totalPagesInput > 0 ? totalPagesInput : 1;
-    const slides: SlideMetadata[] = Array.from({ length: totalPages }, (_, i) => ({
-      index: i + 1,
-      title: `Slide ${i + 1}`,
-      contentUrl: externalUrl,
-      url: externalUrl,
-      thumbnailUrl, // Add thumbnail URL to each slide
-    }));
+    // Canva designs are single presentations (not multi-page like Google Slides)
+    // Each Canva design is treated as one unit with no page-by-page navigation
+    const totalPages = 1;
+    const slides: SlideMetadata[] = [
+      {
+        index: 1,
+        title: name || "Canva Design",
+        contentUrl: externalUrl,
+        url: externalUrl,
+        // Note: Canva thumbnails removed - they are unreliable (Microlink API issues, Canva blocking)
+        // The design preview is only visible when viewing the embed itself
+      },
+    ];
 
     return {
       id: `mat-canva-${now}-${Math.random().toString(36).slice(2, 6)}`,
-      name: name || "Canva Presentation",
+      name: name || "Canva Design",
       type: "canva",
       sourceType: "CANVA_LINK",
       url: externalUrl,
@@ -57,7 +46,7 @@ export class CanvaMaterialProvider implements MaterialProvider {
       expiresAt,
       status: "ready",
       metadata: {
-        title: name || "Canva Presentation",
+        title: name || "Canva Design",
         pageCount: totalPages,
       },
     };
