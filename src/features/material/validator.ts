@@ -131,12 +131,39 @@ export function isPrivateNetworkUrl(urlString: string): boolean {
   }
 }
 
-export function isCanvaMaterialStale(material: { type?: string; totalPages?: number; slides?: Array<{ contentUrl?: string }> } | null | undefined): boolean {
+export function isCanvaMaterialStale(material: {
+  type?: string;
+  sourceType?: string;
+  totalPages?: number;
+  slides?: Array<{ contentUrl?: string }>;
+} | null | undefined): boolean {
   if (!material || material.type !== "canva") return false;
-  if (!material.totalPages || material.totalPages <= 1) return true;
-  if (!material.slides || material.slides.length <= 1) return true;
+
+  // 1. Missing or empty slides array
+  if (!material.slides || !Array.isArray(material.slides) || material.slides.length === 0) {
+    return true;
+  }
+
+  // 2. Invalid totalPages count
+  if (typeof material.totalPages !== "number" || material.totalPages < 1) {
+    return true;
+  }
+
+  // 3. Schema/URL check: Legacy iframe embeds point to Canva /design/ or /view URLs
+  // instead of exported slide image assets (e.g. document-export.canva.com)
   const firstSlideUrl = material.slides[0]?.contentUrl || "";
-  if (firstSlideUrl.includes("/design/") || firstSlideUrl.includes("/view")) return true;
+  if (!firstSlideUrl) {
+    return true;
+  }
+
+  if (
+    firstSlideUrl.includes("/design/") ||
+    firstSlideUrl.includes("/view") ||
+    firstSlideUrl.includes("canva.com/design")
+  ) {
+    return true;
+  }
+
   return false;
 }
 

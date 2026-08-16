@@ -103,9 +103,25 @@ export function stageSessionReducer(
       break;
     }
 
+    case "MATERIAL_UPDATE":
     case "MATERIAL_ADD": {
       const { material } = command.payload;
-      const existingIdx = nextState.materials.findIndex((m) => m.id === material.id);
+      const existingIdx = nextState.materials.findIndex(
+        (m) => m.id === material.id || (material.externalUrl && m.externalUrl === material.externalUrl)
+      );
+
+      // Authoritative Server-Side Live Material Protection:
+      // If the presentation is currently live and using this material,
+      // reject updating the material to prevent live mutation/desynchronization.
+      const isTargetLive =
+        (nextState.presentation.isPresenting || nextState.presentation.status === "live") &&
+        (nextState.presentation.materialId === material.id ||
+          (existingIdx >= 0 && nextState.presentation.materialId === nextState.materials[existingIdx].id));
+
+      if (isTargetLive && existingIdx >= 0) {
+        throw new Error("MATERIAL_LIVE_UPDATE_BLOCKED: Active presentation material cannot be modified while presenting");
+      }
+
       if (existingIdx >= 0) {
         nextState.materials[existingIdx] = material;
       } else {

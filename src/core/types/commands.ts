@@ -10,6 +10,7 @@ export type StageCommandType =
   | "DEVICE_REJECT"
   | "DEVICE_REMOVE"
   | "MATERIAL_ADD"
+  | "MATERIAL_UPDATE"
   | "MATERIAL_REMOVE"
   | "PRESENTATION_START"
   | "PRESENTATION_EXIT"
@@ -168,6 +169,13 @@ export interface MaterialAddCommand extends BaseCommand {
   };
 }
 
+export interface MaterialUpdateCommand extends BaseCommand {
+  type: "MATERIAL_UPDATE";
+  payload: {
+    material: Material;
+  };
+}
+
 export interface ControlTakeoverCommand extends BaseCommand {
   type: "CONTROL_TAKEOVER";
   payload: {
@@ -182,6 +190,7 @@ export type StageCommand =
   | DeviceRejectCommand
   | DeviceRemoveCommand
   | MaterialAddCommand
+  | MaterialUpdateCommand
   | MaterialRemoveCommand
   | PresentationStartCommand
   | PresentationExitCommand

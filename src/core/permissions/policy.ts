@@ -89,6 +89,7 @@ export class PermissionPolicy {
     // CONTROL is allowed to execute presentation, timer, brief, display blanking & takeover commands
     const allowedForControl = [
       "MATERIAL_ADD",
+      "MATERIAL_UPDATE",
       "MATERIAL_REMOVE",
       "PRESENTATION_START",
       "PRESENTATION_EXIT",
