@@ -76,7 +76,10 @@ export async function POST(request: Request) {
     }
 
     // 2.5 Canva Connect Authenticated Export Pipeline
-    const isCanva = urlString.includes("canva.com") || urlString.includes("canva.me");
+    const isCanva =
+      urlString.includes("canva.com") ||
+      urlString.includes("canva.me") ||
+      urlString.includes("canva.link");
     if (isCanva) {
       const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
       const env = (cfCtx?.env || process.env) as Record<string, unknown>;

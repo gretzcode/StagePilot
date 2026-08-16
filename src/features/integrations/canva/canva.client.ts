@@ -29,6 +29,53 @@ export function extractCanvaDesignId(input: string): string | null {
   return null;
 }
 
+export async function resolveCanvaShortlink(input: string): Promise<string> {
+  if (!input || typeof input !== "string") return input;
+  const trimmed = input.trim();
+
+  const isShortlink =
+    trimmed.includes("canva.link/") ||
+    trimmed.includes("canva.me/") ||
+    trimmed.includes("link.canva.com/");
+
+  if (!isShortlink) {
+    return trimmed;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch(trimmed, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
+
+    clearTimeout(timeout);
+
+    if (res.url && res.url !== trimmed) {
+      return res.url;
+    }
+
+    return trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
+export async function extractCanvaDesignIdAsync(input: string): Promise<string | null> {
+  const direct = extractCanvaDesignId(input);
+  if (direct) return direct;
+
+  const resolved = await resolveCanvaShortlink(input);
+  return extractCanvaDesignId(resolved);
+}
+
 export class CanvaClient {
   private accessToken: string;
 

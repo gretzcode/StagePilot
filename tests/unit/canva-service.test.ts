@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { CanvaClient, extractCanvaDesignId } from "@/features/integrations/canva/canva.client";
+import { CanvaClient, extractCanvaDesignId, extractCanvaDesignIdAsync } from "@/features/integrations/canva/canva.client";
 import { CanvaService } from "@/features/integrations/canva/canva.service";
 import { clearMemoryIntegrationCredentials, IntegrationCredentialStore } from "@/lib/integrations/credential-store";
 
@@ -16,6 +16,21 @@ describe("Canva Export Pipeline & Service Unit Tests", () => {
     expect(extractCanvaDesignId("DAG12345")).toBe("DAG12345");
     expect(extractCanvaDesignId("https://invalid-domain.com/test")).toBeNull();
     expect(extractCanvaDesignId("")).toBeNull();
+  });
+
+  it("TEST-CANVA-SHORTLINK-01: Correctly resolves canva.link shortlink to design URL", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementationOnce(async (input) => {
+      if (String(input).includes("canva.link/i6uu2doyu5v4ase")) {
+        return {
+          url: "https://www.canva.com/design/DAGzT4MKsHQ/view",
+          ok: true,
+        } as unknown as Response;
+      }
+      return new Response(JSON.stringify({ error: "NOT_FOUND" }), { status: 404 });
+    });
+
+    const resolved = await extractCanvaDesignIdAsync("https://canva.link/i6uu2doyu5v4ase");
+    expect(resolved).toBe("DAGzT4MKsHQ");
   });
 
   it("TEST-CANVA-EXPORT-01: Successfully creates export job, polls result, and normalizes into 15-page presentation", async () => {

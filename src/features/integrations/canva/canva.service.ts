@@ -1,7 +1,7 @@
 import { Material, SlideMetadata } from "@/core/types";
 import { computeDefaultExpiration } from "@/core/config/material";
 import { IntegrationCredentialStore } from "@/lib/integrations/credential-store";
-import { CanvaClient, extractCanvaDesignId } from "./canva.client";
+import { CanvaClient, extractCanvaDesignIdAsync } from "./canva.client";
 import { getValidCanvaAccessToken } from "./canva.oauth";
 import { CanvaConnectionStatus, CanvaDesign, ExportedPresentation } from "./canva.types";
 
@@ -66,7 +66,7 @@ export class CanvaService {
     designIdOrUrl: string,
     env?: Record<string, unknown> | null
   ): Promise<ExportedPresentation> {
-    const designId = extractCanvaDesignId(designIdOrUrl);
+    const designId = await extractCanvaDesignIdAsync(designIdOrUrl);
     if (!designId) {
       throw new Error("CANVA_INVALID_URL");
     }
@@ -81,7 +81,7 @@ export class CanvaService {
     env?: Record<string, unknown> | null,
     roomCode?: string
   ): Promise<Material> {
-    const designId = extractCanvaDesignId(designIdOrUrl);
+    const designId = await extractCanvaDesignIdAsync(designIdOrUrl);
     if (!designId) {
       throw new Error("CANVA_INVALID_URL");
     }

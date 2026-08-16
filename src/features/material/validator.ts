@@ -89,7 +89,10 @@ export function validateExternalUrl(urlString: string): ValidationResult {
       return { valid: false, error: "URL harus menggunakan protokol HTTPS yang aman." };
     }
 
-    const isCanva = parsed.hostname.includes("canva.com");
+    const isCanva =
+      parsed.hostname.includes("canva.com") ||
+      parsed.hostname.includes("canva.me") ||
+      parsed.hostname.includes("canva.link");
     const isYoutube = parsed.hostname.includes("youtube.com") || parsed.hostname.includes("youtu.be");
     const isVimeo = parsed.hostname.includes("vimeo.com");
     const isGoogleDrive = parsed.hostname.includes("drive.google.com");
