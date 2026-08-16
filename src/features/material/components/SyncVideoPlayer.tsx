@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { MediaPlaybackState } from "@/core/types";
-import { Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX, Maximize } from "lucide-react";
+import { Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX } from "lucide-react";
 
 interface SyncVideoPlayerProps {
   url: string;
@@ -28,6 +28,7 @@ export function SyncVideoPlayer({
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(role !== "control");
+  const [isIframeReady, setIsIframeReady] = useState(false);
 
   const isEmbedVideo =
     url.includes("youtube.com") ||
@@ -38,19 +39,48 @@ export function SyncVideoPlayer({
   const isYouTube = url.includes("youtube.com") || url.includes("youtube-nocookie.com") || url.includes("youtu.be");
   const isVimeo = url.includes("vimeo.com");
 
-  // Post message to embedded iframe players
+  const embedUrl = useMemo(() => {
+    if (!isEmbedVideo) return url;
+    try {
+      const parsed = new URL(url);
+      if (isYouTube) {
+        parsed.searchParams.set("enablejsapi", "1");
+        parsed.searchParams.set("autoplay", "1");
+        parsed.searchParams.set("playsinline", "1");
+        if (typeof window !== "undefined") {
+          parsed.searchParams.set("origin", window.location.origin);
+          parsed.searchParams.set("widget_referrer", window.location.origin);
+        }
+        return parsed.toString();
+      }
+      if (isVimeo) {
+        parsed.searchParams.set("api", "1");
+        parsed.searchParams.set("autoplay", "1");
+        return parsed.toString();
+      }
+    } catch {
+      return url;
+    }
+    return url;
+  }, [url, isEmbedVideo, isYouTube, isVimeo]);
+
+  // Post message to embedded iframe players (YouTube & Vimeo JS API)
   const postIframeCommand = useCallback(
-    (command: "play" | "pause" | "seek", value?: number) => {
+    (command: "play" | "pause" | "seek" | "unMute" | "mute", value?: number) => {
       const iframeWindow = iframeRef.current?.contentWindow;
       if (!iframeWindow) return;
 
       if (isYouTube) {
         if (command === "play") {
-          iframeWindow.postMessage(JSON.stringify({ event: "command", func: "playVideo", args: [] }), "*");
+          iframeWindow.postMessage(JSON.stringify({ event: "command", func: "playVideo", args: "" }), "*");
         } else if (command === "pause") {
-          iframeWindow.postMessage(JSON.stringify({ event: "command", func: "pauseVideo", args: [] }), "*");
+          iframeWindow.postMessage(JSON.stringify({ event: "command", func: "pauseVideo", args: "" }), "*");
         } else if (command === "seek" && typeof value === "number") {
           iframeWindow.postMessage(JSON.stringify({ event: "command", func: "seekTo", args: [value, true] }), "*");
+        } else if (command === "unMute") {
+          iframeWindow.postMessage(JSON.stringify({ event: "command", func: "unMute", args: "" }), "*");
+        } else if (command === "mute") {
+          iframeWindow.postMessage(JSON.stringify({ event: "command", func: "mute", args: "" }), "*");
         }
       } else if (isVimeo) {
         if (command === "play") {
@@ -158,7 +188,24 @@ export function SyncVideoPlayer({
       {isEmbedVideo ? (
         <iframe
           ref={iframeRef}
-          src={url}
+          src={embedUrl}
+          onLoad={() => {
+            setIsIframeReady(true);
+            const iframeWindow = iframeRef.current?.contentWindow;
+            if (iframeWindow && isYouTube) {
+              iframeWindow.postMessage(JSON.stringify({ event: "listening" }), "*");
+            }
+            if (mediaState) {
+              if (mediaState.status === "playing") {
+                postIframeCommand("play");
+              } else {
+                postIframeCommand("pause");
+              }
+              if (typeof mediaState.currentTime === "number") {
+                postIframeCommand("seek", mediaState.currentTime);
+              }
+            }
+          }}
           className="w-full h-full border-0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
@@ -214,7 +261,7 @@ export function SyncVideoPlayer({
               <button
                 type="button"
                 onClick={() => handleSeek(currentTime - 10)}
-                className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 text-xs font-semibold"
+                className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 text-xs font-semibold cursor-pointer"
                 title="Rewind 10s"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -224,7 +271,7 @@ export function SyncVideoPlayer({
               <button
                 type="button"
                 onClick={handleTogglePlay}
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-purple-900/40 transition glow-purple"
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-purple-900/40 transition glow-purple cursor-pointer"
               >
                 {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
                 <span>{isPlaying ? "PAUSE" : "PLAY"}</span>
@@ -233,7 +280,7 @@ export function SyncVideoPlayer({
               <button
                 type="button"
                 onClick={() => handleSeek(currentTime + 10)}
-                className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 text-xs font-semibold"
+                className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1 text-xs font-semibold cursor-pointer"
                 title="Forward 10s"
               >
                 <RotateCw className="w-3.5 h-3.5" />
@@ -245,12 +292,14 @@ export function SyncVideoPlayer({
               <button
                 type="button"
                 onClick={() => {
-                  setIsMuted(!isMuted);
+                  const nextMute = !isMuted;
+                  setIsMuted(nextMute);
                   if (videoRef.current) {
-                    videoRef.current.muted = !isMuted;
+                    videoRef.current.muted = nextMute;
                   }
+                  postIframeCommand(nextMute ? "mute" : "unMute");
                 }}
-                className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
                 title={isMuted ? "Unmute Host Audio" : "Mute Host Audio"}
               >
                 {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
