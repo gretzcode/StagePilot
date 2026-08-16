@@ -46,6 +46,7 @@ export function SyncVideoPlayer({
       if (isYouTube) {
         parsed.searchParams.set("enablejsapi", "1");
         parsed.searchParams.set("autoplay", "1");
+        parsed.searchParams.set("mute", "1");
         parsed.searchParams.set("playsinline", "1");
         if (typeof window !== "undefined") {
           parsed.searchParams.set("origin", window.location.origin);

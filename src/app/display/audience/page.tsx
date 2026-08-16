@@ -70,6 +70,7 @@ function AudienceDisplayContent() {
 
   return (
     <div
+      onClick={toggleFullscreen}
       onDoubleClick={toggleFullscreen}
       className="w-screen h-screen bg-black overflow-hidden relative select-none cursor-none flex flex-col justify-center items-center"
     >
