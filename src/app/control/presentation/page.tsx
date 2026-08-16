@@ -21,6 +21,9 @@ import {
   ListVideo,
   Plus,
   Play,
+  Pause,
+  RotateCcw,
+  RotateCw,
   PanelLeftClose,
   PanelLeftOpen,
   Trash2,
@@ -32,6 +35,13 @@ import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
 import { isCanvaMaterialStale } from "@/features/material/validator";
+
+function formatVideoTime(seconds: number): string {
+  if (isNaN(seconds) || seconds < 0) return "00:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+}
 
 function PresentationControlContent() {
   const searchParams = useSearchParams();
@@ -89,6 +99,7 @@ function PresentationControlContent() {
   }, [dispatchCommand, state]);
 
   const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
+  const isLiveVideo = Boolean(state?.presentation.isPresenting && activeMaterial?.type === "video");
 
   const scannedMaterialsRef = useRef<Set<string>>(new Set());
   const [leftTab, setLeftTab] = useState<"playlist" | "slides">("playlist");
@@ -419,22 +430,24 @@ function PresentationControlContent() {
                 <button
                   onClick={() => setLeftTab("playlist")}
                   className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition flex items-center justify-center space-x-1.5 cursor-pointer ${
-                    leftTab === "playlist" ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-white"
+                    leftTab === "playlist" || isLiveVideo ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-white"
                   }`}
                 >
                   <ListVideo className="w-3.5 h-3.5" />
                   <span>PLAYLIST ({state?.materials.length || 0})</span>
                 </button>
 
-                <button
-                  onClick={() => setLeftTab("slides")}
-                  className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition flex items-center justify-center space-x-1.5 cursor-pointer ${
-                    leftTab === "slides" ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>SLIDES ({state?.presentation.totalPages || 0})</span>
-                </button>
+                {!isLiveVideo && (
+                  <button
+                    onClick={() => setLeftTab("slides")}
+                    className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition flex items-center justify-center space-x-1.5 cursor-pointer ${
+                      leftTab === "slides" ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>SLIDES ({state?.presentation.totalPages || 0})</span>
+                  </button>
+                )}
               </div>
 
               {/* Close Drawer Button (Mobile Only) */}
@@ -449,7 +462,7 @@ function PresentationControlContent() {
 
             {/* Left Column Content View */}
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-              {leftTab === "playlist" ? (
+              {leftTab === "playlist" || isLiveVideo ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Queue</span>
@@ -500,7 +513,7 @@ function PresentationControlContent() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
                                 <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400 block mb-0.5">
-                                  {mat.type.toUpperCase()} • {mat.totalPages} SLIDES
+                                  {mat.type === "video" ? "VIDEO" : `${mat.type.toUpperCase()} • ${mat.totalPages} SLIDES`}
                                 </span>
                                 <h4 className="text-xs font-bold text-white line-clamp-1">{mat.name}</h4>
                               </div>
@@ -547,7 +560,9 @@ function PresentationControlContent() {
                                   <button
                                     onClick={() => {
                                       dispatchCommand("PRESENTATION_START", { materialId: mat.id, startPage: 1 });
-                                      setLeftTab("slides");
+                                      if (mat.type !== "video") {
+                                        setLeftTab("slides");
+                                      }
                                     }}
                                     className="flex-1 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 glow-purple cursor-pointer shadow"
                                   >
@@ -562,12 +577,17 @@ function PresentationControlContent() {
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </>
+                              ) : mat.type === "video" ? (
+                                <div className="w-full py-1.5 rounded-lg bg-purple-950/60 border border-purple-800/40 text-purple-300 font-mono text-[10px] flex items-center justify-center space-x-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
+                                  <span>PLAYING NOW</span>
+                                </div>
                               ) : (
                                 <button
                                   onClick={() => setLeftTab("slides")}
                                   className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition flex items-center justify-center space-x-1.5 cursor-pointer"
                                 >
-                                  <Layers className="w-3 h-3 text-purple-400" />
+                                  <Layers className="w-3.5 h-3.5 text-purple-400" />
                                   <span>VIEW SLIDES DECK</span>
                                 </button>
                               )}
@@ -609,8 +629,8 @@ function PresentationControlContent() {
         )}
 
         {/* Center Column: Live Slide Output Viewer (Expands dynamically to col-span-9 when sidebar is hidden) */}
-        <div className={`${isSidebarOpen ? "col-span-12 lg:col-span-6" : "col-span-12 lg:col-span-9"} bg-black flex flex-col justify-between p-4 sm:p-6 relative overflow-hidden transition-all duration-200 min-h-[350px] sm:min-h-[450px]`}>
-          <div className="flex-1 flex items-center justify-center relative min-h-[250px]">
+        <div className={`${isSidebarOpen ? "col-span-12 lg:col-span-6" : "col-span-12 lg:col-span-9"} bg-black flex flex-col justify-between p-2 sm:p-4 md:p-6 relative overflow-hidden transition-all duration-200 min-h-[350px] sm:min-h-[450px]`}>
+          <div className="flex-1 flex items-center justify-center relative min-h-[220px] sm:min-h-[250px] overflow-hidden">
             <SlideViewer
               material={activeMaterial}
               slide={state?.presentation.currentSlideMetadata || null}
@@ -626,45 +646,138 @@ function PresentationControlContent() {
             />
           </div>
 
-          {/* Slide Controls Bar */}
-          <div className="h-16 bg-slate-900/90 border border-slate-800 rounded-2xl px-4 sm:px-6 flex items-center justify-between shadow-2xl mt-4 z-10">
-            <div className="flex items-center space-x-2">
+          {/* Bottom Bar: Synchronized Video Controls OR Slide Controls */}
+          {isLiveVideo ? (
+            <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-2xl mt-3 sm:mt-4 z-10 flex flex-col gap-2.5">
+              {/* Progress Seekbar */}
+              <div className="flex items-center gap-2.5 sm:gap-3 w-full">
+                <span className="text-[11px] font-mono text-purple-400 font-bold w-12 text-right">
+                  {formatVideoTime(state?.presentation.mediaState?.currentTime || 0)}
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={state?.presentation.mediaState?.duration || 100}
+                  step={0.5}
+                  value={state?.presentation.mediaState?.currentTime || 0}
+                  onChange={(e) => {
+                    const target = parseFloat(e.target.value);
+                    dispatchCommand("MEDIA_SEEK", { targetTime: target });
+                  }}
+                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500 hover:accent-purple-400"
+                />
+                <span className="text-[11px] font-mono text-slate-400 w-12">
+                  {state?.presentation.mediaState?.duration ? formatVideoTime(state.presentation.mediaState.duration) : "--:--"}
+                </span>
+              </div>
+
+              {/* Playback Action Buttons */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center space-x-1.5 sm:space-x-2">
+                  <button
+                    onClick={() => {
+                      const current = state?.presentation.mediaState?.currentTime || 0;
+                      dispatchCommand("MEDIA_SEEK", { targetTime: Math.max(0, current - 10) });
+                    }}
+                    className="p-2 sm:px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1 text-xs font-semibold cursor-pointer"
+                    title="Rewind 10s"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">-10s</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const isPlaying = state?.presentation.mediaState?.status === "playing";
+                      if (isPlaying) {
+                        dispatchCommand("MEDIA_PAUSE", { currentTime: state?.presentation.mediaState?.currentTime });
+                      } else {
+                        dispatchCommand("MEDIA_PLAY", { currentTime: state?.presentation.mediaState?.currentTime });
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center space-x-1.5 shadow glow-purple transition cursor-pointer"
+                  >
+                    {state?.presentation.mediaState?.status === "playing" ? (
+                      <>
+                        <Pause className="w-3.5 h-3.5" />
+                        <span>PAUSE</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5 fill-white" />
+                        <span>PLAY</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const current = state?.presentation.mediaState?.currentTime || 0;
+                      dispatchCommand("MEDIA_SEEK", { targetTime: current + 10 });
+                    }}
+                    className="p-2 sm:px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1 text-xs font-semibold cursor-pointer"
+                    title="Forward 10s"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">+10s</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <span className="hidden sm:inline-block text-[10px] font-mono text-purple-400 bg-purple-950/60 border border-purple-800/50 px-2.5 py-1 rounded-full">
+                    LIVE VIDEO
+                  </span>
+                  <button
+                    onClick={handleStopAndExit}
+                    className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
+                  >
+                    <Square className="w-3.5 h-3.5" />
+                    <span>Stop Video</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Standard Slide Controls Bar */
+            <div className="h-16 bg-slate-900/90 border border-slate-800 rounded-2xl px-4 sm:px-6 flex items-center justify-between shadow-2xl mt-4 z-10">
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => dispatchCommand("SLIDE_PREVIOUS")}
+                  disabled={!state?.presentation.currentSlide || state.presentation.currentSlide <= 1}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition cursor-pointer"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => dispatchCommand("SLIDE_NEXT")}
+                  disabled={
+                    !state?.presentation.currentSlide ||
+                    (activeMaterial?.type !== "url" &&
+                      activeMaterial?.type !== "canva" &&
+                      !!(state.presentation.totalSlides || state.presentation.totalPages) &&
+                      (state.presentation.totalSlides || state.presentation.totalPages) > 1 &&
+                      state.presentation.currentSlide >= (state.presentation.totalSlides || state.presentation.totalPages))
+                  }
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition cursor-pointer"
+                  title="Next Slide (Right Arrow)"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+
+              <span className="font-mono text-xs sm:text-sm font-bold text-slate-300">
+                SLIDE {state?.presentation.currentSlide || 1} / {state?.presentation.totalSlides || state?.presentation.totalPages || 1}
+              </span>
+
               <button
-                onClick={() => dispatchCommand("SLIDE_PREVIOUS")}
-                disabled={!state?.presentation.currentSlide || state.presentation.currentSlide <= 1}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition cursor-pointer"
+                onClick={handleStopAndExit}
+                className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
               >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => dispatchCommand("SLIDE_NEXT")}
-                disabled={
-                  !state?.presentation.currentSlide ||
-                  (activeMaterial?.type !== "url" &&
-                    activeMaterial?.type !== "canva" &&
-                    !!(state.presentation.totalSlides || state.presentation.totalPages) &&
-                    (state.presentation.totalSlides || state.presentation.totalPages) > 1 &&
-                    state.presentation.currentSlide >= (state.presentation.totalSlides || state.presentation.totalPages))
-                }
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition cursor-pointer"
-                title="Next Slide (Right Arrow)"
-              >
-                <ChevronRight className="w-5 h-5" />
+                <Square className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Stop Presentation</span>
               </button>
             </div>
-
-            <span className="font-mono text-xs sm:text-sm font-bold text-slate-300">
-              SLIDE {state?.presentation.currentSlide || 1} / {state?.presentation.totalSlides || state?.presentation.totalPages || 1}
-            </span>
-
-            <button
-              onClick={handleStopAndExit}
-              className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
-            >
-              <Square className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Stop Presentation</span>
-            </button>
-          </div>
+          )}
         </div>
 
         {/* Right Column: Timer & Show Caller Brief Cue Controls */}
