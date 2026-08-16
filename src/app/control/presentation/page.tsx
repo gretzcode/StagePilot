@@ -101,6 +101,27 @@ function PresentationControlContent() {
   const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
   const isLiveVideo = Boolean(state?.presentation.isPresenting && activeMaterial?.type === "video");
 
+  const [localVideoTime, setLocalVideoTime] = useState(0);
+
+  useEffect(() => {
+    if (!state?.presentation.mediaState) return;
+    const media = state.presentation.mediaState;
+    if (media.status !== "playing") {
+      setLocalVideoTime(media.currentTime);
+      return;
+    }
+
+    const initialTime = media.currentTime;
+    const updatedAt = media.updatedAt;
+
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - updatedAt) / 1000;
+      setLocalVideoTime(Math.max(0, initialTime + elapsed));
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [state?.presentation.mediaState]);
+
   const scannedMaterialsRef = useRef<Set<string>>(new Set());
   const [leftTab, setLeftTab] = useState<"playlist" | "slides">("playlist");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -652,16 +673,17 @@ function PresentationControlContent() {
               {/* Progress Seekbar */}
               <div className="flex items-center gap-2.5 sm:gap-3 w-full">
                 <span className="text-[11px] font-mono text-purple-400 font-bold w-12 text-right">
-                  {formatVideoTime(state?.presentation.mediaState?.currentTime || 0)}
+                  {formatVideoTime(localVideoTime)}
                 </span>
                 <input
                   type="range"
                   min={0}
                   max={state?.presentation.mediaState?.duration || 100}
                   step={0.5}
-                  value={state?.presentation.mediaState?.currentTime || 0}
+                  value={localVideoTime}
                   onChange={(e) => {
                     const target = parseFloat(e.target.value);
+                    setLocalVideoTime(target);
                     dispatchCommand("MEDIA_SEEK", { targetTime: target });
                   }}
                   className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500 hover:accent-purple-400"
@@ -676,8 +698,9 @@ function PresentationControlContent() {
                 <div className="flex items-center space-x-1.5 sm:space-x-2">
                   <button
                     onClick={() => {
-                      const current = state?.presentation.mediaState?.currentTime || 0;
-                      dispatchCommand("MEDIA_SEEK", { targetTime: Math.max(0, current - 10) });
+                      const target = Math.max(0, localVideoTime - 10);
+                      setLocalVideoTime(target);
+                      dispatchCommand("MEDIA_SEEK", { targetTime: target });
                     }}
                     className="p-2 sm:px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1 text-xs font-semibold cursor-pointer"
                     title="Rewind 10s"
@@ -690,9 +713,9 @@ function PresentationControlContent() {
                     onClick={() => {
                       const isPlaying = state?.presentation.mediaState?.status === "playing";
                       if (isPlaying) {
-                        dispatchCommand("MEDIA_PAUSE", { currentTime: state?.presentation.mediaState?.currentTime });
+                        dispatchCommand("MEDIA_PAUSE", { currentTime: localVideoTime });
                       } else {
-                        dispatchCommand("MEDIA_PLAY", { currentTime: state?.presentation.mediaState?.currentTime });
+                        dispatchCommand("MEDIA_PLAY", { currentTime: localVideoTime });
                       }
                     }}
                     className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center space-x-1.5 shadow glow-purple transition cursor-pointer"
@@ -712,8 +735,9 @@ function PresentationControlContent() {
 
                   <button
                     onClick={() => {
-                      const current = state?.presentation.mediaState?.currentTime || 0;
-                      dispatchCommand("MEDIA_SEEK", { targetTime: current + 10 });
+                      const target = localVideoTime + 10;
+                      setLocalVideoTime(target);
+                      dispatchCommand("MEDIA_SEEK", { targetTime: target });
                     }}
                     className="p-2 sm:px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1 text-xs font-semibold cursor-pointer"
                     title="Forward 10s"

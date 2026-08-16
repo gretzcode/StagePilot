@@ -21,6 +21,7 @@ export function SyncVideoPlayer({
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const [isMuted, setIsMuted] = useState(role !== "control");
+  const lastHandledStateRef = useRef<{ status?: string; updatedAt?: number; currentTime?: number }>({});
 
   const isEmbedVideo =
     url.includes("youtube.com") ||
@@ -92,6 +93,10 @@ export function SyncVideoPlayer({
   useEffect(() => {
     if (!mediaState) return;
 
+    const isNewTimestamp = lastHandledStateRef.current.updatedAt !== mediaState.updatedAt;
+    const isStatusChanged = lastHandledStateRef.current.status !== mediaState.status;
+
+    // Direct HTML5 Video Sync
     if (!isEmbedVideo && videoRef.current) {
       const video = videoRef.current;
       const elapsedSinceUpdate = (Date.now() - mediaState.updatedAt) / 1000;
@@ -100,30 +105,51 @@ export function SyncVideoPlayer({
           ? mediaState.currentTime + Math.max(0, elapsedSinceUpdate) * (mediaState.playbackRate || 1.0)
           : mediaState.currentTime;
 
-      if (Math.abs(video.currentTime - expectedTime) > 0.4) {
-        video.currentTime = Math.max(0, expectedTime);
-      }
+      if (isNewTimestamp || isStatusChanged || Math.abs(video.currentTime - expectedTime) > 1.0) {
+        if (Math.abs(video.currentTime - expectedTime) > 0.5) {
+          video.currentTime = Math.max(0, expectedTime);
+        }
 
-      if (mediaState.status === "playing") {
-        video.play().catch(() => {
-          video.muted = true;
-          setIsMuted(true);
-          video.play().catch(() => {});
-        });
-      } else if (mediaState.status === "paused" || mediaState.status === "stopped") {
-        video.pause();
-      }
-    } else if (isEmbedVideo) {
-      if (mediaState.status === "playing") {
-        postIframeCommand("play");
-      } else if (mediaState.status === "paused" || mediaState.status === "stopped") {
-        postIframeCommand("pause");
-      }
-
-      if (typeof mediaState.currentTime === "number") {
-        postIframeCommand("seek", mediaState.currentTime);
+        if (mediaState.status === "playing") {
+          video.play().catch(() => {
+            video.muted = true;
+            setIsMuted(true);
+            video.play().catch(() => {});
+          });
+        } else if (mediaState.status === "paused" || mediaState.status === "stopped") {
+          video.pause();
+        }
       }
     }
+    // Embedded Iframe (YouTube / Vimeo) Sync
+    else if (isEmbedVideo) {
+      // Only seek when an explicit command changed mediaState.updatedAt
+      if (isNewTimestamp) {
+        const elapsedSinceUpdate = (Date.now() - mediaState.updatedAt) / 1000;
+        const expectedTime =
+          mediaState.status === "playing"
+            ? mediaState.currentTime + Math.max(0, elapsedSinceUpdate) * (mediaState.playbackRate || 1.0)
+            : mediaState.currentTime;
+
+        if (typeof mediaState.currentTime === "number") {
+          postIframeCommand("seek", expectedTime);
+        }
+      }
+
+      if (isStatusChanged || isNewTimestamp) {
+        if (mediaState.status === "playing") {
+          postIframeCommand("play");
+        } else if (mediaState.status === "paused" || mediaState.status === "stopped") {
+          postIframeCommand("pause");
+        }
+      }
+    }
+
+    lastHandledStateRef.current = {
+      status: mediaState.status,
+      updatedAt: mediaState.updatedAt,
+      currentTime: mediaState.currentTime,
+    };
   }, [mediaState, isEmbedVideo, postIframeCommand]);
 
   return (
@@ -138,13 +164,19 @@ export function SyncVideoPlayer({
               iframeWindow.postMessage(JSON.stringify({ event: "listening" }), "*");
             }
             if (mediaState) {
+              const elapsedSinceUpdate = (Date.now() - mediaState.updatedAt) / 1000;
+              const expectedTime =
+                mediaState.status === "playing"
+                  ? mediaState.currentTime + Math.max(0, elapsedSinceUpdate) * (mediaState.playbackRate || 1.0)
+                  : mediaState.currentTime;
+
+              if (typeof expectedTime === "number") {
+                postIframeCommand("seek", expectedTime);
+              }
               if (mediaState.status === "playing") {
                 postIframeCommand("play");
               } else {
                 postIframeCommand("pause");
-              }
-              if (typeof mediaState.currentTime === "number") {
-                postIframeCommand("seek", mediaState.currentTime);
               }
             }
           }}
