@@ -339,6 +339,46 @@ export function stageSessionReducer(
       break;
     }
 
+    case "MEDIA_PLAY": {
+      const currentTime = command.payload?.currentTime ?? nextState.presentation.mediaState?.currentTime ?? 0;
+      nextState.presentation.mediaState = {
+        status: "playing",
+        currentTime,
+        playbackRate: 1.0,
+        updatedAt: now,
+      };
+      nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+      nextState.presentation.updatedAt = now;
+      break;
+    }
+
+    case "MEDIA_PAUSE": {
+      const currentTime = command.payload?.currentTime ?? nextState.presentation.mediaState?.currentTime ?? 0;
+      nextState.presentation.mediaState = {
+        status: "paused",
+        currentTime,
+        playbackRate: 1.0,
+        updatedAt: now,
+      };
+      nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+      nextState.presentation.updatedAt = now;
+      break;
+    }
+
+    case "MEDIA_SEEK": {
+      const { targetTime } = command.payload;
+      const isCurrentlyPlaying = nextState.presentation.mediaState?.status === "playing";
+      nextState.presentation.mediaState = {
+        status: isCurrentlyPlaying ? "playing" : "paused",
+        currentTime: Math.max(0, targetTime),
+        playbackRate: 1.0,
+        updatedAt: now,
+      };
+      nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+      nextState.presentation.updatedAt = now;
+      break;
+    }
+
     case "CONTROL_TAKEOVER": {
       nextState.activeControllerDeviceId = command.senderDeviceId;
       break;

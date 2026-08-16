@@ -104,6 +104,9 @@ export class PermissionPolicy {
       "BRIEF_CLEAR",
       "DISPLAY_BLANK",
       "DISPLAY_SHOW",
+      "MEDIA_PLAY",
+      "MEDIA_PAUSE",
+      "MEDIA_SEEK",
       "CONTROL_TAKEOVER",
     ];
 

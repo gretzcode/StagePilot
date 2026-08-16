@@ -106,6 +106,7 @@ function ConfidenceDisplayContent() {
               blanked={state?.presentation.blanked}
               role="confidence"
               deviceId={deviceId}
+              mediaState={state?.presentation.mediaState}
             />
           </div>
 

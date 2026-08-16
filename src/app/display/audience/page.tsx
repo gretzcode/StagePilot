@@ -81,6 +81,7 @@ function AudienceDisplayContent() {
           blanked={state?.presentation.blanked}
           role="audience"
           deviceId={deviceId}
+          mediaState={state?.presentation.mediaState}
         />
       ) : (
         /* Waiting for presentation UI */

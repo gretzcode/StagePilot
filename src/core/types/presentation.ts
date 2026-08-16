@@ -48,6 +48,14 @@ export interface Material {
 
 export type PresentationStatus = "idle" | "live" | "paused" | "ended";
 
+export interface MediaPlaybackState {
+  status: "playing" | "paused" | "stopped";
+  currentTime: number; // in seconds
+  duration?: number; // in seconds
+  playbackRate: number; // default 1.0
+  updatedAt: number; // epoch ms when currentTime was recorded
+}
+
 export interface PresentationSession {
   sessionId: string;
   presentationId: string | null;
@@ -56,6 +64,7 @@ export interface PresentationSession {
   status: PresentationStatus;
   revision: number;
   blanked: boolean;
+  mediaState?: MediaPlaybackState;
   updatedAt: number;
 }
 
@@ -74,6 +83,7 @@ export interface PresentationState {
   nextSlideMetadata: SlideMetadata | null;
   blanked: boolean;
   blackoutMode: boolean;
+  mediaState?: MediaPlaybackState;
   startedAt: number | null;
   updatedAt: number;
 }

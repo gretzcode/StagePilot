@@ -25,6 +25,9 @@ export type StageCommandType =
   | "BRIEF_CLEAR"
   | "DISPLAY_BLANK"
   | "DISPLAY_SHOW"
+  | "MEDIA_PLAY"
+  | "MEDIA_PAUSE"
+  | "MEDIA_SEEK"
   | "CONTROL_TAKEOVER";
 
 export interface BaseCommand {
@@ -176,6 +179,27 @@ export interface MaterialUpdateCommand extends BaseCommand {
   };
 }
 
+export interface MediaPlayCommand extends BaseCommand {
+  type: "MEDIA_PLAY";
+  payload?: {
+    currentTime?: number;
+  };
+}
+
+export interface MediaPauseCommand extends BaseCommand {
+  type: "MEDIA_PAUSE";
+  payload?: {
+    currentTime?: number;
+  };
+}
+
+export interface MediaSeekCommand extends BaseCommand {
+  type: "MEDIA_SEEK";
+  payload: {
+    targetTime: number;
+  };
+}
+
 export interface ControlTakeoverCommand extends BaseCommand {
   type: "CONTROL_TAKEOVER";
   payload: {
@@ -205,4 +229,7 @@ export type StageCommand =
   | BriefClearCommand
   | DisplayBlankCommand
   | DisplayShowCommand
+  | MediaPlayCommand
+  | MediaPauseCommand
+  | MediaSeekCommand
   | ControlTakeoverCommand;

@@ -179,4 +179,47 @@ describe("Stage Session Reducer", () => {
     expect(state.presentation.materialId).toBe("mat-new-123");
     expect(state.presentation.totalPages).toBe(10);
   });
+
+  it("should synchronize media playback state on MEDIA_PLAY, MEDIA_PAUSE, and MEDIA_SEEK", () => {
+    let state = createInitialSessionState(roomId, roomId, "Test Room", hostUserId, hostDeviceId);
+
+    // 1. Play command
+    const playCmd: StageCommand = {
+      type: "MEDIA_PLAY",
+      commandId: "cmd-play-1",
+      senderDeviceId: hostDeviceId,
+      timestamp: Date.now(),
+      payload: { currentTime: 15.5 },
+    };
+
+    state = stageSessionReducer(state, playCmd);
+    expect(state.presentation.mediaState).toBeDefined();
+    expect(state.presentation.mediaState?.status).toBe("playing");
+    expect(state.presentation.mediaState?.currentTime).toBe(15.5);
+
+    // 2. Pause command
+    const pauseCmd: StageCommand = {
+      type: "MEDIA_PAUSE",
+      commandId: "cmd-pause-1",
+      senderDeviceId: hostDeviceId,
+      timestamp: Date.now(),
+      payload: { currentTime: 25.0 },
+    };
+
+    state = stageSessionReducer(state, pauseCmd);
+    expect(state.presentation.mediaState?.status).toBe("paused");
+    expect(state.presentation.mediaState?.currentTime).toBe(25.0);
+
+    // 3. Seek command
+    const seekCmd: StageCommand = {
+      type: "MEDIA_SEEK",
+      commandId: "cmd-seek-1",
+      senderDeviceId: hostDeviceId,
+      timestamp: Date.now(),
+      payload: { targetTime: 120.0 },
+    };
+
+    state = stageSessionReducer(state, seekCmd);
+    expect(state.presentation.mediaState?.currentTime).toBe(120.0);
+  });
 });

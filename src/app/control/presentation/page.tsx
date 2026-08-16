@@ -618,6 +618,10 @@ function PresentationControlContent() {
               blanked={state?.presentation.blanked}
               role="control"
               deviceId={deviceId}
+              mediaState={state?.presentation.mediaState}
+              onMediaPlay={(time) => dispatchCommand("MEDIA_PLAY", { currentTime: time })}
+              onMediaPause={(time) => dispatchCommand("MEDIA_PAUSE", { currentTime: time })}
+              onMediaSeek={(target) => dispatchCommand("MEDIA_SEEK", { targetTime: target })}
               onNumPagesDiscovered={handlePdfNumPagesDiscovered}
             />
           </div>
