@@ -50,7 +50,7 @@ function appendAssetAccessParams(url: string, deviceId?: string): string {
 
 export function SlideViewer({ material, slide, currentPage, blanked, role, onNumPagesDiscovered, deviceId }: SlideViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [renderError, setRenderError] = useState<string | null>(null);
+  const [renderError, _setRenderError] = useState<string | null>(null);
 
   const rawUrl = appendAssetAccessParams(material?.externalUrl || material?.url || "", deviceId);
   const isGoogleSlides = rawUrl.includes("docs.google.com/presentation");
@@ -151,6 +151,28 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
       }
       return prev;
     });
+  }, []);
+
+  const handleCanvaNavigation = useCallback((direction: "next" | "prev") => {
+    // Focus iframe and emit keyboard event for Canva built-in navigation
+    if (iframeRef.current) {
+      try {
+        iframeRef.current.focus();
+        const key = direction === "next" ? "ArrowRight" : "ArrowLeft";
+        const event = new KeyboardEvent("keydown", {
+          key,
+          code: key,
+          keyCode: direction === "next" ? 39 : 37,
+          which: direction === "next" ? 39 : 37,
+          bubbles: true,
+          cancelable: true,
+        });
+        document.dispatchEvent(event);
+        iframeRef.current.contentWindow?.dispatchEvent(event);
+      } catch {
+        // Silently fail if iframe is not accessible
+      }
+    }
   }, []);
 
   const persistentIframeSrc = useMemo(() => {
@@ -297,28 +319,6 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     const sandboxAttrs = iframeCanvaEnabled
       ? "allow-scripts allow-same-origin allow-popups allow-forms allow-pointer-lock allow-fullscreen"
       : "allow-scripts allow-same-origin allow-popups allow-forms";
-
-    const handleCanvaNavigation = useCallback((direction: "next" | "prev") => {
-      // Focus iframe and emit keyboard event for Canva built-in navigation
-      if (iframeRef.current) {
-        try {
-          iframeRef.current.focus();
-          const key = direction === "next" ? "ArrowRight" : "ArrowLeft";
-          const event = new KeyboardEvent("keydown", {
-            key,
-            code: key,
-            keyCode: direction === "next" ? 39 : 37,
-            which: direction === "next" ? 39 : 37,
-            bubbles: true,
-            cancelable: true,
-          });
-          document.dispatchEvent(event);
-          iframeRef.current.contentWindow?.dispatchEvent(event);
-        } catch {
-          // Silently fail if iframe is not accessible
-        }
-      }
-    }, []);
 
     return (
       <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">

@@ -10,7 +10,7 @@ export class CanvaMaterialProvider implements MaterialProvider {
     return type === "canva";
   }
 
-  async parse(source: string | File | Blob, name: string, totalPagesInput?: number): Promise<Material> {
+  async parse(source: string | File | Blob, name: string, _totalPagesInput?: number): Promise<Material> {
     const rawUrl = typeof source === "string" ? source.trim() : "";
     const externalUrl = normalizeEmbedUrl(rawUrl);
     
