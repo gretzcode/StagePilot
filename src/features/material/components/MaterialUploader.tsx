@@ -34,6 +34,39 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
   const uploadStartTimeRef = useRef<number | null>(null);
   const lastProgressRef = useRef<{ loaded: number; time: number } | null>(null);
 
+  const [isDiscoveringTitle, setIsDiscoveringTitle] = useState(false);
+
+  const autoFetchTitle = async (rawUrl: string) => {
+    if (!rawUrl || urlTitle.trim()) return;
+    const trimmed = rawUrl.trim();
+
+    try {
+      if (trimmed.includes("youtube.com") || trimmed.includes("youtu.be")) {
+        setIsDiscoveringTitle(true);
+        const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(trimmed)}&format=json`);
+        if (res.ok) {
+          const data = (await res.json().catch(() => null)) as { title?: string } | null;
+          if (data?.title && !urlTitle.trim()) {
+            setUrlTitle(data.title.trim());
+          }
+        }
+      } else if (trimmed.includes("vimeo.com")) {
+        setIsDiscoveringTitle(true);
+        const res = await fetch(`https://vimeo.com/api/oembed.json?url=${encodeURIComponent(trimmed)}`);
+        if (res.ok) {
+          const data = (await res.json().catch(() => null)) as { title?: string } | null;
+          if (data?.title && !urlTitle.trim()) {
+            setUrlTitle(data.title.trim());
+          }
+        }
+      }
+    } catch {
+      // Non-fatal
+    } finally {
+      setIsDiscoveringTitle(false);
+    }
+  };
+
   const handleUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!urlInput) return;
@@ -42,7 +75,7 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
     setLoading(true);
 
     try {
-      const title = urlTitle.trim() || "Web Presentation";
+      const title = urlTitle.trim();
 
       const validation = validateExternalUrl(urlInput);
       if (!validation.valid || !validation.materialType) {
@@ -298,12 +331,19 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
         {activeTab === "link" ? (
         <form onSubmit={handleUrlSubmit} className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">Presentation Title</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-slate-400">Presentation Title</label>
+              {isDiscoveringTitle && (
+                <span className="text-[10px] text-purple-400 animate-pulse font-medium">
+                  Auto-discovering title...
+                </span>
+              )}
+            </div>
             <input
               type="text"
               value={urlTitle}
               onChange={(e) => setUrlTitle(e.target.value)}
-              placeholder="e.g. Keynote Presentation Deck"
+              placeholder="Auto-detected from link or enter custom title"
               className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:border-purple-500 transition"
             />
           </div>
@@ -316,7 +356,14 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
                 type="url"
                 required
                 value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setUrlInput(val);
+                  if (val.includes("youtube.com") || val.includes("youtu.be") || val.includes("vimeo.com")) {
+                    autoFetchTitle(val);
+                  }
+                }}
+                onBlur={(e) => autoFetchTitle(e.target.value)}
                 placeholder="https://example.com/file.pdf / youtube.com/watch?v=... / canva.com/design/..."
                 className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:border-purple-500 font-mono transition"
               />

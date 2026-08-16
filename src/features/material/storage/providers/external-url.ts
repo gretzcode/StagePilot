@@ -56,6 +56,8 @@ export class ExternalUrlStorageProvider implements MaterialStorageProvider {
     // 3. Load slide metadata via PresentationAdapter
     const parsed = await defaultPresentationAdapter.loadMaterial(trimmedUrl, title, validation.materialType);
 
+    const resolvedTitle = parsed.name || title;
+
     // 4. Save metadata reference in D1 (NO binary copy stored in StagePilot)
     const registry = new MaterialRegistryService(this.env);
     const record = await registry.createMaterial({
@@ -66,7 +68,7 @@ export class ExternalUrlStorageProvider implements MaterialStorageProvider {
       materialType: validation.materialType,
       storageProvider: "external_url",
       storageReference: trimmedUrl,
-      title,
+      title: resolvedTitle,
       originalFileName: undefined,
       mimeType: "text/html",
       sizeBytes: 0,
