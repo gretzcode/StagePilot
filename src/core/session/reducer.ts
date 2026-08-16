@@ -355,6 +355,7 @@ export function stageSessionReducer(
         status: "playing",
         currentTime,
         playbackRate: 1.0,
+        seekSequence: nextState.presentation.mediaState?.seekSequence,
         updatedAt: now,
       };
       nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
@@ -368,6 +369,7 @@ export function stageSessionReducer(
         status: "paused",
         currentTime,
         playbackRate: 1.0,
+        seekSequence: nextState.presentation.mediaState?.seekSequence,
         updatedAt: now,
       };
       nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
@@ -378,10 +380,12 @@ export function stageSessionReducer(
     case "MEDIA_SEEK": {
       const { targetTime } = command.payload;
       const isCurrentlyPlaying = nextState.presentation.mediaState?.status === "playing";
+      const currentSeq = nextState.presentation.mediaState?.seekSequence || 0;
       nextState.presentation.mediaState = {
         status: isCurrentlyPlaying ? "playing" : "paused",
         currentTime: Math.max(0, targetTime),
         playbackRate: 1.0,
+        seekSequence: currentSeq + 1,
         updatedAt: now,
       };
       nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;

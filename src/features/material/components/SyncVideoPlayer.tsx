@@ -21,8 +21,11 @@ export function SyncVideoPlayer({
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const [isMuted, setIsMuted] = useState(role !== "control");
-  const lastStateRef = useRef<{ status?: string; updatedAt?: number; currentTime?: number }>({});
-  const isIframeReadyRef = useRef(false);
+
+  // Track the exact handled states to never re-trigger commands during continuous playback
+  const isInitializedRef = useRef(false);
+  const lastStatusRef = useRef<string | undefined>(undefined);
+  const lastSeekSeqRef = useRef<number | undefined>(undefined);
 
   const isEmbedVideo =
     url.includes("youtube.com") ||
@@ -94,89 +97,77 @@ export function SyncVideoPlayer({
   useEffect(() => {
     if (!mediaState) return;
 
-    const isNewTimestamp = lastStateRef.current.updatedAt !== mediaState.updatedAt;
-    const isStatusChanged = lastStateRef.current.status !== mediaState.status;
+    const currentStatus = mediaState.status;
+    const currentSeekSeq = mediaState.seekSequence;
 
-    // Direct HTML5 Video Sync
-    if (!isEmbedVideo && videoRef.current) {
-      const video = videoRef.current;
-      const elapsed = (Date.now() - mediaState.updatedAt) / 1000;
-      const expectedTime =
-        mediaState.status === "playing"
-          ? mediaState.currentTime + Math.max(0, elapsed) * (mediaState.playbackRate || 1.0)
-          : mediaState.currentTime;
+    // 1. Handle explicit seek commands ONLY
+    const hasNewSeek = currentSeekSeq !== undefined && currentSeekSeq !== lastSeekSeqRef.current;
+    if (hasNewSeek) {
+      lastSeekSeqRef.current = currentSeekSeq;
 
-      if (isNewTimestamp) {
-        // Only jump if difference is substantial (> 1.5s) to prevent jitter
-        if (Math.abs(video.currentTime - expectedTime) > 1.5) {
-          video.currentTime = Math.max(0, expectedTime);
-        }
-      }
-
-      if (mediaState.status === "playing") {
-        video.play().catch(() => {
-          video.muted = true;
-          setIsMuted(true);
-          video.play().catch(() => {});
-        });
-      } else if (mediaState.status === "paused" || mediaState.status === "stopped") {
-        video.pause();
+      if (!isEmbedVideo && videoRef.current) {
+        videoRef.current.currentTime = mediaState.currentTime;
+      } else if (isEmbedVideo) {
+        postIframeCommand("seek", mediaState.currentTime);
       }
     }
-    // Embedded Iframe (YouTube / Vimeo) Sync
-    else if (isEmbedVideo) {
-      if (isNewTimestamp) {
-        const elapsed = (Date.now() - mediaState.updatedAt) / 1000;
-        const expectedTime =
-          mediaState.status === "playing"
-            ? mediaState.currentTime + Math.max(0, elapsed) * (mediaState.playbackRate || 1.0)
-            : mediaState.currentTime;
 
-        // If target seek time is explicitly set (> 1s or new seek), dispatch seek
-        if (isIframeReadyRef.current && typeof expectedTime === "number" && expectedTime > 0.5) {
-          postIframeCommand("seek", expectedTime);
+    // 2. Handle Play / Pause transitions ONLY when status changes
+    const hasStatusChanged = currentStatus !== lastStatusRef.current;
+    if (hasStatusChanged) {
+      lastStatusRef.current = currentStatus;
+
+      if (!isEmbedVideo && videoRef.current) {
+        if (currentStatus === "playing") {
+          videoRef.current.play().catch(() => {
+            if (videoRef.current) {
+              videoRef.current.muted = true;
+              setIsMuted(true);
+              videoRef.current.play().catch(() => {});
+            }
+          });
+        } else if (currentStatus === "paused" || currentStatus === "stopped") {
+          videoRef.current.pause();
         }
-      }
-
-      if (isStatusChanged || isNewTimestamp) {
-        if (mediaState.status === "playing") {
+      } else if (isEmbedVideo) {
+        if (currentStatus === "playing") {
           postIframeCommand("play");
-        } else if (mediaState.status === "paused" || mediaState.status === "stopped") {
+        } else if (currentStatus === "paused" || currentStatus === "stopped") {
           postIframeCommand("pause");
         }
       }
     }
-
-    lastStateRef.current = {
-      status: mediaState.status,
-      updatedAt: mediaState.updatedAt,
-      currentTime: mediaState.currentTime,
-    };
   }, [mediaState, isEmbedVideo, postIframeCommand]);
 
   return (
     <div className="w-full h-full bg-slate-950 flex items-center justify-center relative overflow-hidden select-none">
       {isEmbedVideo ? (
         <iframe
-          key={url}
+          key={embedUrl}
           ref={iframeRef}
           src={embedUrl}
           onLoad={() => {
-            isIframeReadyRef.current = true;
             const iframeWindow = iframeRef.current?.contentWindow;
             if (iframeWindow && isYouTube) {
               iframeWindow.postMessage(JSON.stringify({ event: "listening" }), "*");
             }
-            if (mediaState) {
+
+            // On initial load only: sync current playback position if joining late
+            if (!isInitializedRef.current && mediaState) {
+              isInitializedRef.current = true;
+              lastStatusRef.current = mediaState.status;
+              lastSeekSeqRef.current = mediaState.seekSequence;
+
               const elapsed = (Date.now() - mediaState.updatedAt) / 1000;
-              const expectedTime =
+              const startTime =
                 mediaState.status === "playing"
                   ? mediaState.currentTime + Math.max(0, elapsed) * (mediaState.playbackRate || 1.0)
                   : mediaState.currentTime;
 
-              if (typeof expectedTime === "number" && expectedTime > 1.0) {
-                postIframeCommand("seek", expectedTime);
+              if (startTime > 1.5) {
+                postIframeCommand("seek", startTime);
               }
+
               if (mediaState.status === "playing") {
                 postIframeCommand("play");
               } else if (mediaState.status === "paused" || mediaState.status === "stopped") {
@@ -184,7 +175,7 @@ export function SyncVideoPlayer({
               }
             }
           }}
-          className="w-full h-full border-0"
+          className="w-full h-full border-0 pointer-events-auto"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
         />
@@ -193,9 +184,36 @@ export function SyncVideoPlayer({
           key={url}
           ref={videoRef}
           src={url}
-          className="max-w-full max-h-full object-contain"
+          className="max-w-full max-h-full object-contain pointer-events-auto"
           playsInline
           muted={isMuted}
+          onLoadedMetadata={() => {
+            if (!isInitializedRef.current && mediaState && videoRef.current) {
+              isInitializedRef.current = true;
+              lastStatusRef.current = mediaState.status;
+              lastSeekSeqRef.current = mediaState.seekSequence;
+
+              const elapsed = (Date.now() - mediaState.updatedAt) / 1000;
+              const startTime =
+                mediaState.status === "playing"
+                  ? mediaState.currentTime + Math.max(0, elapsed) * (mediaState.playbackRate || 1.0)
+                  : mediaState.currentTime;
+
+              if (startTime > 1.5) {
+                videoRef.current.currentTime = startTime;
+              }
+
+              if (mediaState.status === "playing") {
+                videoRef.current.play().catch(() => {
+                  if (videoRef.current) {
+                    videoRef.current.muted = true;
+                    setIsMuted(true);
+                    videoRef.current.play().catch(() => {});
+                  }
+                });
+              }
+            }
+          }}
         />
       )}
     </div>

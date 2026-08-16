@@ -221,5 +221,19 @@ describe("Stage Session Reducer", () => {
 
     state = stageSessionReducer(state, seekCmd);
     expect(state.presentation.mediaState?.currentTime).toBe(120.0);
+    expect(state.presentation.mediaState?.seekSequence).toBe(1);
+
+    // 4. Second seek command increments seekSequence
+    const seekCmd2: StageCommand = {
+      type: "MEDIA_SEEK",
+      commandId: "cmd-seek-2",
+      senderDeviceId: hostDeviceId,
+      timestamp: Date.now(),
+      payload: { targetTime: 200.0 },
+    };
+
+    state = stageSessionReducer(state, seekCmd2);
+    expect(state.presentation.mediaState?.currentTime).toBe(200.0);
+    expect(state.presentation.mediaState?.seekSequence).toBe(2);
   });
 });

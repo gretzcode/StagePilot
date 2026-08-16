@@ -53,6 +53,7 @@ export interface MediaPlaybackState {
   currentTime: number; // in seconds
   duration?: number; // in seconds
   playbackRate: number; // default 1.0
+  seekSequence?: number; // Monotonically increments only on explicit seek
   updatedAt: number; // epoch ms when currentTime was recorded
 }
 
