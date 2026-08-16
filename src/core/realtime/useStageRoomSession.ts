@@ -77,15 +77,16 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         }
 
         const data = (await res.json()) as { type?: string; state?: StageSessionState };
-        if (data.type === "SYNC_STATE" && data.state) {
+        const fetchedState = data.state;
+        if (data.type === "SYNC_STATE" && fetchedState) {
           // Prevent old state from overwriting newer local state via version check
           setState((currentState) => {
-            if (currentState && data.state && data.state.version <= currentState.version) {
+            if (currentState && fetchedState.version <= currentState.version) {
               // Incoming state is same or older → skip update to preserve optimistic updates
               return currentState;
             }
             // Incoming state is newer → update
-            return data.state;
+            return fetchedState;
           });
           setIsConnected(true);
           setRoomError(null);
@@ -134,15 +135,16 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
       broadcastChannel.onmessage = (event) => {
         if (!isMounted) return;
         try {
-          if (event.data?.type === "SYNC_STATE" && event.data?.state) {
+          const broadcastedState = event.data?.state as StageSessionState | undefined;
+          if (event.data?.type === "SYNC_STATE" && broadcastedState) {
             // Prevent old state from overwriting newer local state via version check
             setState((currentState) => {
-              if (currentState && event.data.state && event.data.state.version <= currentState.version) {
+              if (currentState && broadcastedState.version <= currentState.version) {
                 // Incoming state is same or older → skip update to preserve optimistic updates
                 return currentState;
               }
               // Incoming state is newer → update
-              return event.data.state;
+              return broadcastedState;
             });
             setIsConnected(true);
             setRoomError(null);
@@ -189,23 +191,26 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         if (!isMounted) return;
         try {
           const msg: ServerMessage = JSON.parse(event.data);
-          if (msg.type === "SYNC_STATE" && msg.state) {
-            // Prevent old state from overwriting newer local state via version check
-            setState((currentState) => {
-              if (currentState && msg.state && msg.state.version <= currentState.version) {
-                // Incoming state is same or older → skip update to preserve optimistic updates
-                return currentState;
-              }
-              // Incoming state is newer → update
-              return msg.state;
-            });
-            setIsConnected(true);
-            setRoomError(null);
+          if (msg.type === "SYNC_STATE") {
+            const socketState = msg.state;
+            if (socketState) {
+              // Prevent old state from overwriting newer local state via version check
+              setState((currentState) => {
+                if (currentState && socketState.version <= currentState.version) {
+                  // Incoming state is same or older → skip update to preserve optimistic updates
+                  return currentState;
+                }
+                // Incoming state is newer → update
+                return socketState;
+              });
+              setIsConnected(true);
+              setRoomError(null);
 
-            // Relay state to local BroadcastChannel for 0ms cross-window sync
-            try {
-              broadcastChannel?.postMessage({ type: "SYNC_STATE", state: msg.state });
-            } catch {}
+              // Relay state to local BroadcastChannel for 0ms cross-window sync
+              try {
+                broadcastChannel?.postMessage({ type: "SYNC_STATE", state: socketState });
+              } catch {}
+            }
           }
         } catch {
           // Ignore
