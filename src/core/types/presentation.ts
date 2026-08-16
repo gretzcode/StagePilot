@@ -21,6 +21,7 @@ export interface MaterialMetadata {
   pageCount: number;
   fileSize?: number;
   mimeType?: string;
+  thumbnailUrl?: string;
 }
 
 export interface Material {

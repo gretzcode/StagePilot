@@ -159,21 +159,35 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
       try {
         iframeRef.current.focus();
         const key = direction === "next" ? "ArrowRight" : "ArrowLeft";
+        const keyCode = direction === "next" ? 39 : 37;
         const event = new KeyboardEvent("keydown", {
           key,
           code: key,
-          keyCode: direction === "next" ? 39 : 37,
-          which: direction === "next" ? 39 : 37,
+          keyCode,
+          which: keyCode,
           bubbles: true,
           cancelable: true,
         });
         document.dispatchEvent(event);
+        iframeRef.current.dispatchEvent(event);
         iframeRef.current.contentWindow?.dispatchEvent(event);
       } catch {
         // Silently fail if iframe is not accessible
       }
     }
   }, []);
+
+  const prevCanvaPageRef = useRef(currentPage);
+  useEffect(() => {
+    if (material?.type === "canva") {
+      if (currentPage > prevCanvaPageRef.current) {
+        handleCanvaNavigation("next");
+      } else if (currentPage < prevCanvaPageRef.current) {
+        handleCanvaNavigation("prev");
+      }
+      prevCanvaPageRef.current = currentPage;
+    }
+  }, [currentPage, material?.type, handleCanvaNavigation]);
 
   const persistentIframeSrc = useMemo(() => {
     if (isGoogleSlides && googlePresentationId) {
@@ -323,13 +337,13 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     return (
       <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
         <div
-          className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}
+          className={`w-full h-full relative ${role !== "control" ? "pointer-events-none select-none" : ""}`}
           style={
             role === "audience" && iframeCanvaEnabled
               ? {
                   overflow: "hidden",
-                  // Clip to hide Canva toolbar at the top
-                  clipPath: "inset(60px 0 0 0)",
+                  // Hide Canva header/footer controls for audience
+                  clipPath: "inset(55px 0 50px 0)",
                 }
               : undefined
           }
@@ -341,7 +355,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
             className="w-full h-full border-0 bg-slate-950 z-10"
             sandbox={sandboxAttrs}
             allowFullScreen
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+            allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             referrerPolicy="strict-origin-when-cross-origin"
           />
 
