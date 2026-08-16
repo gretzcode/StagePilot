@@ -24,12 +24,14 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Trash2,
+  RefreshCw,
 } from "lucide-react";
 import { useStageRoomSession } from "@/core/realtime/useStageRoomSession";
 import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
+import { isCanvaMaterialStale } from "@/features/material/validator";
 
 function PresentationControlContent() {
   const searchParams = useSearchParams();
@@ -266,6 +268,51 @@ function PresentationControlContent() {
     }
   };
 
+  const [reimportingMatId, setReimportingMatId] = useState<string | null>(null);
+  const [reimportError, setReimportError] = useState<string | null>(null);
+
+  const handleReimportCanva = async (mat: Material) => {
+    if (reimportingMatId) return;
+    const isLive = state?.presentation.isPresenting && state.presentation.materialId === mat.id;
+    if (isLive) {
+      alert("Hentikan presentasi terlebih dahulu sebelum menyinkronkan ulang materi untuk mencegah perubahan mendadak pada tampilan layar.");
+      return;
+    }
+
+    setReimportingMatId(mat.id);
+    setReimportError(null);
+
+    try {
+      const res = await fetch("/api/integrations/canva/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: mat.externalUrl || mat.url,
+          roomCode,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        material?: Material;
+        message?: string;
+        error?: string;
+      };
+
+      if (!res.ok || !data.success || !data.material) {
+        throw new Error(data.message || data.error || "Gagal mengimpor ulang materi Canva.");
+      }
+
+      dispatchCommand("MATERIAL_ADD", { material: data.material });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Gagal menyinkronkan materi Canva.";
+      setReimportError(msg);
+      alert(`Sinkronisasi Canva Gagal: ${msg}`);
+    } finally {
+      setReimportingMatId(null);
+    }
+  };
+
   const handleRemoveMaterial = (materialId: string) => {
     dispatchCommand("MATERIAL_REMOVE", { materialId });
     fetch("/api/material/delete", {
@@ -436,12 +483,17 @@ function PresentationControlContent() {
                     ) : (
                       state.materials.map((mat) => {
                         const isLive = state.presentation.isPresenting && state.presentation.materialId === mat.id;
+                        const isStale = isCanvaMaterialStale(mat);
+                        const isReimporting = reimportingMatId === mat.id;
+
                         return (
                           <div
                             key={mat.id}
                             className={`p-3.5 rounded-2xl border transition-all ${
                               isLive
                                 ? "bg-purple-950/40 border-purple-500/80 shadow-lg ring-1 ring-purple-500/40"
+                                : isStale
+                                ? "bg-amber-950/20 border-amber-800/60 hover:border-amber-700/80"
                                 : "bg-slate-900 border-slate-800 hover:border-slate-700"
                             }`}
                           >
@@ -458,6 +510,10 @@ function PresentationControlContent() {
                                   <Play className="w-2.5 h-2.5 fill-current" />
                                   <span>LIVE</span>
                                 </span>
+                              ) : isStale ? (
+                                <span className="px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-700/60 text-amber-300 text-[9px] font-bold uppercase tracking-wider flex items-center space-x-1">
+                                  <span>NEEDS SYNC</span>
+                                </span>
                               ) : (
                                 <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 text-[9px] font-bold uppercase tracking-wider">
                                   READY
@@ -466,7 +522,27 @@ function PresentationControlContent() {
                             </div>
 
                             <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/60 mt-2">
-                              {!isLive ? (
+                              {isStale ? (
+                                <>
+                                  <button
+                                    onClick={() => handleReimportCanva(mat)}
+                                    disabled={isReimporting || isLive}
+                                    className="flex-1 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 cursor-pointer shadow"
+                                    title="Export slide assets melalui Canva Connect API"
+                                  >
+                                    <RefreshCw className={`w-3 h-3 ${isReimporting ? "animate-spin" : ""}`} />
+                                    <span>{isReimporting ? "MENGIMPOR..." : "RE-IMPORT CANVA"}</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveMaterial(mat.id)}
+                                    disabled={isReimporting || isLive}
+                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition cursor-pointer disabled:opacity-40"
+                                    title="Remove from Queue & Database"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              ) : !isLive ? (
                                 <>
                                   <button
                                     onClick={() => {

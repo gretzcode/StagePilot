@@ -131,6 +131,15 @@ export function isPrivateNetworkUrl(urlString: string): boolean {
   }
 }
 
+export function isCanvaMaterialStale(material: { type?: string; totalPages?: number; slides?: Array<{ contentUrl?: string }> } | null | undefined): boolean {
+  if (!material || material.type !== "canva") return false;
+  if (!material.totalPages || material.totalPages <= 1) return true;
+  if (!material.slides || material.slides.length <= 1) return true;
+  const firstSlideUrl = material.slides[0]?.contentUrl || "";
+  if (firstSlideUrl.includes("/design/") || firstSlideUrl.includes("/view")) return true;
+  return false;
+}
+
 export function normalizeEmbedUrl(urlString: string): string {
   if (!urlString || typeof urlString !== "string") return urlString;
   const trimmed = urlString.trim();
