@@ -136,17 +136,19 @@ export async function POST(request: Request) {
       title,
       roomCode,
       ownerUserId,
+      slideCount,
     });
 
     const parsedMaterial = await defaultPresentationAdapter.loadMaterial(
       storedMaterial.externalUrl || urlString.trim(),
       storedMaterial.title,
       storedMaterial.materialType,
-      slideCount
+      slideCount || storedMaterial.slideCount
     );
 
     const assetUrl = `/api/material/asset?materialId=${storedMaterial.id}&roomCode=${encodeURIComponent(upperRoomCode)}`;
     const materialUrl = storedMaterial.materialType === "pdf" ? assetUrl : parsedMaterial.url;
+    const finalTotalPages = slideCount || storedMaterial.slideCount || parsedMaterial.totalPages || 1;
 
     const newMaterial: Material = {
       ...parsedMaterial,
@@ -158,9 +160,10 @@ export async function POST(request: Request) {
       expiresAt: storedMaterial.expiresAt,
       ownerUserId,
       roomCode: upperRoomCode,
+      totalPages: finalTotalPages,
       slides:
         storedMaterial.materialType === "pdf"
-          ? Array.from({ length: slideCount || parsedMaterial.totalPages || 1 }, (_, index) => ({
+          ? Array.from({ length: finalTotalPages }, (_, index) => ({
               index: index + 1,
               title: `Page ${index + 1}`,
               contentUrl: assetUrl,

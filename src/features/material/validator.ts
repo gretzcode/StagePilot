@@ -170,6 +170,32 @@ export function isCanvaMaterialStale(material: {
   return false;
 }
 
+export function isPdfMaterialStale(material: {
+  type?: string;
+  sourceType?: string;
+  totalPages?: number;
+  slides?: Array<{ contentUrl?: string; url?: string }>;
+} | null | undefined): boolean {
+  if (!material || material.type !== "pdf") return false;
+
+  // 1. Invalid or missing totalPages count (or legacy 1-page fallback on multi-page material)
+  if (typeof material.totalPages !== "number" || material.totalPages < 1) {
+    return true;
+  }
+
+  // 2. Missing or empty slides array
+  if (!material.slides || !Array.isArray(material.slides) || material.slides.length === 0) {
+    return true;
+  }
+
+  // 3. Mismatch between totalPages and slides.length
+  if (material.slides.length !== material.totalPages) {
+    return true;
+  }
+
+  return false;
+}
+
 export function normalizeEmbedUrl(urlString: string): string {
   if (!urlString || typeof urlString !== "string") return urlString;
   const trimmed = urlString.trim();
@@ -240,7 +266,54 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
     const host = parsed.hostname.toLowerCase();
     const isPdfUrl = parsed.pathname.toLowerCase().endsWith(".pdf");
 
-    if (isPdfUrl) {
+    // Google Drive PDF Dynamic Auto-Detection
+    const isGoogleDrive =
+      host.includes("drive.google.com") ||
+      (host.includes("docs.google.com") && !parsed.pathname.includes("/presentation/d/"));
+    if (isGoogleDrive) {
+      const match =
+        parsed.pathname.match(/\/file\/d\/([A-Za-z0-9_-]+)/) ||
+        parsed.search.match(/[?&]id=([A-Za-z0-9_-]+)/) ||
+        normalized.match(/\/file\/d\/([A-Za-z0-9_-]+)/) ||
+        normalized.match(/[?&]id=([A-Za-z0-9_-]+)/);
+
+      if (match && match[1]) {
+        const fileId = match[1];
+        const driveProbeUrls = [
+          `https://drive.google.com/uc?id=${fileId}&export=download`,
+          `https://docs.google.com/uc?id=${fileId}&export=download`,
+          `https://drive.usercontent.google.com/download?id=${fileId}&export=download`,
+        ];
+
+        for (const probeUrl of driveProbeUrls) {
+          try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 4000);
+            const res = await fetch(probeUrl, {
+              signal: controller.signal,
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                Accept: "application/pdf,*/*",
+              },
+            });
+            clearTimeout(timeout);
+
+            if (res.ok) {
+              const arrayBuf = await res.arrayBuffer();
+              const count = estimatePdfPageCountFromBytes(arrayBuf);
+              if (count && count > 0) {
+                return { totalPages: count };
+              }
+            }
+          } catch {
+            // Silently try next probe URL
+          }
+        }
+      }
+    }
+
+    if (isPdfUrl || parsed.search.toLowerCase().includes(".pdf")) {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);

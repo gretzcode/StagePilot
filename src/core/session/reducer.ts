@@ -221,6 +221,9 @@ export function stageSessionReducer(
 
     case "SLIDE_PREVIOUS": {
       if (!nextState.presentation.isPresenting) break;
+      if (nextState.presentation.currentSlide <= 1) {
+        break;
+      }
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
       const totalSlides = Math.max(nextState.presentation.totalSlides || 1, material?.totalPages || 1, material?.slides?.length || 1);
       ensureMaterialSlides(material, totalSlides);

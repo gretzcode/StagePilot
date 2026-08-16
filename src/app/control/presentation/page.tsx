@@ -34,7 +34,7 @@ import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
-import { isCanvaMaterialStale } from "@/features/material/validator";
+import { isCanvaMaterialStale, isPdfMaterialStale } from "@/features/material/validator";
 
 function formatVideoTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return "00:00";
@@ -253,23 +253,27 @@ function PresentationControlContent() {
     };
   }, [activeMaterial?.id, dispatchCommand]);
 
-  // ── PDF: update material totalPages when PDF.js discovers the real count ────
+  // ── PDF: update material totalPages when PDF.js discovers the real count (when not live) ────
   const handlePdfNumPagesDiscovered = (numPages: number) => {
     if (!activeMaterial) return;
     if (numPages <= 1 || numPages === activeMaterial.totalPages) return;
-    const expandedSlides = Array.from({ length: numPages }, (_, i) => ({
-      index: i + 1,
-      title: `Page ${i + 1}`,
-      url: activeMaterial.externalUrl || activeMaterial.url || "",
-      contentUrl: activeMaterial.externalUrl || activeMaterial.url || "",
-    }));
-    dispatchCommand("MATERIAL_ADD", {
-      material: {
-        ...activeMaterial,
-        totalPages: numPages,
-        slides: expandedSlides,
-      },
-    });
+    const isLive = state?.presentation.isPresenting && state.presentation.materialId === activeMaterial.id;
+    // When not live, safely update the material in DO state
+    if (!isLive) {
+      const expandedSlides = Array.from({ length: numPages }, (_, i) => ({
+        index: i + 1,
+        title: `Page ${i + 1}`,
+        url: activeMaterial.externalUrl || activeMaterial.url || "",
+        contentUrl: activeMaterial.externalUrl || activeMaterial.url || "",
+      }));
+      dispatchCommand("MATERIAL_ADD", {
+        material: {
+          ...activeMaterial,
+          totalPages: numPages,
+          slides: expandedSlides,
+        },
+      });
+    }
   };
   // Auto-switch sidebar tab to 'slides' whenever GO LIVE / PRESENT is clicked or active
   useEffect(() => {
@@ -277,8 +281,6 @@ function PresentationControlContent() {
       setLeftTab("slides");
     }
   }, [state?.presentation.isPresenting, state?.presentation.materialId]);
-
-
 
   const handleStopAndExit = () => {
     dispatchCommand("PRESENTATION_EXIT");
@@ -340,6 +342,40 @@ function PresentationControlContent() {
       const msg = err instanceof Error ? err.message : "Gagal menyinkronkan materi Canva.";
       setReimportError(msg);
       alert(`Sinkronisasi Canva Gagal: ${msg}`);
+    } finally {
+      setReimportingMatId(null);
+    }
+  };
+
+  const handleSyncPdf = async (mat: Material) => {
+    if (reimportingMatId) return;
+    const isLive = state?.presentation.isPresenting && state.presentation.materialId === mat.id;
+    if (isLive) {
+      alert("Hentikan presentasi terlebih dahulu sebelum menyinkronkan ulang materi untuk mencegah perubahan mendadak pada tampilan layar.");
+      return;
+    }
+
+    setReimportingMatId(mat.id);
+    setReimportError(null);
+
+    try {
+      const res = await fetch(`/api/material/resolve?materialId=${encodeURIComponent(mat.id)}&roomCode=${encodeURIComponent(roomCode)}`);
+      const data = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        material?: Material;
+        message?: string;
+        error?: string;
+      };
+
+      if (!res.ok || !data.success || !data.material) {
+        throw new Error(data.message || data.error || "Gagal menyinkronkan detail PDF.");
+      }
+
+      dispatchCommand("MATERIAL_ADD", { material: data.material });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Gagal menyinkronkan materi PDF.";
+      setReimportError(msg);
+      alert(`Sinkronisasi PDF Gagal: ${msg}`);
     } finally {
       setReimportingMatId(null);
     }
@@ -517,7 +553,9 @@ function PresentationControlContent() {
                     ) : (
                       state.materials.map((mat) => {
                         const isLive = state.presentation.isPresenting && state.presentation.materialId === mat.id;
-                        const isStale = isCanvaMaterialStale(mat);
+                        const isCanvaStale = isCanvaMaterialStale(mat);
+                        const isPdfStale = isPdfMaterialStale(mat);
+                        const isStale = isCanvaStale || isPdfStale;
                         const isReimporting = reimportingMatId === mat.id;
 
                         return (
@@ -559,13 +597,19 @@ function PresentationControlContent() {
                               {isStale ? (
                                 <>
                                   <button
-                                    onClick={() => handleReimportCanva(mat)}
+                                    onClick={() => (isCanvaStale ? handleReimportCanva(mat) : handleSyncPdf(mat))}
                                     disabled={isReimporting || isLive}
                                     className="flex-1 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 cursor-pointer shadow"
-                                    title="Export slide assets melalui Canva Connect API"
+                                    title={isCanvaStale ? "Export slide assets melalui Canva Connect API" : "Perbarui jumlah halaman PDF dari sumber"}
                                   >
                                     <RefreshCw className={`w-3 h-3 ${isReimporting ? "animate-spin" : ""}`} />
-                                    <span>{isReimporting ? "MENGIMPOR..." : "RE-IMPORT CANVA"}</span>
+                                    <span>
+                                      {isReimporting
+                                        ? "MENGIMPOR..."
+                                        : isCanvaStale
+                                        ? "RE-IMPORT CANVA"
+                                        : "SYNC PDF PAGES"}
+                                    </span>
                                   </button>
                                   <button
                                     onClick={() => handleRemoveMaterial(mat.id)}

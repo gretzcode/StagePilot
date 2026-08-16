@@ -21,6 +21,7 @@ export interface ExternalMaterialInput {
   title: string;
   roomCode: string;
   ownerUserId: string;
+  slideCount?: number;
 }
 
 export interface MaterialResolveInput {

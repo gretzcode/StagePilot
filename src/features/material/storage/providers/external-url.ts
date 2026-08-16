@@ -54,9 +54,16 @@ export class ExternalUrlStorageProvider implements MaterialStorageProvider {
     const title = input.title.trim() || "External Presentation";
 
     // 3. Load slide metadata via PresentationAdapter
-    const parsed = await defaultPresentationAdapter.loadMaterial(trimmedUrl, title, validation.materialType);
+    const initialSlideCount = input.slideCount && input.slideCount > 0 ? input.slideCount : undefined;
+    const parsed = await defaultPresentationAdapter.loadMaterial(
+      trimmedUrl,
+      title,
+      validation.materialType,
+      initialSlideCount
+    );
 
     const resolvedTitle = parsed.name || title;
+    const effectiveSlideCount = initialSlideCount || parsed.totalPages || 1;
 
     // 4. Save metadata reference in D1 (NO binary copy stored in StagePilot)
     const registry = new MaterialRegistryService(this.env);
@@ -74,7 +81,7 @@ export class ExternalUrlStorageProvider implements MaterialStorageProvider {
       sizeBytes: 0,
       objectKey: null,
       externalUrl: trimmedUrl,
-      slideCount: parsed.totalPages || 1,
+      slideCount: effectiveSlideCount,
       status: "ready",
       createdAt: now,
       expiresAt,
@@ -121,7 +128,22 @@ export class ExternalUrlStorageProvider implements MaterialStorageProvider {
     }
 
     const sourceUrl = record.externalUrl || record.storageReference || "";
-    const parsed = await defaultPresentationAdapter.loadMaterial(sourceUrl, record.title, record.materialType);
+    const parsed = await defaultPresentationAdapter.loadMaterial(
+      sourceUrl,
+      record.title,
+      record.materialType,
+      record.slideCount
+    );
+
+    const totalPages = record.slideCount || parsed.totalPages || 1;
+    const slides =
+      parsed.slides && parsed.slides.length === totalPages
+        ? parsed.slides
+        : Array.from({ length: totalPages }, (_, i) => ({
+            index: i + 1,
+            title: `Page ${i + 1}`,
+            url: sourceUrl,
+          }));
 
     return {
       materialId: record.id,
@@ -129,8 +151,8 @@ export class ExternalUrlStorageProvider implements MaterialStorageProvider {
       sourceUrl,
       provider: "external_url",
       title: record.title,
-      totalPages: record.slideCount || parsed.totalPages || 1,
-      slides: parsed.slides || [{ index: 1, title: record.title, url: sourceUrl }],
+      totalPages,
+      slides,
       expiresAt: record.expiresAt,
     };
   }
