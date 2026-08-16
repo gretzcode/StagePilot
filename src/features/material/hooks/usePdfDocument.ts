@@ -7,15 +7,7 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 const pdfDocCache = new Map<string, PDFDocumentProxy>();
 const pdfLoadingPromises = new Map<string, Promise<PDFDocumentProxy>>();
 
-function buildFetchTarget(url: string, googleFileId: string | null): string {
-  if (url.startsWith("/api/material/asset")) {
-    return url;
-  }
-  if (googleFileId) {
-    return `/api/material/asset?url=${encodeURIComponent(
-      `https://drive.google.com/uc?export=download&id=${googleFileId}`
-    )}`;
-  }
+function buildFetchTarget(url: string): string {
   return url;
 }
 
@@ -49,13 +41,13 @@ export function usePdfDocument(
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
-  const cacheKey = googleFileId ? `gd:${googleFileId}` : url;
+  const cacheKey = url || (googleFileId ? `gd:${googleFileId}` : "");
 
   useEffect(() => {
     isMountedRef.current = true;
 
     // Nothing to load
-    if (!url && !googleFileId) {
+    if (!cacheKey) {
       setLoading(false);
       return;
     }
@@ -93,7 +85,7 @@ export function usePdfDocument(
     setPdfDoc(null);
     setNumPages(0);
 
-    const fetchTarget = buildFetchTarget(url, googleFileId ?? null);
+    const fetchTarget = buildFetchTarget(url);
     const loadPromise = loadPdfDocument(fetchTarget);
 
     pdfLoadingPromises.set(cacheKey, loadPromise);

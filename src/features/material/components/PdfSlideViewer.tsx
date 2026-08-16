@@ -24,7 +24,7 @@ export function PdfSlideViewer({
   currentSlide,
   currentPage,
   role,
-  title,
+  title: _title,
   onNumPagesDiscovered,
 }: PdfSlideViewerProps) {
   const activeSlide = currentSlide ?? currentPage ?? 1;
@@ -121,27 +121,17 @@ export function PdfSlideViewer({
     };
   }, [pdfDoc, activeSlide]);
 
-  // ── Graceful iframe fallback when PDF.js cannot fetch (CORS / network) ─────
+  // ── Canonical Error State (No iframe fallback / no external toolbar) ─────
   if (docError) {
-    const iframeSrc = googleFileId
-      ? `https://drive.google.com/file/d/${googleFileId}/preview#page=${activeSlide}&toolbar=0&navpanes=0`
-      : url;
-
     return (
-      <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
-        <div
-          className={`w-full h-full relative ${
-            role !== "control" ? "pointer-events-none" : ""
-          }`}
-          // Clip the Google Drive toolbar that appears at the top of the iframe
-          style={googleFileId ? { clipPath: "inset(48px 0 0 0)" } : undefined}
-        >
-          <iframe
-            src={iframeSrc}
-            title={title || "PDF Document"}
-            className="w-full h-full border-0 bg-slate-950 z-10"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-          />
+      <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none">
+        <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-800/60 max-w-md">
+          <span className="text-rose-400 font-mono font-bold text-xs uppercase tracking-wider block mb-1">
+            Gagal Memuat Dokumen PDF
+          </span>
+          <p className="text-slate-400 text-xs">
+            {docError || "File PDF tidak dapat dirender. Pastikan file valid dan akun Google Drive tersambung."}
+          </p>
         </div>
       </div>
     );

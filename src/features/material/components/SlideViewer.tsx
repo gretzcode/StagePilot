@@ -83,9 +83,6 @@ export function SlideViewer({
   const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
   const googlePresentationId = match ? match[1] : null;
 
-  const driveMatch = rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/id=([A-Za-z0-9_-]+)/);
-  const googleFileId = driveMatch ? driveMatch[1] : null;
-
   // Target Google Slides PNG export URL for the current page
   const targetGoogleSlideImg = googlePresentationId
     ? `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${activeSlide}`
@@ -181,11 +178,8 @@ export function SlideViewer({
     if (isGoogleSlides && googlePresentationId) {
       return `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${activeSlide}`;
     }
-    if (isGoogleDrive && googleFileId) {
-      return `https://drive.google.com/file/d/${googleFileId}/preview#page=${activeSlide}&zoom=page-fit&toolbar=0&navpanes=0`;
-    }
     return rawUrl;
-  }, [activeSlide, googleFileId, googlePresentationId, isGoogleDrive, isGoogleSlides, rawUrl]);
+  }, [activeSlide, googlePresentationId, isGoogleSlides, rawUrl]);
 
   // 4. Reactive fallback iframe update engine for the rare cases where PNG export is blocked.
   useEffect(() => {
@@ -194,16 +188,8 @@ export function SlideViewer({
       if (iframeRef.current.src !== targetSrc) {
         iframeRef.current.src = targetSrc;
       }
-    } else if (useFallbackIframe && isGoogleDrive && googleFileId && iframeRef.current?.contentWindow) {
-      try {
-        iframeRef.current.contentWindow.location.replace(
-          `https://drive.google.com/file/d/${googleFileId}/preview#page=${activeSlide}&zoom=page-fit&toolbar=0&navpanes=0`
-        );
-      } catch {
-        // Cross-origin fallback
-      }
     }
-  }, [activeSlide, isGoogleSlides, googlePresentationId, isGoogleDrive, googleFileId, useFallbackIframe]);
+  }, [activeSlide, isGoogleSlides, googlePresentationId, useFallbackIframe]);
 
   if (blanked) {
     return (

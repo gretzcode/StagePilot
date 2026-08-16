@@ -26,14 +26,14 @@ describe("StagePilot Phase 3.2B Material Storage & Asset Pipeline Tests", () => 
   it("TEST-PROVIDER-02: ExternalUrlStorageProvider registers HTTPS URL without R2 binary upload", async () => {
     const provider = new ExternalUrlStorageProvider(null);
     const stored = await provider.registerExternalUrl({
-      url: "https://example.com/presentation.pdf",
+      url: "https://example.com/presentation-deck",
       title: "Public Slide Deck",
       roomCode: "ROOMA",
       ownerUserId: "host-1",
     });
 
     expect(stored.storageProvider).toBe("external_url");
-    expect(stored.externalUrl).toBe("https://example.com/presentation.pdf");
+    expect(stored.externalUrl).toBe("https://example.com/presentation-deck");
     expect(stored.objectKey).toBeNull();
   });
 

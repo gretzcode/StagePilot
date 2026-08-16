@@ -40,6 +40,10 @@ export class ExternalUrlStorageProvider implements MaterialStorageProvider {
       throw new Error(validation.error || "Link materi tidak valid. Gunakan URL HTTPS yang lengkap.");
     }
 
+    if (validation.materialType === "pdf") {
+      throw new Error("Materi PDF eksternal harus diimpor melalui pipeline Google Drive.");
+    }
+
     // 2. SSRF Protection: Reject private/local network IPs
     if (isPrivateNetworkUrl(trimmedUrl)) {
       throw new Error("Link materi dari jaringan privat atau localhost tidak diizinkan.");

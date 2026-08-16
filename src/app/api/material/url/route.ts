@@ -9,6 +9,7 @@ import { detectSlideCountFromUrl } from "@/features/material/validator";
 import { RoomRegistry } from "@/lib/rooms/registry";
 import { Material } from "@/core/types";
 import { CanvaService } from "@/features/integrations/canva/canva.service";
+import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
 
 /**
  * Dispatch MATERIAL_ADD command to the room (Durable Object in production,
@@ -123,11 +124,231 @@ export async function POST(request: Request) {
       }
     }
 
-    // Dynamic slide count auto-detection from Google Slides / external link
+    // 2.6 Canonical Google Drive PDF Ingestion Pipeline
+    const isGoogleDrivePdf =
+      urlString.includes("drive.google.com") ||
+      (urlString.includes("docs.google.com") && !urlString.includes("/presentation/d/"));
+    const isDirectPdf =
+      urlString.toLowerCase().endsWith(".pdf") ||
+      urlString.toLowerCase().includes(".pdf?") ||
+      urlString.toLowerCase().includes(".pdf#");
+
+    if (isGoogleDrivePdf || isDirectPdf) {
+      const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
+      const env = (cfCtx?.env || process.env) as Record<string, unknown>;
+      const googleProvider = new GoogleDriveStorageProvider(env);
+
+      if (!(await googleProvider.isAvailable())) {
+        return applySecurityHeaders(
+          NextResponse.json(
+            {
+              error: "GOOGLE_DRIVE_NOT_CONNECTED",
+              message:
+                "Akun Google Drive belum tersambung. Sambungkan akun Google Drive Anda di Dashboard terlebih dahulu agar materi PDF dapat diimpor dan disinkronkan ke semua layar.",
+            },
+            { status: 400 }
+          )
+        );
+      }
+
+      let pdfArrayBuffer: ArrayBuffer | null = null;
+
+      if (isGoogleDrivePdf) {
+        const match =
+          urlString.match(/\/file\/d\/([A-Za-z0-9_-]+)/) ||
+          urlString.match(/[?&]id=([A-Za-z0-9_-]+)/);
+        const fileId = match ? match[1] : null;
+
+        if (!fileId) {
+          return applySecurityHeaders(
+            NextResponse.json(
+              { error: "PDF_URL_INVALID", message: "Link Google Drive tidak valid." },
+              { status: 400 }
+            )
+          );
+        }
+
+        try {
+          const driveAsset = await googleProvider.getFile(fileId);
+          pdfArrayBuffer = driveAsset.data;
+        } catch {
+          const probeUrls = [
+            `https://drive.google.com/uc?id=${fileId}&export=download`,
+            `https://docs.google.com/uc?id=${fileId}&export=download`,
+            `https://drive.usercontent.google.com/download?id=${fileId}&export=download`,
+          ];
+
+          for (const probeUrl of probeUrls) {
+            try {
+              const res = await fetch(probeUrl, {
+                headers: {
+                  "User-Agent":
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                  Accept: "application/pdf,*/*",
+                },
+              });
+              if (res.ok) {
+                const buf = await res.arrayBuffer();
+                const head = new TextDecoder("ascii").decode(new Uint8Array(buf.slice(0, 1024)));
+                if (head.includes("%PDF-")) {
+                  pdfArrayBuffer = buf;
+                  break;
+                }
+              }
+            } catch {
+              // Try next probe URL
+            }
+          }
+        }
+
+        if (!pdfArrayBuffer) {
+          return applySecurityHeaders(
+            NextResponse.json(
+              {
+                error: "PDF_DOWNLOAD_FAILED",
+                message:
+                  "Gagal mengunduh file PDF dari Google Drive. Pastikan file dapat diakses publik atau tersambung dengan akun Google Drive yang tepat.",
+              },
+              { status: 400 }
+            )
+          );
+        }
+      } else {
+        // Direct External PDF URL Ingestion
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        let res: Response;
+
+        try {
+          res = await fetch(urlString, {
+            signal: controller.signal,
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              Accept: "application/pdf,*/*",
+            },
+          });
+        } catch (fetchErr: unknown) {
+          clearTimeout(timeout);
+          return applySecurityHeaders(
+            NextResponse.json(
+              {
+                error: "PDF_DOWNLOAD_FAILED",
+                message: `Gagal mengunduh file PDF: ${fetchErr instanceof Error ? fetchErr.message : "Koneksi terputus atau timeout."}`,
+              },
+              { status: 400 }
+            )
+          );
+        }
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+          return applySecurityHeaders(
+            NextResponse.json(
+              {
+                error: "PDF_DOWNLOAD_FAILED",
+                message: `Server eksternal mengembalikan status ${res.status}. File PDF tidak dapat diunduh.`,
+              },
+              { status: 400 }
+            )
+          );
+        }
+
+        pdfArrayBuffer = await res.arrayBuffer();
+        if (pdfArrayBuffer.byteLength < 4) {
+          return applySecurityHeaders(
+            NextResponse.json(
+              {
+                error: "PDF_NOT_A_PDF",
+                message: "File yang diunduh kosong atau rusak.",
+              },
+              { status: 400 }
+            )
+          );
+        }
+
+        const header = new TextDecoder("ascii").decode(new Uint8Array(pdfArrayBuffer.slice(0, 1024)));
+        if (!header.includes("%PDF-")) {
+          return applySecurityHeaders(
+            NextResponse.json(
+              {
+                error: "PDF_NOT_A_PDF",
+                message: "Tautan tersebut tidak mengembalikan file PDF yang valid (terdeteksi format non-PDF / HTML).",
+              },
+              { status: 400 }
+            )
+          );
+        }
+      }
+
+      // Determine clean filename
+      let fileName = "Presentation.pdf";
+      try {
+        const parsedUrl = new URL(urlString);
+        const segments = parsedUrl.pathname.split("/").filter(Boolean);
+        const lastSegment = segments[segments.length - 1];
+        if (lastSegment && lastSegment.toLowerCase().endsWith(".pdf")) {
+          fileName = decodeURIComponent(lastSegment.split("?")[0]);
+        } else if (title && title !== "External Presentation") {
+          fileName = `${title.replace(/[/\\?%*:|"<>]/g, "-")}.pdf`;
+        }
+      } catch {
+        fileName = "Presentation.pdf";
+      }
+
+      // Upload PDF bytes to Google Drive room folder
+      const pdfBlob = new Blob([pdfArrayBuffer], { type: "application/pdf" });
+      const storedMaterial = await googleProvider.upload({
+        file: pdfBlob,
+        fileName,
+        mimeType: "application/pdf",
+        sizeBytes: pdfBlob.size,
+        roomCode: upperRoomCode,
+        ownerUserId,
+      });
+
+      const assetUrl = `/api/material/asset?materialId=${storedMaterial.id}&roomCode=${encodeURIComponent(upperRoomCode)}`;
+      const finalTotalPages = storedMaterial.slideCount || 1;
+
+      const canonicalPdfMaterial: Material = {
+        id: storedMaterial.id,
+        name: storedMaterial.title,
+        type: "pdf",
+        sourceType: "UPLOADED_FILE",
+        objectKey: null,
+        url: assetUrl,
+        externalUrl: urlString,
+        expiresAt: storedMaterial.expiresAt,
+        ownerUserId,
+        roomCode: upperRoomCode,
+        totalPages: finalTotalPages,
+        slides: Array.from({ length: finalTotalPages }, (_, index) => ({
+          index: index + 1,
+          title: `Page ${index + 1}`,
+          contentUrl: assetUrl,
+        })),
+        uploadedAt: storedMaterial.createdAt,
+        status: "ready",
+      };
+
+      const hostDeviceId = `dev-host-${ownerUserId.slice(-8)}`;
+      await dispatchMaterialAddCommand(request, upperRoomCode, hostDeviceId, canonicalPdfMaterial);
+
+      const response = NextResponse.json({
+        success: true,
+        material: canonicalPdfMaterial,
+        record: storedMaterial,
+        totalSlides: finalTotalPages,
+      });
+
+      return applySecurityHeaders(response);
+    }
+
+    // Dynamic slide count auto-detection from Google Slides
     const detection = await detectSlideCountFromUrl(urlString);
     const slideCount = detection ? detection.totalPages : undefined;
 
-    // 3. Delegate to MaterialStorageResolver ExternalUrlStorageProvider
+    // 3. Delegate to MaterialStorageResolver ExternalUrlStorageProvider (for video, Google Slides, web pages)
     const resolver = new MaterialStorageResolver(process.env as Record<string, unknown>);
     const urlProvider = resolver.getUrlProvider();
 

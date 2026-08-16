@@ -1,6 +1,5 @@
 import { MATERIAL_CONFIG } from "@/core/config/material";
 import { MaterialType, MaterialSourceType } from "@/core/types";
-import { estimatePdfPageCountFromBytes } from "./pdf-page-count";
 
 export interface ValidationResult {
   valid: boolean;
@@ -264,79 +263,6 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
   try {
     const parsed = new URL(normalized);
     const host = parsed.hostname.toLowerCase();
-    const isPdfUrl = parsed.pathname.toLowerCase().endsWith(".pdf");
-
-    // Google Drive PDF Dynamic Auto-Detection
-    const isGoogleDrive =
-      host.includes("drive.google.com") ||
-      (host.includes("docs.google.com") && !parsed.pathname.includes("/presentation/d/"));
-    if (isGoogleDrive) {
-      const match =
-        parsed.pathname.match(/\/file\/d\/([A-Za-z0-9_-]+)/) ||
-        parsed.search.match(/[?&]id=([A-Za-z0-9_-]+)/) ||
-        normalized.match(/\/file\/d\/([A-Za-z0-9_-]+)/) ||
-        normalized.match(/[?&]id=([A-Za-z0-9_-]+)/);
-
-      if (match && match[1]) {
-        const fileId = match[1];
-        const driveProbeUrls = [
-          `https://drive.google.com/uc?id=${fileId}&export=download`,
-          `https://docs.google.com/uc?id=${fileId}&export=download`,
-          `https://drive.usercontent.google.com/download?id=${fileId}&export=download`,
-        ];
-
-        for (const probeUrl of driveProbeUrls) {
-          try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 4000);
-            const res = await fetch(probeUrl, {
-              signal: controller.signal,
-              headers: {
-                "User-Agent":
-                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                Accept: "application/pdf,*/*",
-              },
-            });
-            clearTimeout(timeout);
-
-            if (res.ok) {
-              const arrayBuf = await res.arrayBuffer();
-              const count = estimatePdfPageCountFromBytes(arrayBuf);
-              if (count && count > 0) {
-                return { totalPages: count };
-              }
-            }
-          } catch {
-            // Silently try next probe URL
-          }
-        }
-      }
-    }
-
-    if (isPdfUrl || parsed.search.toLowerCase().includes(".pdf")) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        const res = await fetch(normalized, {
-          signal: controller.signal,
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            Accept: "application/pdf,*/*",
-          },
-        });
-        clearTimeout(timeout);
-
-        if (res.ok) {
-          const count = estimatePdfPageCountFromBytes(await res.arrayBuffer());
-          if (count && count > 0) {
-            return { totalPages: count };
-          }
-        }
-      } catch {
-        // Silently fall back to default page count
-      }
-    }
 
     // Google Slides Dynamic Auto-Detection
     if (host.includes("docs.google.com") && parsed.pathname.includes("/presentation/d/")) {
@@ -478,49 +404,6 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
           } catch {
             // Continue to next endpoint if one fails
           }
-        }
-      }
-    }
-
-    // Google Drive PDF Dynamic Page Auto-Detection
-    if (host.includes("drive.google.com")) {
-      const match = parsed.pathname.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || parsed.search.match(/id=([A-Za-z0-9_-]+)/);
-      if (match && match[1]) {
-        const fileId = match[1];
-        const targetUrl = `https://drive.google.com/file/d/${fileId}/view`;
-
-        try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 4000);
-
-          const res = await fetch(targetUrl, {
-            signal: controller.signal,
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              "Accept-Language": "en-US,en;q=0.9",
-            },
-          });
-          clearTimeout(timeout);
-
-          if (res.ok) {
-            const html = await res.text();
-
-            // Match pageCount pattern in Google Drive viewer JSON script
-            const pageCountMatch =
-              html.match(/["']numPages["']:\s*(\d+)/i) ||
-              html.match(/["']pageCount["']:\s*(\d+)/i) ||
-              html.match(/\\"pageCount\\":\s*(\d+)/i) ||
-              html.match(/\\\[null,\s*(\d+),\s*\\"PDF\\"/i);
-
-            if (pageCountMatch && pageCountMatch[1]) {
-              const pages = parseInt(pageCountMatch[1], 10);
-              if (pages > 0) {
-                return { totalPages: pages };
-              }
-            }
-          }
-        } catch {
-          // Silently fall back to default
         }
       }
     }

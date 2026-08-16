@@ -6,11 +6,11 @@ import {
   estimatePdfPageCountFromBytes,
   estimatePdfPageCountFromBlob,
 } from "@/features/material/pdf-page-count";
-import {
-  detectSlideCountFromUrl,
-  isPdfMaterialStale,
-} from "@/features/material/validator";
+import { isPdfMaterialStale } from "@/features/material/validator";
 import { defaultPresentationAdapter } from "@/features/material/adapter";
+import { ExternalUrlStorageProvider } from "@/features/material/storage/providers/external-url";
+import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
+import { clearMemoryD1Registry } from "@/lib/storage/registry";
 
 function generateSamplePdf(pageCount: number): string {
   const pageObjects = Array.from(
@@ -31,13 +31,42 @@ ${pageObjects}
 %%EOF`;
 }
 
-describe("Google Drive PDF — Centralized Page Count & Presentation State (Phases 1-20)", () => {
+function createGoogleFetchMock(pdfContent: string) {
+  return vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    const target = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+    if (target.includes("oauth2.googleapis.com/token")) {
+      return Response.json({ access_token: "access-token", expires_in: 3600 });
+    }
+
+    if (target.includes("drive/v3/files?q=")) {
+      return Response.json({ files: [] });
+    }
+
+    if (target.includes("drive/v3/files?fields=id") && init?.method === "POST") {
+      return Response.json({ id: `folder-${Math.random().toString(36).slice(2, 6)}` });
+    }
+
+    if (target.includes("upload/drive/v3/files")) {
+      return Response.json({ id: "drive-file-ingested-11" });
+    }
+
+    if (target.includes("drive/v3/files/drive-file-ingested-11?alt=media")) {
+      return new Response(pdfContent, { headers: { "Content-Type": "application/pdf" } });
+    }
+
+    return new Response("not found", { status: 404 });
+  });
+}
+
+describe("Google Drive PDF — Canonical PDF Ingestion & Presentation Pipeline", () => {
   const roomId = "room-pdf-test";
   const roomCode = "PDFTEST";
   const hostUserId = "user-host-1";
   const hostDeviceId = "dev-host-1";
 
   beforeEach(() => {
+    clearMemoryD1Registry();
     vi.restoreAllMocks();
   });
 
@@ -54,7 +83,7 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
       expect(estimatePdfPageCountFromBytes(buffer)).toBe(2);
     });
 
-    it("3. Accurately determines page count for an 11-page PDF (The Confirmed Bug Scenario)", () => {
+    it("3. Accurately determines page count for an 11-page PDF (The Canonical 11-page Scenario)", () => {
       const pdf = generateSamplePdf(11);
       const buffer = new TextEncoder().encode(pdf).buffer;
       expect(estimatePdfPageCountFromBytes(buffer)).toBe(11);
@@ -76,30 +105,50 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
     });
   });
 
-  describe("Google Drive PDF URL Auto-Detection (Phase 15)", () => {
-    it("6. detectSlideCountFromUrl probes Google Drive file URL and returns actual totalPages", async () => {
-      const sample11Pdf = generateSamplePdf(11);
-      const fetchMock = vi.fn().mockImplementation(async (url: string) => {
-        if (url.includes("drive.google.com/uc") || url.includes("export=download")) {
-          return new Response(sample11Pdf, {
-            status: 200,
-            headers: { "Content-Type": "application/pdf" },
-          });
-        }
-        return new Response("not found", { status: 404 });
+  describe("External URL -> Google Drive Canonical Ingestion (Phases 4-8)", () => {
+    it("6. ExternalUrlStorageProvider rejects direct PDF URL registration (forces Google Drive pipeline)", async () => {
+      const provider = new ExternalUrlStorageProvider();
+      await expect(
+        provider.registerExternalUrl({
+          url: "https://example.com/document.pdf",
+          title: "Direct PDF",
+          roomCode: "PDFTEST",
+          ownerUserId: "host-1",
+        })
+      ).rejects.toThrow("Materi PDF eksternal harus diimpor melalui pipeline Google Drive");
+    });
+
+    it("7. GoogleDriveStorageProvider ingests PDF blob, determines page count, and stores in D1", async () => {
+      const pdf11 = generateSamplePdf(11);
+      vi.stubGlobal("fetch", createGoogleFetchMock(pdf11));
+
+      const env = {
+        GOOGLE_CLIENT_ID: "client-id",
+        GOOGLE_CLIENT_SECRET: "client-secret",
+        GOOGLE_REFRESH_TOKEN: "refresh-token",
+      };
+      const provider = new GoogleDriveStorageProvider(env);
+      const blob = new Blob([pdf11], { type: "application/pdf" });
+
+      const stored = await provider.upload({
+        file: blob,
+        fileName: "QuarterlyReport.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: blob.size,
+        roomCode: "PDFTEST",
+        ownerUserId: "host-1",
       });
-      vi.stubGlobal("fetch", fetchMock);
 
-      const driveUrl = "https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/view";
-      const result = await detectSlideCountFromUrl(driveUrl);
-
-      expect(result).toBeDefined();
-      expect(result?.totalPages).toBe(11);
+      expect(stored.materialType).toBe("pdf");
+      expect(stored.storageProvider).toBe("google_drive");
+      expect(stored.storageReference).toBe("drive-file-ingested-11");
+      expect(stored.slideCount).toBe(11);
+      expect(stored.status).toBe("ready");
     });
   });
 
   describe("Presentation Adapter & Material Snapshot (Phases 5-6)", () => {
-    it("7. PresentationAdapter loads PDF material with dynamic slideCount", async () => {
+    it("8. PresentationAdapter loads PDF material with dynamic slideCount", async () => {
       const material = await defaultPresentationAdapter.loadMaterial(
         "https://example.com/sample.pdf",
         "Quarterly Report PDF",
@@ -113,12 +162,12 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
       expect(material.slides[10].index).toBe(11);
     });
 
-    it("8. PRESENTATION_START initializes totalSlides to material.totalPages (11) and currentSlide to 1", () => {
+    it("9. PRESENTATION_START initializes totalSlides to material.totalPages (11) and currentSlide to 1", () => {
       const material: Material = {
         id: "mat-gdrive-11",
         name: "Financial Deck.pdf",
         type: "pdf",
-        sourceType: "EXTERNAL_URL",
+        sourceType: "UPLOADED_FILE",
         url: "/api/material/asset?materialId=mat-gdrive-11&roomCode=PDFTEST",
         totalPages: 11,
         slides: Array.from({ length: 11 }, (_, i) => ({
@@ -164,7 +213,7 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
       id: "mat-gdrive-11",
       name: "Financial Deck.pdf",
       type: "pdf",
-      sourceType: "EXTERNAL_URL",
+      sourceType: "UPLOADED_FILE",
       url: "/api/material/asset?materialId=mat-gdrive-11&roomCode=PDFTEST",
       totalPages: 11,
       slides: Array.from({ length: 11 }, (_, i) => ({
@@ -194,7 +243,7 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
       });
     });
 
-    it("9. NEXT advances currentSlide from 1 to 2, 3, up to 11", () => {
+    it("10. NEXT advances currentSlide from 1 to 2, 3, up to 11", () => {
       expect(state.presentation.currentSlide).toBe(1);
 
       state = stageSessionReducer(state, {
@@ -216,7 +265,7 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
       expect(state.presentation.currentSlide).toBe(3);
     });
 
-    it("10. NEXT at page 11 (last page) stops and does not exceed totalSlides", () => {
+    it("11. NEXT at page 11 (last page) stops and does not exceed totalSlides", () => {
       // Go to slide 11
       state = stageSessionReducer(state, {
         type: "SLIDE_GOTO",
@@ -241,7 +290,7 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
       expect(state.presentation.revision).toBe(revisionBefore);
     });
 
-    it("11. PREVIOUS steps back from 11 to 10 down to 1, and stops at page 1", () => {
+    it("12. PREVIOUS steps back from 11 to 10 down to 1, and stops at page 1", () => {
       state = stageSessionReducer(state, {
         type: "SLIDE_GOTO",
         commandId: "cmd-goto-2",
@@ -274,7 +323,7 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
       expect(state.presentation.revision).toBe(revisionBefore);
     });
 
-    it("12. GOTO jumps directly to target slide (e.g. 7)", () => {
+    it("13. GOTO jumps directly to target slide (e.g. 7)", () => {
       state = stageSessionReducer(state, {
         type: "SLIDE_GOTO",
         commandId: "cmd-goto-7",
@@ -286,7 +335,7 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
       expect(state.presentation.totalSlides).toBe(11);
     });
 
-    it("13. GOTO with out-of-range value (0 or 15) is clamped safely without corrupting state", () => {
+    it("14. GOTO with out-of-range value (0 or 15) is clamped safely without corrupting state", () => {
       state = stageSessionReducer(state, {
         type: "SLIDE_GOTO",
         commandId: "cmd-goto-0",
@@ -308,7 +357,7 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
   });
 
   describe("Display Blank, Legacy Handling & Live Protection (Phases 16-19)", () => {
-    it("14. DISPLAY_BLANK preserves currentSlide and totalSlides", () => {
+    it("15. DISPLAY_BLANK preserves currentSlide and totalSlides", () => {
       const material: Material = {
         id: "mat-gdrive-11",
         name: "Deck.pdf",
@@ -364,7 +413,7 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
       expect(state.presentation.totalSlides).toBe(11);
     });
 
-    it("15. MATERIAL_LIVE_UPDATE_BLOCKED protects live presentation from material modification", () => {
+    it("16. MATERIAL_LIVE_UPDATE_BLOCKED protects live presentation from material modification", () => {
       const material: Material = {
         id: "mat-gdrive-11",
         name: "Deck.pdf",
@@ -408,13 +457,12 @@ describe("Google Drive PDF — Centralized Page Count & Presentation State (Phas
       }).toThrow("MATERIAL_LIVE_UPDATE_BLOCKED");
     });
 
-    it("16. isPdfMaterialStale correctly flags legacy or incomplete PDF materials", () => {
+    it("17. isPdfMaterialStale correctly flags legacy or incomplete PDF materials", () => {
       const legacyStalePdf = {
         type: "pdf",
         totalPages: 1,
         slides: [{ contentUrl: "https://example.com/asset.pdf" }],
       };
-      // Stale if totalPages is 0, missing slides, or length mismatch
       expect(isPdfMaterialStale(legacyStalePdf)).toBe(false); // 1-page PDF with 1 slide is valid
       expect(isPdfMaterialStale({ type: "pdf", totalPages: 0, slides: [] })).toBe(true);
       expect(isPdfMaterialStale({ type: "pdf", totalPages: 5, slides: [{ contentUrl: "a" }] })).toBe(true);
