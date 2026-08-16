@@ -4,6 +4,7 @@ import { PdfMaterialProvider } from "./providers/pdf";
 import { UrlMaterialProvider } from "./providers/url";
 import { ImageMaterialProvider } from "./providers/image";
 import { CanvaMaterialProvider } from "./providers/canva";
+import { VideoMaterialProvider } from "./providers/video";
 
 export class PresentationAdapterImpl implements PresentationAdapter {
   private providers: Map<MaterialType, MaterialProvider> = new Map();
@@ -15,6 +16,7 @@ export class PresentationAdapterImpl implements PresentationAdapter {
     this.registerProvider(new UrlMaterialProvider());
     this.registerProvider(new ImageMaterialProvider());
     this.registerProvider(new CanvaMaterialProvider());
+    this.registerProvider(new VideoMaterialProvider());
   }
 
   registerProvider(provider: MaterialProvider): void {

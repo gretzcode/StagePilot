@@ -48,6 +48,11 @@ describe("Phase 2 Material Providers Engine", () => {
 
     const imgMat = await defaultPresentationAdapter.loadMaterial("http://example.com/b.png", "Graphic.png", "image");
     expect(imgMat.status).toBe("ready");
+
+    const videoMat = await defaultPresentationAdapter.loadMaterial("https://www.youtube.com/watch?v=3QZg97_fk14", "YouTube Video", "video");
+    expect(videoMat.status).toBe("ready");
+    expect(videoMat.type).toBe("video");
+    expect(videoMat.url).toContain("youtube-nocookie.com/embed/3QZg97_fk14");
   });
 
   it("Google Drive provider is available only when operator secrets are configured", async () => {

@@ -230,10 +230,30 @@ export function SlideViewer({
   }
 
   if (resolvedMediaType === "video" || material.type === "video") {
+    const videoUrl = slide?.contentUrl || material.url || rawUrl;
+    const isEmbedVideo =
+      videoUrl.includes("youtube.com") ||
+      videoUrl.includes("youtube-nocookie.com") ||
+      videoUrl.includes("youtu.be") ||
+      videoUrl.includes("vimeo.com");
+
+    if (isEmbedVideo) {
+      return (
+        <div className="w-full h-full bg-slate-950 flex items-center justify-center overflow-hidden">
+          <iframe
+            src={videoUrl}
+            className="w-full h-full border-0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="w-full h-full bg-slate-950 flex items-center justify-center overflow-hidden">
         <video
-          src={slide?.contentUrl || material.url || rawUrl}
+          src={videoUrl}
           className="max-w-full max-h-full object-contain"
           controls={role === "control"}
           autoPlay

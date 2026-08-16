@@ -198,6 +198,27 @@ export function normalizeEmbedUrl(urlString: string): string {
         return `https://docs.google.com/presentation/d/${presentationId}/embed?rm=minimal&start=false&loop=false&delayms=3000`;
       }
     }
+
+    if (host.includes("youtube.com") || host.includes("youtu.be")) {
+      let videoId = "";
+      if (host.includes("youtu.be")) {
+        videoId = parsed.pathname.slice(1).split("?")[0];
+      } else if (parsed.pathname.includes("/embed/")) {
+        videoId = parsed.pathname.split("/embed/")[1].split("?")[0];
+      } else {
+        videoId = parsed.searchParams.get("v") || "";
+      }
+      if (videoId) {
+        return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
+      }
+    }
+
+    if (host.includes("vimeo.com")) {
+      const match = parsed.pathname.match(/\/(\d+)/);
+      if (match && match[1]) {
+        return `https://player.vimeo.com/video/${match[1]}?autoplay=1`;
+      }
+    }
   } catch {
     // Return original if parsing fails
   }
