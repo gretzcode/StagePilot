@@ -24,6 +24,11 @@ export default function DashboardPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [driveStatus, setDriveStatus] = useState<{ connected: boolean; account: string | null } | null>(null);
+  const [canvaStatus, setCanvaStatus] = useState<{ connected: boolean; accountName: string | null; accountEmail: string | null } | null>(null);
+  const [canvaDesigns, setCanvaDesigns] = useState<Array<{ id: string; title: string; thumbnail?: { url: string } }>>([]);
+  const [isCanvaModalOpen, setIsCanvaModalOpen] = useState(false);
+  const [loadingDesigns, setLoadingDesigns] = useState(false);
+  const [disconnectingCanva, setDisconnectingCanva] = useState(false);
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,6 +59,16 @@ export default function DashboardPage() {
         if (driveRes.ok) {
           const driveData = (await driveRes.json()) as { connected?: boolean; account?: string | null };
           setDriveStatus({ connected: Boolean(driveData.connected), account: driveData.account || null });
+        }
+
+        const canvaRes = await fetch("/api/integrations/canva/status");
+        if (canvaRes.ok) {
+          const canvaData = (await canvaRes.json()) as { connected?: boolean; accountName?: string | null; accountEmail?: string | null };
+          setCanvaStatus({
+            connected: Boolean(canvaData.connected),
+            accountName: canvaData.accountName || null,
+            accountEmail: canvaData.accountEmail || null,
+          });
         }
       } catch {
         router.push("/login");
@@ -156,6 +171,34 @@ export default function DashboardPage() {
     router.push("/login");
   };
 
+  const handleBrowseCanvaDesigns = async () => {
+    setIsCanvaModalOpen(true);
+    setLoadingDesigns(true);
+    try {
+      const res = await fetch("/api/integrations/canva/designs");
+      const data = (await res.json()) as { success?: boolean; designs?: Array<{ id: string; title: string; thumbnail?: { url: string } }> };
+      if (res.ok && data.success && Array.isArray(data.designs)) {
+        setCanvaDesigns(data.designs);
+      }
+    } catch {
+      // Non-fatal
+    } finally {
+      setLoadingDesigns(false);
+    }
+  };
+
+  const handleDisconnectCanva = async () => {
+    setDisconnectingCanva(true);
+    try {
+      await fetch("/api/integrations/canva/disconnect", { method: "POST" });
+      setCanvaStatus({ connected: false, accountName: null, accountEmail: null });
+    } catch {
+      // Non-fatal
+    } finally {
+      setDisconnectingCanva(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
@@ -165,36 +208,43 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      {/* Top Bar */}
-      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center font-bold text-white shadow-md">
-            SP
-          </div>
-          <span className="font-bold text-lg">StagePilot Host Dashboard</span>
-        </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 md:p-10 font-sans relative overflow-x-hidden">
+      {/* Background ambient lighting */}
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-purple-600/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none" />
 
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2 text-xs text-slate-400 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Host: {user?.email || "Authenticated"}</span>
+      <div className="max-w-6xl mx-auto relative z-10">
+        {/* Top Navigation / Header */}
+        <header className="flex items-center justify-between border-b border-slate-800 pb-6 mb-8">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-400 font-bold">
+              <Radio className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-xl font-bold tracking-tight">StagePilot</span>
+              <span className="block text-xs font-mono text-purple-400">HOST DASHBOARD</span>
+            </div>
           </div>
-          <button
-            onClick={handleLogout}
-            className="text-slate-400 hover:text-white transition p-1.5 rounded-lg hover:bg-slate-900"
-            title="Log Out"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="max-w-6xl w-full mx-auto p-6 md:p-10 flex-1">
+          <div className="flex items-center space-x-4">
+            <div className="text-right hidden sm:block">
+              <span className="text-sm font-medium block">{user?.name || "Host User"}</span>
+              <span className="text-xs text-slate-400">{user?.email}</span>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </header>
+
+        {/* Global Error Banner */}
         {error && (
-          <div className="mb-6 p-4 rounded-2xl bg-rose-950/80 border border-rose-800/60 text-rose-300 text-xs flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <div className="mb-6 p-4 rounded-2xl bg-rose-950/80 border border-rose-800 text-rose-300 text-sm flex items-center space-x-3">
+            <AlertCircle className="w-5 h-5 shrink-0" />
             <span>{error}</span>
           </div>
         )}
@@ -218,25 +268,151 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="mb-8 p-5 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center">
-              <HardDrive className="w-5 h-5 text-emerald-400" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-white">Material Storage</h2>
-              <p className="text-xs text-slate-400">
-                {driveStatus?.connected ? `Google Drive connected: ${driveStatus.account || "Operator"}` : "Google Drive belum tersambung"}
-              </p>
-            </div>
-          </div>
+        {/* Integrations Section */}
+        <div className="mb-8">
+          <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Integrations & External Storage</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Google Drive Card */}
+            <div className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col justify-between">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center shrink-0">
+                  <HardDrive className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-white">Google Drive</h3>
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                      driveStatus?.connected
+                        ? "bg-emerald-950/80 border-emerald-800 text-emerald-400"
+                        : "bg-slate-950 border-slate-800 text-slate-500"
+                    }`}>
+                      {driveStatus?.connected ? "● Connected" : "Not connected"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {driveStatus?.connected ? `Account: ${driveStatus.account || "Connected"}` : "Hubungkan Google Drive untuk import materi PPTX / PDF."}
+                  </p>
+                </div>
+              </div>
           <a
             href="/api/google-drive/connect"
-            className="px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-sm transition"
+            className="px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-xs text-center transition"
           >
-            {driveStatus?.connected ? "Reconnect" : "Connect Google Drive"}
+            {driveStatus?.connected ? "Reconnect Google Drive" : "Connect Google Drive"}
           </a>
+            </div>
+
+            {/* Canva Connect API Card */}
+            <div className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col justify-between">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center shrink-0 font-bold text-purple-400 text-sm">
+                  C
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-white">Canva Connect</h3>
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                      canvaStatus?.connected
+                        ? "bg-purple-950/80 border-purple-800 text-purple-300"
+                        : "bg-slate-950 border-slate-800 text-slate-500"
+                    }`}>
+                      {canvaStatus?.connected ? "● Connected" : "Not connected"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {canvaStatus?.connected
+                      ? `Account: ${canvaStatus.accountName || canvaStatus.accountEmail || "Canva Connected"}`
+                      : "Hubungkan Canva untuk sinkronisasi presentasi & slide native."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {canvaStatus?.connected ? (
+                  <>
+                    <button
+                      onClick={handleBrowseCanvaDesigns}
+                      className="flex-1 px-4 py-2 rounded-xl bg-purple-600/20 border border-purple-500/40 hover:bg-purple-600/30 text-purple-300 font-medium text-xs transition"
+                    >
+                      Browse Designs
+                    </button>
+                    <button
+                      onClick={handleDisconnectCanva}
+                      disabled={disconnectingCanva}
+                      className="px-3 py-2 rounded-xl bg-rose-950/60 border border-rose-800 hover:bg-rose-900/80 text-rose-300 font-medium text-xs transition"
+                    >
+                      {disconnectingCanva ? "..." : "Disconnect"}
+                    </button>
+                  </>
+                ) : (
+                  <a
+                    href="/api/integrations/canva/authorize"
+                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-xs text-center transition"
+                  >
+                    Connect Canva
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Canva Designs Browser Modal */}
+        {isCanvaModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <div className="glass-panel w-full max-w-2xl p-6 rounded-3xl border border-slate-800 shadow-2xl relative max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-lg bg-purple-600/20 border border-purple-500/40 flex items-center justify-center text-purple-300 font-bold text-xs">
+                    C
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Canva Presentations</h3>
+                </div>
+                <button
+                  onClick={() => setIsCanvaModalOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-200"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {loadingDesigns ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                  <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs font-mono text-slate-400">Loading accessible Canva designs…</span>
+                </div>
+              ) : canvaDesigns.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-sm">
+                  <p>Tidak ada desain presentasi yang ditemukan di akun Canva Anda.</p>
+                  <p className="text-xs text-slate-500 mt-2">Buat presentasi di Canva atau paste link Canva langsung pada Control Room.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 overflow-y-auto pr-1 flex-1 custom-scrollbar">
+                  {canvaDesigns.map((design) => (
+                    <div
+                      key={design.id}
+                      className="p-3 rounded-2xl bg-slate-900 border border-slate-800 hover:border-purple-500/50 transition flex flex-col justify-between"
+                    >
+                      {design.thumbnail?.url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={design.thumbnail.url}
+                          alt={design.title}
+                          className="w-full h-28 object-cover rounded-xl mb-2 bg-slate-950"
+                        />
+                      ) : (
+                        <div className="w-full h-28 rounded-xl bg-slate-950 flex items-center justify-center mb-2 text-slate-600 font-mono text-xs">
+                          Preview
+                        </div>
+                      )}
+                      <h4 className="text-sm font-semibold text-white truncate">{design.title || "Untitled Design"}</h4>
+                      <span className="text-[10px] font-mono text-slate-400 mt-1 truncate">ID: {design.id}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Room Cards List */}
         {rooms.length === 0 ? (
@@ -331,7 +507,7 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
-      </main>
+      </div>
 
       {/* Create New Room Modal */}
       {isModalOpen && (

@@ -52,7 +52,7 @@ export class CanvaMaterialProvider implements MaterialProvider {
       {
         index: 1,
         title: resolvedTitle,
-        contentUrl: externalUrl,
+        contentUrl: thumbnailUrl || externalUrl,
         url: externalUrl,
         thumbnailUrl,
       },

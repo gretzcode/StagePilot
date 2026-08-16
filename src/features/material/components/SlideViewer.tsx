@@ -302,7 +302,32 @@ export function SlideViewer({
       );
     }
 
-    // ── Generic iframe (Canva, web embeds) ───────────────────────────────────
+    // ── Canva Connect API: Native Slide Image Rendering (100% Synced) ───────
+    const activeSlideData = slide || material.slides?.[activeSlide - 1];
+    const isCanvaImage = Boolean(
+      material.type === "canva" &&
+        activeSlideData?.contentUrl &&
+        activeSlideData.contentUrl !== rawUrl &&
+        (activeSlideData.contentUrl.startsWith("data:image/") ||
+          /\.(?:png|jpg|jpeg|webp)(?:\?|$)/i.test(activeSlideData.contentUrl) ||
+          activeSlideData.contentUrl.includes("media.canva.com") ||
+          activeSlideData.contentUrl.includes("document-export.canva.com"))
+    );
+
+    if (isCanvaImage && activeSlideData?.contentUrl) {
+      return (
+        <div className="w-full h-full bg-slate-950 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={activeSlideData.contentUrl}
+            alt={activeSlideData.title || material.name}
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-150"
+          />
+        </div>
+      );
+    }
+
+    // ── Generic iframe (Canva embed fallback, web embeds) ────────────────────
     const isCanva = material.type === "canva";
     const sandboxAttrs = isCanva
       ? "allow-scripts allow-same-origin allow-popups allow-forms allow-pointer-lock allow-fullscreen"

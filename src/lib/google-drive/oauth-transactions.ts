@@ -2,7 +2,7 @@ export type OAuthTransactionStatus = "pending" | "consumed";
 
 export interface OAuthTransaction {
   id: string;
-  provider: "google_drive";
+  provider: "google_drive" | "canva" | string;
   stateHash: string;
   hostUserId: string;
   createdAt: number;

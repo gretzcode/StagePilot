@@ -51,6 +51,35 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
 
       console.log("[MaterialUploader] URL validation passed:", { type: validation.materialType, url: urlInput });
 
+      // If it is a Canva link, try authenticated Canva Connect import first
+      if (validation.materialType === "canva") {
+        try {
+          const canvaRes = await fetch("/api/integrations/canva/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: urlInput.trim(), roomCode }),
+          });
+          const canvaJson = (await canvaRes.json().catch(() => ({}))) as {
+            success?: boolean;
+            material?: Material;
+            message?: string;
+          };
+
+          if (canvaRes.ok && canvaJson.success && canvaJson.material) {
+            console.log("[MaterialUploader] Canva Connect import succeeded:", {
+              id: canvaJson.material.id,
+              totalPages: canvaJson.material.totalPages,
+            });
+            onMaterialAdded(canvaJson.material);
+            setUrlInput("");
+            setUrlTitle("");
+            return;
+          }
+        } catch {
+          // Fallback to standard URL handler
+        }
+      }
+
       const res = await fetch("/api/material/url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
