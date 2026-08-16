@@ -18,18 +18,6 @@ export interface CanvaDesignThumbnail {
   url: string;
 }
 
-export interface CanvaDesignPage {
-  page_number?: number;
-  index?: number;
-  id?: string;
-  title?: string;
-  thumbnail?: CanvaDesignThumbnail;
-  thumbnail_url?: string;
-  content_url?: string;
-  width?: number;
-  height?: number;
-}
-
 export interface CanvaDesign {
   id: string;
   title: string;
@@ -41,6 +29,34 @@ export interface CanvaDesign {
     view_url?: string;
   };
   page_count?: number;
+}
+
+export type CanvaExportJobStatus = "in_progress" | "success" | "failed";
+
+export interface CanvaExportJob {
+  id: string;
+  status: CanvaExportJobStatus;
+  urls?: string[];
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+export interface ExportedSlide {
+  index: number;
+  contentUrl: string;
+  thumbnailUrl: string;
+  title: string;
+  width?: number;
+  height?: number;
+}
+
+export interface ExportedPresentation {
+  designId: string;
+  title: string;
+  totalPages: number;
+  slides: ExportedSlide[];
 }
 
 export interface CanvaConnectionStatus {

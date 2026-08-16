@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { validateHostSessionRequest } from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/security/rate-limit";
 import { MaterialStorageResolver } from "@/features/material/storage";
@@ -7,6 +8,7 @@ import { defaultPresentationAdapter } from "@/features/material/adapter";
 import { detectSlideCountFromUrl } from "@/features/material/validator";
 import { RoomRegistry } from "@/lib/rooms/registry";
 import { Material } from "@/core/types";
+import { CanvaService } from "@/features/integrations/canva/canva.service";
 
 /**
  * Dispatch MATERIAL_ADD command to the room (Durable Object in production,
@@ -71,6 +73,51 @@ export async function POST(request: Request) {
     if (!rateCheck.allowed) {
       const tooMany = NextResponse.json({ error: "TOO_MANY_REQUESTS", retryAfter: rateCheck.resetAt }, { status: 429 });
       return applySecurityHeaders(tooMany);
+    }
+
+    // 2.5 Canva Connect Authenticated Export Pipeline
+    const isCanva = urlString.includes("canva.com") || urlString.includes("canva.me");
+    if (isCanva) {
+      const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
+      const env = (cfCtx?.env || process.env) as Record<string, unknown>;
+
+      const canvaStatus = await CanvaService.getConnectionStatus(ownerUserId, env);
+      if (!canvaStatus.connected) {
+        return applySecurityHeaders(
+          NextResponse.json(
+            {
+              error: "CANVA_NOT_CONNECTED",
+              message: "Akun Canva belum tersambung. Hubungkan akun Canva Anda di Dashboard terlebih dahulu agar presentasi Canva dapat diimpor dan disinkronkan ke semua layar.",
+            },
+            { status: 400 }
+          )
+        );
+      }
+
+      try {
+        const canvaMaterial = await CanvaService.importDesignAsMaterial(ownerUserId, urlString, env, upperRoomCode);
+        const hostDeviceId = `dev-host-${ownerUserId.slice(-8)}`;
+        await dispatchMaterialAddCommand(request, upperRoomCode, hostDeviceId, canvaMaterial);
+
+        return applySecurityHeaders(
+          NextResponse.json({
+            success: true,
+            material: canvaMaterial,
+            totalSlides: canvaMaterial.totalPages,
+          })
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "CANVA_IMPORT_FAILED";
+        return applySecurityHeaders(
+          NextResponse.json(
+            {
+              error: msg,
+              message: `Gagal mengimpor presentasi Canva: ${msg}`,
+            },
+            { status: 400 }
+          )
+        );
+      }
     }
 
     // Dynamic slide count auto-detection from Google Slides / external link

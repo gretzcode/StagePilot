@@ -3,7 +3,7 @@ import { computeDefaultExpiration } from "@/core/config/material";
 import { IntegrationCredentialStore } from "@/lib/integrations/credential-store";
 import { CanvaClient, extractCanvaDesignId } from "./canva.client";
 import { getValidCanvaAccessToken } from "./canva.oauth";
-import { CanvaConnectionStatus, CanvaDesign } from "./canva.types";
+import { CanvaConnectionStatus, CanvaDesign, ExportedPresentation } from "./canva.types";
 
 export class CanvaService {
   static async getConnectionStatus(
@@ -61,6 +61,20 @@ export class CanvaService {
     return result.items;
   }
 
+  static async exportPresentation(
+    userId: string,
+    designIdOrUrl: string,
+    env?: Record<string, unknown> | null
+  ): Promise<ExportedPresentation> {
+    const designId = extractCanvaDesignId(designIdOrUrl);
+    if (!designId) {
+      throw new Error("CANVA_INVALID_URL");
+    }
+
+    const client = await this.getClientForUser(userId, env);
+    return client.exportPresentation(designId);
+  }
+
   static async importDesignAsMaterial(
     userId: string,
     designIdOrUrl: string,
@@ -74,42 +88,34 @@ export class CanvaService {
 
     const client = await this.getClientForUser(userId, env);
 
-    // 1. Fetch design metadata
-    const design = await client.getDesign(designId);
-    if (!design) {
-      throw new Error("CANVA_DESIGN_NOT_FOUND");
-    }
+    // 1. Export presentation slides through Canva Connect Export API
+    const exported = await client.exportPresentation(designId);
+    const totalSlides = Math.max(exported.totalPages, exported.slides.length);
 
-    // 2. Fetch all pages
-    const pages = await client.getDesignPages(designId);
-    const totalSlides = Math.max(pages.length, 1);
+    if (totalSlides === 0 || exported.slides.length === 0) {
+      throw new Error("CANVA_EXPORT_EMPTY_SLIDES");
+    }
 
     const now = Date.now();
     const expiresAt = computeDefaultExpiration(now);
-    const resolvedTitle = design.title || `Canva Presentation ${designId}`;
+    const resolvedTitle = exported.title || `Canva Presentation ${designId}`;
 
-    const slides: SlideMetadata[] = pages.map((page, idx) => {
-      const slideNum = idx + 1;
-      const contentUrl = page.content_url || page.thumbnail_url || page.thumbnail?.url || "";
-      const thumbnailUrl = page.thumbnail_url || page.thumbnail?.url || contentUrl;
-
-      return {
-        index: slideNum,
-        title: page.title || `${resolvedTitle} — Slide ${slideNum}`,
-        contentUrl,
-        thumbnailUrl,
-        url: contentUrl,
-      };
-    });
+    const slides: SlideMetadata[] = exported.slides.map((slide) => ({
+      index: slide.index,
+      title: slide.title || `${resolvedTitle} — Slide ${slide.index}`,
+      contentUrl: slide.contentUrl,
+      thumbnailUrl: slide.thumbnailUrl || slide.contentUrl,
+      url: slide.contentUrl,
+    }));
 
     const material: Material = {
       id: `mat-canva-${designId}-${now}`,
       name: resolvedTitle,
       type: "canva",
       sourceType: "CANVA_LINK",
-      url: design.urls?.view_url || `https://www.canva.com/design/${designId}/view`,
+      url: slides[0]?.contentUrl || `https://www.canva.com/design/${designId}/view`,
       objectKey: null,
-      externalUrl: design.urls?.view_url || `https://www.canva.com/design/${designId}/view`,
+      externalUrl: `https://www.canva.com/design/${designId}/view`,
       sizeBytes: 0,
       totalPages: totalSlides,
       slides,
@@ -121,7 +127,7 @@ export class CanvaService {
       metadata: {
         title: resolvedTitle,
         pageCount: totalSlides,
-        thumbnailUrl: design.thumbnail?.url || slides[0]?.thumbnailUrl,
+        thumbnailUrl: slides[0]?.thumbnailUrl,
       },
     };
 

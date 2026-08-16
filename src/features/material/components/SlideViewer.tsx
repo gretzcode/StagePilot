@@ -303,35 +303,42 @@ export function SlideViewer({
     }
 
     // ── Canva Connect API: Native Slide Image Rendering (100% Synced) ───────
-    const activeSlideData = slide || material.slides?.[activeSlide - 1];
-    const isCanvaImage = Boolean(
-      material.type === "canva" &&
-        activeSlideData?.contentUrl &&
-        activeSlideData.contentUrl !== rawUrl &&
-        (activeSlideData.contentUrl.startsWith("data:image/") ||
-          /\.(?:png|jpg|jpeg|webp)(?:\?|$)/i.test(activeSlideData.contentUrl) ||
-          activeSlideData.contentUrl.includes("media.canva.com") ||
-          activeSlideData.contentUrl.includes("document-export.canva.com"))
-    );
+    if (material.type === "canva") {
+      const activeSlideData = slide || material.slides?.[activeSlide - 1] || material.slides?.[0];
+      const slideImageUrl = activeSlideData?.contentUrl || material.metadata?.thumbnailUrl || activeSlideData?.thumbnailUrl;
 
-    if (isCanvaImage && activeSlideData?.contentUrl) {
+      if (slideImageUrl && !slideImageUrl.includes("/design/") && !slideImageUrl.includes("/view")) {
+        return (
+          <div className="w-full h-full bg-slate-950 flex items-center justify-center p-2 sm:p-4 overflow-hidden select-none">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={slideImageUrl}
+              alt={activeSlideData?.title || `${material.name} — Slide ${activeSlide}`}
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-150"
+            />
+          </div>
+        );
+      }
+
+      // If Canva material has no exported slide assets yet
       return (
-        <div className="w-full h-full bg-slate-950 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={activeSlideData.contentUrl}
-            alt={activeSlideData.title || material.name}
-            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-150"
-          />
+        <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-purple-950/80 border border-purple-800/60 flex items-center justify-center text-purple-400 font-bold text-lg mb-3">
+            C
+          </div>
+          <h3 className="text-base font-bold text-white mb-1">{material.name}</h3>
+          <p className="text-xs text-slate-400 max-w-md mb-4">
+            Slide {activeSlide} of {material.totalPages || 1}
+          </p>
+          <span className="text-[11px] font-mono text-purple-400 bg-purple-950/60 px-3 py-1 rounded-full border border-purple-800/50">
+            Canva Native Presentation Mode Active
+          </span>
         </div>
       );
     }
 
-    // ── Generic iframe (Canva embed fallback, web embeds) ────────────────────
-    const isCanva = material.type === "canva";
-    const sandboxAttrs = isCanva
-      ? "allow-scripts allow-same-origin allow-popups allow-forms allow-pointer-lock allow-fullscreen"
-      : "allow-scripts allow-same-origin allow-popups allow-forms";
+    // ── Generic iframe (web embeds) ──────────────────────────────────────────
+    const sandboxAttrs = "allow-scripts allow-same-origin allow-popups allow-forms";
 
     return (
       <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">

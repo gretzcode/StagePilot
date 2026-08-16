@@ -1,7 +1,9 @@
 import {
   CanvaDesign,
-  CanvaDesignPage,
+  CanvaExportJob,
   CanvaUserProfile,
+  ExportedPresentation,
+  ExportedSlide,
 } from "./canva.types";
 
 const CANVA_API_BASE = "https://api.canva.com/rest/v1";
@@ -41,7 +43,7 @@ export class CanvaClient {
     headers.set("Accept", "application/json");
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 12000);
 
     try {
       const res = await fetch(url, {
@@ -64,9 +66,13 @@ export class CanvaClient {
           throw new Error("CANVA_RATE_LIMITED");
         }
 
-        const errorBody = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
-        const msg = errorBody.message || errorBody.error || `HTTP ${res.status}`;
-        throw new Error(`Canva API error: ${msg}`);
+        const errorBody = (await res.json().catch(() => ({}))) as {
+          message?: string;
+          error?: string;
+          code?: string;
+        };
+        const msg = errorBody.message || errorBody.error || errorBody.code || `HTTP ${res.status}`;
+        throw new Error(`CANVA_API_ERROR: ${msg}`);
       }
 
       return (await res.json()) as T;
@@ -77,10 +83,11 @@ export class CanvaClient {
 
   async getUserProfile(): Promise<CanvaUserProfile> {
     try {
-      const data = await this.request<{ user?: CanvaUserProfile; profile?: CanvaUserProfile } & CanvaUserProfile>("/users/me/profile");
+      const data = await this.request<{ user?: CanvaUserProfile; profile?: CanvaUserProfile } & CanvaUserProfile>(
+        "/users/me/profile"
+      );
       return data.user || data.profile || { id: data.id, display_name: data.display_name, email: data.email };
     } catch {
-      // Fallback for user metadata
       return { display_name: "Canva User" };
     }
   }
@@ -105,48 +112,108 @@ export class CanvaClient {
 
   async getDesign(designId: string): Promise<CanvaDesign> {
     const data = await this.request<{ design?: CanvaDesign }>(`/designs/${encodeURIComponent(designId)}`);
-    return data.design || (data as unknown as CanvaDesign);
+    const design = data.design || (data as unknown as CanvaDesign);
+    if (!design || !design.id) {
+      throw new Error("CANVA_DESIGN_NOT_FOUND");
+    }
+    return design;
   }
 
-  async getDesignPages(designId: string): Promise<CanvaDesignPage[]> {
-    try {
-      // Query Canva Connect get design pages endpoint
-      const data = await this.request<{ items?: CanvaDesignPage[]; pages?: CanvaDesignPage[] }>(
-        `/designs/${encodeURIComponent(designId)}/pages`
-      );
+  async createExportJob(designId: string, format: "jpg" | "png" | "pdf" = "jpg"): Promise<CanvaExportJob> {
+    const requestBody = {
+      design_id: designId,
+      format: {
+        type: format,
+        quality: 100,
+      },
+    };
 
-      const rawPages = data.items || data.pages || [];
-      if (Array.isArray(rawPages) && rawPages.length > 0) {
-        return rawPages.map((p, idx) => ({
-          page_number: p.page_number ?? idx + 1,
-          index: idx + 1,
-          id: p.id || `page-${idx + 1}`,
-          title: p.title || `Slide ${idx + 1}`,
-          thumbnail: p.thumbnail,
-          thumbnail_url: p.thumbnail?.url || p.thumbnail_url,
-          content_url: p.thumbnail?.url || p.thumbnail_url || p.content_url,
-          width: p.thumbnail?.width || p.width || 1920,
-          height: p.thumbnail?.height || p.height || 1080,
-        }));
-      }
-    } catch (err) {
-      console.warn("[CanvaClient] getDesignPages endpoint failed or not permitted:", err);
+    const data = await this.request<{ job?: CanvaExportJob } & CanvaExportJob>("/exports", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    const job = data.job || data;
+    if (!job || !job.id) {
+      throw new Error("CANVA_EXPORT_JOB_CREATION_FAILED");
     }
 
-    // Fallback: Return at least page 1 with design thumbnail if available
+    return job;
+  }
+
+  async getExportJob(exportId: string): Promise<CanvaExportJob> {
+    const data = await this.request<{ job?: CanvaExportJob } & CanvaExportJob>(
+      `/exports/${encodeURIComponent(exportId)}`
+    );
+    const job = data.job || data;
+    if (!job || !job.id) {
+      throw new Error("CANVA_EXPORT_JOB_NOT_FOUND");
+    }
+    return job;
+  }
+
+  async pollExportJobUntilComplete(exportId: string, maxWaitMs = 30000, intervalMs = 1000): Promise<CanvaExportJob> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitMs) {
+      const job = await this.getExportJob(exportId);
+
+      if (job.status === "success") {
+        if (!job.urls || job.urls.length === 0) {
+          throw new Error("CANVA_EXPORT_EMPTY_URLS");
+        }
+        return job;
+      }
+
+      if (job.status === "failed") {
+        const errorMsg = job.error?.message || job.error?.code || "Export job returned failed status";
+        throw new Error(`CANVA_EXPORT_FAILED: ${errorMsg}`);
+      }
+
+      // Wait interval before next poll
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    throw new Error("CANVA_EXPORT_TIMEOUT");
+  }
+
+  async exportPresentation(designId: string): Promise<ExportedPresentation> {
+    // 1. Fetch design metadata
     const design = await this.getDesign(designId);
-    return [
-      {
-        page_number: 1,
-        index: 1,
-        id: "page-1",
-        title: design.title || "Slide 1",
-        thumbnail: design.thumbnail,
-        thumbnail_url: design.thumbnail?.url,
-        content_url: design.thumbnail?.url,
-        width: design.thumbnail?.width || 1920,
-        height: design.thumbnail?.height || 1080,
-      },
-    ];
+    const title = design.title || `Canva Presentation ${designId}`;
+
+    // 2. Create export job
+    const initialJob = await this.createExportJob(designId, "jpg");
+
+    // 3. Poll until export completes
+    let completedJob: CanvaExportJob;
+    if (initialJob.status === "success" && initialJob.urls && initialJob.urls.length > 0) {
+      completedJob = initialJob;
+    } else {
+      completedJob = await this.pollExportJobUntilComplete(initialJob.id);
+    }
+
+    const urls = completedJob.urls || [];
+    if (urls.length === 0) {
+      throw new Error("CANVA_EXPORT_NO_SLIDES_PRODUCED");
+    }
+
+    const slides: ExportedSlide[] = urls.map((url, idx) => {
+      const slideNum = idx + 1;
+      return {
+        index: slideNum,
+        contentUrl: url,
+        thumbnailUrl: url,
+        title: `${title} — Slide ${slideNum}`,
+      };
+    });
+
+    return {
+      designId,
+      title,
+      totalPages: slides.length,
+      slides,
+    };
   }
 }
