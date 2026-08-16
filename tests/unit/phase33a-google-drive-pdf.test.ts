@@ -198,7 +198,7 @@ describe("Phase 3.3A Google Drive PDF presentation", () => {
       timestamp: Date.now(),
       payload: { materialId: material.id, startPage: 1 },
     });
-    expect(state.presentation.currentPage).toBe(1);
+    expect(state.presentation.currentSlide).toBe(1);
 
     state = stageSessionReducer(state, {
       type: "SLIDE_NEXT",
@@ -207,7 +207,7 @@ describe("Phase 3.3A Google Drive PDF presentation", () => {
       timestamp: Date.now(),
       payload: {},
     });
-    expect(state.presentation.currentPage).toBe(2);
+    expect(state.presentation.currentSlide).toBe(2);
 
     state = stageSessionReducer(state, {
       type: "SLIDE_GOTO",
@@ -216,7 +216,7 @@ describe("Phase 3.3A Google Drive PDF presentation", () => {
       timestamp: Date.now(),
       payload: { pageNumber: 3 },
     });
-    expect(state.presentation.currentPage).toBe(3);
+    expect(state.presentation.currentSlide).toBe(3);
 
     state = stageSessionReducer(state, {
       type: "SLIDE_PREVIOUS",
@@ -225,6 +225,6 @@ describe("Phase 3.3A Google Drive PDF presentation", () => {
       timestamp: Date.now(),
       payload: {},
     });
-    expect(state.presentation.currentPage).toBe(2);
+    expect(state.presentation.currentSlide).toBe(2);
   });
 });

@@ -510,12 +510,12 @@ function PresentationControlContent() {
                       {activeMaterial?.name || "Active Presentation"}
                     </span>
                     <span className="text-[10px] font-mono text-purple-400 font-bold">
-                      {state?.presentation.currentPage || 1} / {state?.presentation.totalPages || 1}
+                      {state?.presentation.currentSlide || 1} / {state?.presentation.totalSlides || state?.presentation.totalPages || 1}
                     </span>
                   </div>
                   <ThumbnailList
                     material={activeMaterial}
-                    currentPage={state?.presentation.currentPage || 1}
+                    currentSlide={state?.presentation.currentSlide || 1}
                     placeholderCount={discoveredPlaceholderCount}
                     isDiscoveringSlides={isDiscoveringSlides}
                     deviceId={deviceId}
@@ -537,8 +537,8 @@ function PresentationControlContent() {
           <div className="flex-1 flex items-center justify-center relative min-h-[250px]">
             <SlideViewer
               material={activeMaterial}
-              slide={state?.presentation.currentSlide || null}
-              currentPage={state?.presentation.currentPage || 1}
+              slide={state?.presentation.currentSlideMetadata || null}
+              currentSlide={state?.presentation.currentSlide || 1}
               blanked={state?.presentation.blanked}
               role="control"
               deviceId={deviceId}
@@ -551,7 +551,7 @@ function PresentationControlContent() {
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => dispatchCommand("SLIDE_PREVIOUS")}
-                disabled={!state?.presentation.currentPage || state.presentation.currentPage <= 1}
+                disabled={!state?.presentation.currentSlide || state.presentation.currentSlide <= 1}
                 className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition cursor-pointer"
               >
                 <ChevronLeft className="w-5 h-5" />
@@ -559,12 +559,12 @@ function PresentationControlContent() {
               <button
                 onClick={() => dispatchCommand("SLIDE_NEXT")}
                 disabled={
-                  !state?.presentation.currentPage ||
+                  !state?.presentation.currentSlide ||
                   (activeMaterial?.type !== "url" &&
                     activeMaterial?.type !== "canva" &&
-                    !!state.presentation.totalPages &&
-                    state.presentation.totalPages > 1 &&
-                    state.presentation.currentPage >= state.presentation.totalPages)
+                    !!(state.presentation.totalSlides || state.presentation.totalPages) &&
+                    (state.presentation.totalSlides || state.presentation.totalPages) > 1 &&
+                    state.presentation.currentSlide >= (state.presentation.totalSlides || state.presentation.totalPages))
                 }
                 className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition cursor-pointer"
                 title="Next Slide (Right Arrow)"
@@ -574,7 +574,7 @@ function PresentationControlContent() {
             </div>
 
             <span className="font-mono text-xs sm:text-sm font-bold text-slate-300">
-              SLIDE {state?.presentation.currentPage || 1} / {state?.presentation.totalPages || 1}
+              SLIDE {state?.presentation.currentSlide || 1} / {state?.presentation.totalSlides || state?.presentation.totalPages || 1}
             </span>
 
             <button

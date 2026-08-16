@@ -79,13 +79,16 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         const data = (await res.json()) as { type?: string; state?: StageSessionState };
         const fetchedState = data.state;
         if (data.type === "SYNC_STATE" && fetchedState) {
-          // Prevent old state from overwriting newer local state via version check
+          // Prevent old state from overwriting newer local state via version & revision check
           setState((currentState) => {
-            if (currentState && fetchedState.version <= currentState.version) {
-              // Incoming state is same or older → skip update to preserve optimistic updates
+            if (
+              currentState &&
+              fetchedState.version < currentState.version ||
+              (fetchedState.version === currentState?.version &&
+                (fetchedState.presentation?.revision || 0) < (currentState?.presentation?.revision || 0))
+            ) {
               return currentState;
             }
-            // Incoming state is newer → update
             return fetchedState;
           });
           setIsConnected(true);
@@ -137,13 +140,16 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         try {
           const broadcastedState = event.data?.state as StageSessionState | undefined;
           if (event.data?.type === "SYNC_STATE" && broadcastedState) {
-            // Prevent old state from overwriting newer local state via version check
+            // Prevent old state from overwriting newer local state via version & revision check
             setState((currentState) => {
-              if (currentState && broadcastedState.version <= currentState.version) {
-                // Incoming state is same or older → skip update to preserve optimistic updates
+              if (
+                currentState &&
+                (broadcastedState.version < currentState.version ||
+                  (broadcastedState.version === currentState.version &&
+                    (broadcastedState.presentation?.revision || 0) < (currentState.presentation?.revision || 0)))
+              ) {
                 return currentState;
               }
-              // Incoming state is newer → update
               return broadcastedState;
             });
             setIsConnected(true);
@@ -194,13 +200,16 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
           if (msg.type === "SYNC_STATE") {
             const socketState = msg.state;
             if (socketState) {
-              // Prevent old state from overwriting newer local state via version check
+              // Prevent old state from overwriting newer local state via version & revision check
               setState((currentState) => {
-                if (currentState && socketState.version <= currentState.version) {
-                  // Incoming state is same or older → skip update to preserve optimistic updates
+                if (
+                  currentState &&
+                  (socketState.version < currentState.version ||
+                    (socketState.version === currentState.version &&
+                      (socketState.presentation?.revision || 0) < (currentState.presentation?.revision || 0)))
+                ) {
                   return currentState;
                 }
-                // Incoming state is newer → update
                 return socketState;
               });
               setIsConnected(true);

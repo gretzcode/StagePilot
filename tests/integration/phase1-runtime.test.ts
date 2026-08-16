@@ -45,7 +45,8 @@ describe("StagePilot Phase 1 Core Stage Runtime Invariant Tests", () => {
     state = CommandDispatcher.dispatch(state, cmdGoto);
 
     expect(state.version).toBe(3);
-    expect(state.presentation.currentPage).toBe(3);
+    expect(state.presentation.currentSlide).toBe(3);
+    expect(state.presentation.revision).toBe(3);
   });
 
   it("INVARIANT 2: Only Host can approve devices; Control devices cannot approve pending requests", () => {
@@ -209,12 +210,12 @@ describe("StagePilot Phase 1 Core Stage Runtime Invariant Tests", () => {
       payload: {},
     });
 
-    const hostViewCurrentPage = state.presentation.currentPage;
-    const controlViewCurrentPage = state.presentation.currentPage;
-    const audienceViewCurrentPage = state.presentation.currentPage;
+    const hostViewCurrentSlide = state.presentation.currentSlide;
+    const controlViewCurrentSlide = state.presentation.currentSlide;
+    const audienceViewCurrentSlide = state.presentation.currentSlide;
 
-    expect(hostViewCurrentPage).toBe(controlViewCurrentPage);
-    expect(controlViewCurrentPage).toBe(audienceViewCurrentPage);
+    expect(hostViewCurrentSlide).toBe(controlViewCurrentSlide);
+    expect(controlViewCurrentSlide).toBe(audienceViewCurrentSlide);
   });
 
   it("CONTROL TAKEOVER: Approved Control can claim active controller status when Host is disconnected", () => {

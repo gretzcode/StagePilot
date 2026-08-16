@@ -16,7 +16,7 @@ describe("ThumbnailList", () => {
 
     expect(() =>
       renderToStaticMarkup(
-        <ThumbnailList material={material} currentPage={1} onSelectSlide={() => undefined} />
+        <ThumbnailList material={material} currentSlide={1} onSelectSlide={() => undefined} />
       )
     ).not.toThrow();
   });

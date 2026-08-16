@@ -7,7 +7,8 @@ import { PdfSlideViewer } from "./PdfSlideViewer";
 interface SlideViewerProps {
   material: Material | null;
   slide: SlideMetadata | null;
-  currentPage: number;
+  currentSlide?: number;
+  currentPage?: number;
   blanked?: boolean;
   role?: "control" | "audience" | "confidence";
   /** Called when the real PDF page count is discovered from PDF.js */
@@ -48,7 +49,17 @@ function appendAssetAccessParams(url: string, deviceId?: string): string {
   return `${path}${separator}deviceId=${encodeURIComponent(deviceId)}${hash ? `#${hash}` : ""}`;
 }
 
-export function SlideViewer({ material, slide, currentPage, blanked, role, onNumPagesDiscovered, deviceId }: SlideViewerProps) {
+export function SlideViewer({
+  material,
+  slide,
+  currentSlide,
+  currentPage,
+  blanked,
+  role,
+  onNumPagesDiscovered,
+  deviceId,
+}: SlideViewerProps) {
+  const activeSlide = currentSlide ?? currentPage ?? 1;
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [renderError, _setRenderError] = useState<string | null>(null);
 
@@ -64,7 +75,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
 
   // Target Google Slides PNG export URL for the current page
   const targetGoogleSlideImg = googlePresentationId
-    ? `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${currentPage}`
+    ? `https://docs.google.com/presentation/d/${googlePresentationId}/export/png?id=${googlePresentationId}&pageid=p${activeSlide}`
     : null;
 
   // ── Double-buffer crossfade state ─────────────────────────────────────────
@@ -90,7 +101,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     if (!googlePresentationId || !material?.totalPages || material.totalPages <= 1) return;
 
     const pendingPages = Array.from({ length: material.totalPages }, (_, index) => index + 1).filter(
-      (page) => page !== currentPage && !prefetchedPages.includes(page) && page <= currentPage + MAX_PREFETCH_AHEAD
+      (page) => page !== activeSlide && !prefetchedPages.includes(page) && page <= activeSlide + MAX_PREFETCH_AHEAD
     );
 
     if (pendingPages.length === 0) return;
@@ -111,7 +122,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     return () => {
       window.clearTimeout(timer);
     };
-  }, [googlePresentationId, currentPage, material?.totalPages, prefetchedPages, prefetchQueue]);
+  }, [googlePresentationId, activeSlide, material?.totalPages, prefetchedPages, prefetchQueue]);
 
   // 2. Double-buffer slide transition engine.
   //    When targetGoogleSlideImg changes, write the new URL into the BACK layer
@@ -153,69 +164,33 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     });
   }, []);
 
-  const handleCanvaNavigation = useCallback((direction: "next" | "prev") => {
-    // Focus iframe and emit keyboard event for Canva built-in navigation
-    if (iframeRef.current) {
-      try {
-        iframeRef.current.focus();
-        const key = direction === "next" ? "ArrowRight" : "ArrowLeft";
-        const keyCode = direction === "next" ? 39 : 37;
-        const event = new KeyboardEvent("keydown", {
-          key,
-          code: key,
-          keyCode,
-          which: keyCode,
-          bubbles: true,
-          cancelable: true,
-        });
-        document.dispatchEvent(event);
-        iframeRef.current.dispatchEvent(event);
-        iframeRef.current.contentWindow?.dispatchEvent(event);
-      } catch {
-        // Silently fail if iframe is not accessible
-      }
-    }
-  }, []);
-
-  const prevCanvaPageRef = useRef(currentPage);
-  useEffect(() => {
-    if (material?.type === "canva") {
-      if (currentPage > prevCanvaPageRef.current) {
-        handleCanvaNavigation("next");
-      } else if (currentPage < prevCanvaPageRef.current) {
-        handleCanvaNavigation("prev");
-      }
-      prevCanvaPageRef.current = currentPage;
-    }
-  }, [currentPage, material?.type, handleCanvaNavigation]);
-
   const persistentIframeSrc = useMemo(() => {
     if (isGoogleSlides && googlePresentationId) {
-      return `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${currentPage}`;
+      return `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false#slide=id.p${activeSlide}`;
     }
     if (isGoogleDrive && googleFileId) {
-      return `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0`;
+      return `https://drive.google.com/file/d/${googleFileId}/preview#page=${activeSlide}&zoom=page-fit&toolbar=0&navpanes=0`;
     }
     return rawUrl;
-  }, [currentPage, googleFileId, googlePresentationId, isGoogleDrive, isGoogleSlides, rawUrl]);
+  }, [activeSlide, googleFileId, googlePresentationId, isGoogleDrive, isGoogleSlides, rawUrl]);
 
   // 4. Reactive fallback iframe update engine for the rare cases where PNG export is blocked.
   useEffect(() => {
     if (useFallbackIframe && isGoogleSlides && googlePresentationId && iframeRef.current) {
-      const targetSrc = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false&delayms=60000#slide=id.p${currentPage}`;
+      const targetSrc = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false&delayms=60000#slide=id.p${activeSlide}`;
       if (iframeRef.current.src !== targetSrc) {
         iframeRef.current.src = targetSrc;
       }
     } else if (useFallbackIframe && isGoogleDrive && googleFileId && iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.location.replace(
-          `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}&zoom=page-fit&toolbar=0&navpanes=0`
+          `https://drive.google.com/file/d/${googleFileId}/preview#page=${activeSlide}&zoom=page-fit&toolbar=0&navpanes=0`
         );
       } catch {
         // Cross-origin fallback
       }
     }
-  }, [currentPage, isGoogleSlides, googlePresentationId, isGoogleDrive, googleFileId, useFallbackIframe]);
+  }, [activeSlide, isGoogleSlides, googlePresentationId, isGoogleDrive, googleFileId, useFallbackIframe]);
 
   if (blanked) {
     return (
@@ -246,7 +221,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
     return (
       <PdfSlideViewer
         url={rawUrl}
-        currentPage={currentPage}
+        currentSlide={activeSlide}
         role={role}
         title={material.name}
         onNumPagesDiscovered={onNumPagesDiscovered}
@@ -310,7 +285,7 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
 
     // ── Google Slides iframe fallback (when PNG export is blocked) ────────────
     if (useFallbackIframe && isGoogleSlides && googlePresentationId) {
-      const embedUrl = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false&delayms=60000#slide=id.p${currentPage}`;
+      const embedUrl = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false&delayms=60000#slide=id.p${activeSlide}`;
       return (
         <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
           <div className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}>
@@ -327,33 +302,9 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
       );
     }
 
-    // ── Canva Direct Slide Image Rendering (100% Realtime Synchronized) ─────
-    const activeSlideUrl = slide?.contentUrl || material.slides?.[currentPage - 1]?.contentUrl;
-    const isCanvaImageSlide = Boolean(
-      material.type === "canva" &&
-        activeSlideUrl &&
-        (activeSlideUrl.includes("media.canva.com") ||
-          activeSlideUrl.includes("document-export.canva.com") ||
-          /\.(?:png|jpg|jpeg|webp)(?:\?|$)/i.test(activeSlideUrl))
-    );
-
-    if (isCanvaImageSlide && activeSlideUrl) {
-      return (
-        <div className="w-full h-full bg-slate-950 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={activeSlideUrl}
-            alt={slide?.title || material.name}
-            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-150"
-          />
-        </div>
-      );
-    }
-
-    // ── Generic iframe (Canva embed fallback, other embed URLs) ──────────────
-    // Determine sandbox attributes based on material type
-    const iframeCanvaEnabled = material.type === "canva";
-    const sandboxAttrs = iframeCanvaEnabled
+    // ── Generic iframe (Canva, web embeds) ───────────────────────────────────
+    const isCanva = material.type === "canva";
+    const sandboxAttrs = isCanva
       ? "allow-scripts allow-same-origin allow-popups allow-forms allow-pointer-lock allow-fullscreen"
       : "allow-scripts allow-same-origin allow-popups allow-forms";
 
@@ -361,15 +312,6 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
       <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
         <div
           className={`w-full h-full relative ${role !== "control" ? "pointer-events-none select-none" : ""}`}
-          style={
-            role === "audience" && iframeCanvaEnabled
-              ? {
-                  overflow: "hidden",
-                  // Hide Canva header/footer controls for audience
-                  clipPath: "inset(55px 0 50px 0)",
-                }
-              : undefined
-          }
         >
           <iframe
             ref={iframeRef}
@@ -381,35 +323,6 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
             allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             referrerPolicy="strict-origin-when-cross-origin"
           />
-
-          {/* Canva Navigation Overlay - visible only in control mode */}
-          {role === "control" && iframeCanvaEnabled && (
-            <>
-              {/* Left Navigation Button */}
-              <button
-                onClick={() => handleCanvaNavigation("prev")}
-                className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700 text-slate-300 flex items-center justify-center transition opacity-0 hover:opacity-100 group"
-                title="Previous (←)"
-                aria-label="Previous slide"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-
-              {/* Right Navigation Button */}
-              <button
-                onClick={() => handleCanvaNavigation("next")}
-                className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700 text-slate-300 flex items-center justify-center transition opacity-0 hover:opacity-100 group"
-                title="Next (→)"
-                aria-label="Next slide"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </>
-          )}
         </div>
       </div>
     );

@@ -119,11 +119,15 @@ export function stageSessionReducer(
       nextState.materials = nextState.materials.filter((m) => m.id !== materialId);
       if (nextState.presentation.materialId === materialId) {
         nextState.presentation.isPresenting = false;
+        nextState.presentation.status = "ended";
         nextState.presentation.materialId = null;
-        nextState.presentation.currentSlide = null;
-        nextState.presentation.nextSlide = null;
-        nextState.presentation.currentPage = 1;
+        nextState.presentation.currentSlide = 1;
+        nextState.presentation.totalSlides = 0;
         nextState.presentation.totalPages = 0;
+        nextState.presentation.currentSlideMetadata = null;
+        nextState.presentation.nextSlideMetadata = null;
+        nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+        nextState.presentation.updatedAt = now;
       }
       break;
     }
@@ -131,16 +135,19 @@ export function stageSessionReducer(
     case "PRESENTATION_START": {
       const { materialId, startPage = 1 } = command.payload;
       const material = nextState.materials.find((m) => m.id === materialId);
-      const totalPages = Math.max(material?.totalPages || 1, material?.slides.length || 1, startPage);
-      ensureMaterialSlides(material, totalPages);
+      const totalSlides = Math.max(material?.totalPages || 1, material?.slides?.length || 1, startPage);
+      ensureMaterialSlides(material, totalSlides);
 
       nextState.presentation = {
         isPresenting: true,
+        status: "live",
         materialId,
-        currentPage: startPage,
-        totalPages,
-        currentSlide: material?.slides[startPage - 1] || { index: startPage, title: `Slide ${startPage}` },
-        nextSlide: material?.slides[startPage] || (startPage < totalPages ? { index: startPage + 1, title: `Slide ${startPage + 1}` } : null),
+        currentSlide: startPage,
+        totalSlides,
+        totalPages: totalSlides,
+        revision: (nextState.presentation.revision || 0) + 1,
+        currentSlideMetadata: material?.slides[startPage - 1] || { index: startPage, title: `Slide ${startPage}` },
+        nextSlideMetadata: material?.slides[startPage] || (startPage < totalSlides ? { index: startPage + 1, title: `Slide ${startPage + 1}` } : null),
         blanked: false,
         blackoutMode: false,
         startedAt: now,
@@ -151,12 +158,15 @@ export function stageSessionReducer(
 
     case "PRESENTATION_EXIT": {
       nextState.presentation.isPresenting = false;
+      nextState.presentation.status = "ended";
       nextState.presentation.materialId = null;
-      nextState.presentation.currentSlide = null;
-      nextState.presentation.nextSlide = null;
-      nextState.presentation.currentPage = 1;
+      nextState.presentation.currentSlide = 1;
+      nextState.presentation.totalSlides = 0;
       nextState.presentation.totalPages = 0;
+      nextState.presentation.currentSlideMetadata = null;
+      nextState.presentation.nextSlideMetadata = null;
       nextState.presentation.blanked = false;
+      nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
       nextState.presentation.updatedAt = now;
       break;
     }
@@ -164,19 +174,21 @@ export function stageSessionReducer(
     case "SLIDE_NEXT": {
       if (!nextState.presentation.isPresenting) break;
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
-      const totalPages = Math.max(material?.totalPages || 1, material?.slides?.length || 1);
-      ensureMaterialSlides(material, totalPages);
+      const totalSlides = Math.max(material?.totalPages || 1, material?.slides?.length || 1, nextState.presentation.totalSlides || 1);
+      ensureMaterialSlides(material, totalSlides);
 
-      if (nextState.presentation.currentPage >= totalPages) {
+      if (nextState.presentation.currentSlide >= totalSlides) {
         break;
       }
 
-      const currentPage = Math.min(nextState.presentation.currentPage + 1, totalPages);
+      const nextSlideNum = Math.min(nextState.presentation.currentSlide + 1, totalSlides);
 
-      nextState.presentation.currentPage = currentPage;
-      nextState.presentation.totalPages = totalPages;
-      nextState.presentation.currentSlide = material?.slides[currentPage - 1] || { index: currentPage, title: `Slide ${currentPage}` };
-      nextState.presentation.nextSlide = currentPage < totalPages ? (material?.slides[currentPage] || { index: currentPage + 1, title: `Slide ${currentPage + 1}` }) : null;
+      nextState.presentation.currentSlide = nextSlideNum;
+      nextState.presentation.totalSlides = totalSlides;
+      nextState.presentation.totalPages = totalSlides;
+      nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+      nextState.presentation.currentSlideMetadata = material?.slides[nextSlideNum - 1] || { index: nextSlideNum, title: `Slide ${nextSlideNum}` };
+      nextState.presentation.nextSlideMetadata = nextSlideNum < totalSlides ? (material?.slides[nextSlideNum] || { index: nextSlideNum + 1, title: `Slide ${nextSlideNum + 1}` }) : null;
       nextState.presentation.updatedAt = now;
       break;
     }
@@ -184,14 +196,16 @@ export function stageSessionReducer(
     case "SLIDE_PREVIOUS": {
       if (!nextState.presentation.isPresenting) break;
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
-      const totalPages = Math.max(nextState.presentation.totalPages || 1, material?.totalPages || 1);
-      ensureMaterialSlides(material, totalPages);
-      const currentPage = Math.max(nextState.presentation.currentPage - 1, 1);
+      const totalSlides = Math.max(nextState.presentation.totalSlides || 1, material?.totalPages || 1, material?.slides?.length || 1);
+      ensureMaterialSlides(material, totalSlides);
+      const prevSlideNum = Math.max(nextState.presentation.currentSlide - 1, 1);
 
-      nextState.presentation.currentPage = currentPage;
-      nextState.presentation.totalPages = totalPages;
-      nextState.presentation.currentSlide = material?.slides[currentPage - 1] || { index: currentPage, title: `Slide ${currentPage}` };
-      nextState.presentation.nextSlide = material?.slides[currentPage] || (currentPage < totalPages ? { index: currentPage + 1, title: `Slide ${currentPage + 1}` } : null);
+      nextState.presentation.currentSlide = prevSlideNum;
+      nextState.presentation.totalSlides = totalSlides;
+      nextState.presentation.totalPages = totalSlides;
+      nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+      nextState.presentation.currentSlideMetadata = material?.slides[prevSlideNum - 1] || { index: prevSlideNum, title: `Slide ${prevSlideNum}` };
+      nextState.presentation.nextSlideMetadata = material?.slides[prevSlideNum] || (prevSlideNum < totalSlides ? { index: prevSlideNum + 1, title: `Slide ${prevSlideNum + 1}` } : null);
       nextState.presentation.updatedAt = now;
       break;
     }
@@ -199,16 +213,18 @@ export function stageSessionReducer(
     case "SLIDE_GOTO": {
       if (!nextState.presentation.isPresenting) break;
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
-      const knownMax = material?.totalPages || 1;
-      const targetPage = Math.max(1, Math.min(command.payload.pageNumber, knownMax));
+      const knownMax = Math.max(material?.totalPages || 1, material?.slides?.length || 1, nextState.presentation.totalSlides || 1);
+      const targetSlideNum = Math.max(1, Math.min(command.payload.pageNumber, knownMax));
 
-      ensureMaterialSlides(material, targetPage);
+      ensureMaterialSlides(material, targetSlideNum);
 
-      const totalPages = Math.max(nextState.presentation.totalPages || 1, material?.totalPages || targetPage);
-      nextState.presentation.currentPage = targetPage;
-      nextState.presentation.totalPages = totalPages;
-      nextState.presentation.currentSlide = material?.slides[targetPage - 1] || { index: targetPage, title: `Slide ${targetPage}` };
-      nextState.presentation.nextSlide = material?.slides[targetPage] || (targetPage < totalPages ? { index: targetPage + 1, title: `Slide ${targetPage + 1}` } : null);
+      const totalSlides = Math.max(nextState.presentation.totalSlides || 1, material?.totalPages || targetSlideNum, material?.slides?.length || targetSlideNum);
+      nextState.presentation.currentSlide = targetSlideNum;
+      nextState.presentation.totalSlides = totalSlides;
+      nextState.presentation.totalPages = totalSlides;
+      nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+      nextState.presentation.currentSlideMetadata = material?.slides[targetSlideNum - 1] || { index: targetSlideNum, title: `Slide ${targetSlideNum}` };
+      nextState.presentation.nextSlideMetadata = material?.slides[targetSlideNum] || (targetSlideNum < totalSlides ? { index: targetSlideNum + 1, title: `Slide ${targetSlideNum + 1}` } : null);
       nextState.presentation.updatedAt = now;
       break;
     }
@@ -289,6 +305,8 @@ export function stageSessionReducer(
         nextState.displays[targetDisplayId].isBlanked = blank;
       } else {
         nextState.presentation.blanked = blank;
+        nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+        nextState.presentation.updatedAt = now;
       }
       break;
     }
@@ -299,6 +317,8 @@ export function stageSessionReducer(
         nextState.displays[targetDisplayId].isBlanked = false;
       } else {
         nextState.presentation.blanked = false;
+        nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+        nextState.presentation.updatedAt = now;
       }
       break;
     }

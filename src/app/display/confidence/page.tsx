@@ -101,8 +101,8 @@ function ConfidenceDisplayContent() {
           <div className="col-span-1 md:col-span-8 lg:col-span-9 bg-black rounded-3xl border border-slate-800/80 overflow-hidden relative shadow-2xl flex items-center justify-center min-h-[260px] md:min-h-0">
             <SlideViewer
               material={activeMaterial}
-              slide={state?.presentation.currentSlide || null}
-              currentPage={state?.presentation.currentPage || 1}
+              slide={state?.presentation.currentSlideMetadata || null}
+              currentSlide={state?.presentation.currentSlide || 1}
               blanked={state?.presentation.blanked}
               role="confidence"
               deviceId={deviceId}

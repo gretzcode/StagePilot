@@ -76,8 +76,8 @@ function AudienceDisplayContent() {
       {isPresenting ? (
         <SlideViewer
           material={activeMaterial}
-          slide={state?.presentation.currentSlide || null}
-          currentPage={state?.presentation.currentPage || 1}
+          slide={state?.presentation.currentSlideMetadata || null}
+          currentSlide={state?.presentation.currentSlide || 1}
           blanked={state?.presentation.blanked}
           role="audience"
           deviceId={deviceId}

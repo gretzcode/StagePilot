@@ -84,7 +84,7 @@ describe("Stage Session Reducer", () => {
 
     state = stageSessionReducer(state, startCmd);
     expect(state.presentation.isPresenting).toBe(true);
-    expect(state.presentation.currentPage).toBe(1);
+    expect(state.presentation.currentSlide).toBe(1);
 
     const nextCmd: StageCommand = {
       type: "SLIDE_NEXT",
@@ -95,7 +95,7 @@ describe("Stage Session Reducer", () => {
     };
 
     state = stageSessionReducer(state, nextCmd);
-    expect(state.presentation.currentPage).toBe(2);
+    expect(state.presentation.currentSlide).toBe(2);
   });
 
   it("should expand slide metadata for web materials when jumping to a later page", () => {
@@ -136,7 +136,7 @@ describe("Stage Session Reducer", () => {
     expect(() => stageSessionReducer(state, gotoCmd)).not.toThrow();
 
     const nextState = stageSessionReducer(state, gotoCmd);
-    expect(nextState.presentation.currentPage).toBe(4);
+    expect(nextState.presentation.currentSlide).toBe(4);
     expect(nextState.materials[0].slides.length).toBeGreaterThanOrEqual(4);
   });
 

@@ -31,9 +31,11 @@ describe("Phase 2 Presentation Lifecycle Integration Tests", () => {
       payload: { materialId: "mat-deck-1", startPage: 1 },
     });
     expect(state.presentation.isPresenting).toBe(true);
-    expect(state.presentation.currentPage).toBe(1);
-    expect(state.presentation.currentSlide?.index).toBe(1);
-    expect(state.presentation.nextSlide?.index).toBe(2);
+    expect(state.presentation.status).toBe("live");
+    expect(state.presentation.currentSlide).toBe(1);
+    expect(state.presentation.currentSlideMetadata?.index).toBe(1);
+    expect(state.presentation.nextSlideMetadata?.index).toBe(2);
+    expect(state.presentation.revision).toBe(2);
 
     // 2. SLIDE_NEXT
     state = CommandDispatcher.dispatch(state, {
@@ -43,8 +45,9 @@ describe("Phase 2 Presentation Lifecycle Integration Tests", () => {
       timestamp: Date.now(),
       payload: {},
     });
-    expect(state.presentation.currentPage).toBe(2);
-    expect(state.presentation.nextSlide?.index).toBe(3);
+    expect(state.presentation.currentSlide).toBe(2);
+    expect(state.presentation.nextSlideMetadata?.index).toBe(3);
+    expect(state.presentation.revision).toBe(3);
 
     // 3. SLIDE_PREVIOUS
     state = CommandDispatcher.dispatch(state, {
@@ -54,7 +57,8 @@ describe("Phase 2 Presentation Lifecycle Integration Tests", () => {
       timestamp: Date.now(),
       payload: {},
     });
-    expect(state.presentation.currentPage).toBe(1);
+    expect(state.presentation.currentSlide).toBe(1);
+    expect(state.presentation.revision).toBe(4);
 
     // 4. SLIDE_GOTO page 5
     state = CommandDispatcher.dispatch(state, {
@@ -64,7 +68,8 @@ describe("Phase 2 Presentation Lifecycle Integration Tests", () => {
       timestamp: Date.now(),
       payload: { pageNumber: 5 },
     });
-    expect(state.presentation.currentPage).toBe(5);
+    expect(state.presentation.currentSlide).toBe(5);
+    expect(state.presentation.revision).toBe(5);
 
     // 5. DISPLAY_BLANK
     state = CommandDispatcher.dispatch(state, {
@@ -75,6 +80,7 @@ describe("Phase 2 Presentation Lifecycle Integration Tests", () => {
       payload: { blank: true },
     });
     expect(state.presentation.blanked).toBe(true);
+    expect(state.presentation.revision).toBe(6);
 
     // 6. PRESENTATION_EXIT
     state = CommandDispatcher.dispatch(state, {
@@ -85,5 +91,7 @@ describe("Phase 2 Presentation Lifecycle Integration Tests", () => {
       payload: {},
     });
     expect(state.presentation.isPresenting).toBe(false);
+    expect(state.presentation.status).toBe("ended");
+    expect(state.presentation.revision).toBe(7);
   });
 });

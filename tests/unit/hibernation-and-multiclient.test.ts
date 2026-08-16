@@ -113,10 +113,10 @@ describe("Hibernation Recovery & Multi-Client Synchronization Test", () => {
     });
 
     // All client views (Host, Control B, Audience C, Confidence D) receive identical state
-    const hostView = roomState.presentation.currentPage;
-    const controlView = roomState.presentation.currentPage;
-    const audienceView = roomState.presentation.currentPage;
-    const confidenceView = roomState.presentation.currentPage;
+    const hostView = roomState.presentation.currentSlide;
+    const controlView = roomState.presentation.currentSlide;
+    const audienceView = roomState.presentation.currentSlide;
+    const confidenceView = roomState.presentation.currentSlide;
 
     expect(hostView).toBe(2);
     expect(controlView).toBe(2);

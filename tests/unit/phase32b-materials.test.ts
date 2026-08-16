@@ -221,9 +221,9 @@ describe("StagePilot Phase 3.2B Material Storage & Asset Pipeline Tests", () => 
 
     expect(state.presentation.isPresenting).toBe(true);
     expect(state.presentation.materialId).toBe("mat-attach-1");
-    expect(state.presentation.currentPage).toBe(1);
-    expect(state.presentation.currentSlide?.index).toBe(1);
-    expect(state.presentation.nextSlide?.index).toBe(2);
+    expect(state.presentation.currentSlide).toBe(1);
+    expect(state.presentation.currentSlideMetadata?.index).toBe(1);
+    expect(state.presentation.nextSlideMetadata?.index).toBe(2);
   });
 
   it("TEST-16, TEST-17, TEST-18: Approved Audience & Confidence resolve active material while unauthorized device is rejected", () => {
@@ -327,11 +327,11 @@ describe("StagePilot Phase 3.2B Material Storage & Asset Pipeline Tests", () => 
 
     expect(state.presentation.isPresenting).toBe(true);
     expect(state.presentation.materialId).toBe("mat-reconnect");
-    expect(state.presentation.currentPage).toBe(4);
+    expect(state.presentation.currentSlide).toBe(4);
 
     // Re-serializing state simulates reconnect SYNC_STATE broadcast
     const syncedState = JSON.parse(JSON.stringify(state));
     expect(syncedState.presentation.materialId).toBe("mat-reconnect");
-    expect(syncedState.presentation.currentPage).toBe(4);
+    expect(syncedState.presentation.currentSlide).toBe(4);
   });
 });

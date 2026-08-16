@@ -46,13 +46,32 @@ export interface Material {
   metadata?: MaterialMetadata;
 }
 
+export type PresentationStatus = "idle" | "live" | "paused" | "ended";
+
+export interface PresentationSession {
+  sessionId: string;
+  presentationId: string | null;
+  currentSlide: number;
+  totalSlides: number;
+  status: PresentationStatus;
+  revision: number;
+  blanked: boolean;
+  updatedAt: number;
+}
+
 export interface PresentationState {
   isPresenting: boolean;
   materialId: string | null;
-  currentPage: number;
+  /** Sole Source of Truth for presentation position (1-indexed) */
+  currentSlide: number;
+  totalSlides: number;
+  /** Backward-compatible alias for totalSlides */
   totalPages: number;
-  currentSlide: SlideMetadata | null;
-  nextSlide: SlideMetadata | null;
+  status: PresentationStatus;
+  /** Monotonically increasing revision integer */
+  revision: number;
+  currentSlideMetadata: SlideMetadata | null;
+  nextSlideMetadata: SlideMetadata | null;
   blanked: boolean;
   blackoutMode: boolean;
   startedAt: number | null;

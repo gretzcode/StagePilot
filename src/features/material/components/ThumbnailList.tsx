@@ -155,12 +155,14 @@ function appendAssetAccessParams(url: string, deviceId?: string): string {
 
 interface PdfThumbnailListProps {
   material: Material;
-  currentPage: number;
+  currentSlide?: number;
+  currentPage?: number;
   onSelectSlide: (pageNumber: number) => void;
   deviceId?: string;
 }
 
-function PdfThumbnailList({ material, currentPage, onSelectSlide, deviceId }: PdfThumbnailListProps) {
+function PdfThumbnailList({ material, currentSlide, currentPage, onSelectSlide, deviceId }: PdfThumbnailListProps) {
+  const activeSlide = currentSlide ?? currentPage ?? 1;
   const rawUrl = appendAssetAccessParams(material.externalUrl || material.url || "", deviceId);
   const driveMatch = rawUrl.includes("drive.google.com")
     ? rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/[?&]id=([A-Za-z0-9_-]+)/)
@@ -191,7 +193,7 @@ function PdfThumbnailList({ material, currentPage, onSelectSlide, deviceId }: Pd
       <div className="grid grid-cols-1 gap-2">
         {Array.from({ length: effectiveCount }, (_, i) => {
           const page = i + 1;
-          const isSel = page === currentPage;
+          const isSel = page === activeSlide;
           return (
             <button
               key={page}
@@ -220,7 +222,7 @@ function PdfThumbnailList({ material, currentPage, onSelectSlide, deviceId }: Pd
           key={i + 1}
           pdfDoc={pdfDoc}
           pageNumber={i + 1}
-          isSelected={currentPage === i + 1}
+          isSelected={activeSlide === i + 1}
           onSelectSlide={onSelectSlide}
         />
       ))}
@@ -234,7 +236,8 @@ function PdfThumbnailList({ material, currentPage, onSelectSlide, deviceId }: Pd
 
 interface ThumbnailListProps {
   material: Material | null;
-  currentPage: number;
+  currentSlide?: number;
+  currentPage?: number;
   onSelectSlide: (pageNumber: number) => void;
   placeholderCount?: number | null;
   isDiscoveringSlides?: boolean;
@@ -245,12 +248,14 @@ const LOAD_INTERVAL = 100;
 
 export function ThumbnailList({
   material,
+  currentSlide,
   currentPage,
   onSelectSlide,
   placeholderCount,
   isDiscoveringSlides,
   deviceId,
 }: ThumbnailListProps) {
+  const activeSlide = currentSlide ?? currentPage ?? 1;
   // ── ALL hooks must be declared before any conditional return ──────────────
   const containerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -271,7 +276,7 @@ export function ThumbnailList({
         placeholderCount || material?.totalPages || 1,
         material?.totalPages || 1,
         material?.slides?.length || 1,
-        currentPage + 1
+        activeSlide + 1
       );
 
   // ── Sequential reveal with self-discovering probe ──────────────────────────
@@ -379,7 +384,7 @@ export function ThumbnailList({
       <div className="overflow-y-auto max-h-[calc(100vh-160px)] pr-1 custom-scrollbar">
         <PdfThumbnailList
           material={material}
-          currentPage={currentPage}
+          currentSlide={activeSlide}
           onSelectSlide={onSelectSlide}
           deviceId={deviceId}
         />
@@ -431,7 +436,7 @@ export function ThumbnailList({
           // A thumbnail URL is only assigned once this slide's index has been
           // "revealed" by the sequential timer — guaranteeing 1→2→3 order.
           const isRevealed = slide.index <= revealedCount;
-          const isSelected = slide.index === currentPage;
+          const isSelected = slide.index === activeSlide;
 
           const googleThumbnailUrl =
             isRevealed && googlePresentationId

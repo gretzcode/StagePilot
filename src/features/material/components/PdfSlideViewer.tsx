@@ -6,7 +6,8 @@ import { usePdfDocument } from "../hooks/usePdfDocument";
 
 interface PdfSlideViewerProps {
   url: string;
-  currentPage: number;
+  currentSlide?: number;
+  currentPage?: number;
   role?: "control" | "audience" | "confidence";
   title?: string;
   /** Called once when the real page count is known from the loaded PDF */
@@ -20,11 +21,13 @@ interface PdfSlideViewerProps {
  */
 export function PdfSlideViewer({
   url,
+  currentSlide,
   currentPage,
   role,
   title,
   onNumPagesDiscovered,
 }: PdfSlideViewerProps) {
+  const activeSlide = currentSlide ?? currentPage ?? 1;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [pageRendering, setPageRendering] = useState(false);
   // Track active render task so we can cancel on page change
@@ -48,11 +51,11 @@ export function PdfSlideViewer({
     }
   }, [numPages, onNumPagesDiscovered]);
 
-  // ── Render the target page whenever pdfDoc or currentPage changes ──────────
+  // ── Render the target page whenever pdfDoc or activeSlide changes ──────────
   useEffect(() => {
     if (!pdfDoc || !canvasRef.current) return;
 
-    const pageNum = Math.min(Math.max(1, currentPage), pdfDoc.numPages);
+    const pageNum = Math.min(Math.max(1, activeSlide), pdfDoc.numPages);
 
     // Cancel any in-progress render
     if (renderTaskRef.current) {
@@ -116,12 +119,12 @@ export function PdfSlideViewer({
         renderTaskRef.current = null;
       }
     };
-  }, [pdfDoc, currentPage]);
+  }, [pdfDoc, activeSlide]);
 
   // ── Graceful iframe fallback when PDF.js cannot fetch (CORS / network) ─────
   if (docError) {
     const iframeSrc = googleFileId
-      ? `https://drive.google.com/file/d/${googleFileId}/preview#page=${currentPage}&toolbar=0&navpanes=0`
+      ? `https://drive.google.com/file/d/${googleFileId}/preview#page=${activeSlide}&toolbar=0&navpanes=0`
       : url;
 
     return (
@@ -153,7 +156,7 @@ export function PdfSlideViewer({
         <div className="absolute inset-0 bg-slate-950/80 backdrop-blur flex flex-col items-center justify-center z-20 space-y-2">
           <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
           <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-widest">
-            {docLoading ? "Loading PDF..." : `Rendering Page ${currentPage}…`}
+            {docLoading ? "Loading PDF..." : `Rendering Page ${activeSlide}…`}
           </span>
         </div>
       )}

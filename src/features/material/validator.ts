@@ -140,12 +140,8 @@ export function normalizeEmbedUrl(urlString: string): string {
     const host = parsed.hostname.toLowerCase();
 
     if (host.includes("canva.com")) {
-      if (!parsed.searchParams.has("embed")) {
-        parsed.searchParams.set("embed", "true");
-      }
-      parsed.protocol = "https:";
-      parsed.hostname = "www.canva.com";
-      return parsed.toString();
+      const cleanPath = parsed.pathname;
+      return `https://www.canva.com${cleanPath}?embed`;
     }
 
     if (host.includes("drive.google.com")) {
