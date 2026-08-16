@@ -327,7 +327,30 @@ export function SlideViewer({ material, slide, currentPage, blanked, role, onNum
       );
     }
 
-    // ── Generic iframe (Canva, other embed URLs) ──────────────────────────────
+    // ── Canva Direct Slide Image Rendering (100% Realtime Synchronized) ─────
+    const activeSlideUrl = slide?.contentUrl || material.slides?.[currentPage - 1]?.contentUrl;
+    const isCanvaImageSlide = Boolean(
+      material.type === "canva" &&
+        activeSlideUrl &&
+        (activeSlideUrl.includes("media.canva.com") ||
+          activeSlideUrl.includes("document-export.canva.com") ||
+          /\.(?:png|jpg|jpeg|webp)(?:\?|$)/i.test(activeSlideUrl))
+    );
+
+    if (isCanvaImageSlide && activeSlideUrl) {
+      return (
+        <div className="w-full h-full bg-slate-950 flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={activeSlideUrl}
+            alt={slide?.title || material.name}
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-150"
+          />
+        </div>
+      );
+    }
+
+    // ── Generic iframe (Canva embed fallback, other embed URLs) ──────────────
     // Determine sandbox attributes based on material type
     const iframeCanvaEnabled = material.type === "canva";
     const sandboxAttrs = iframeCanvaEnabled
