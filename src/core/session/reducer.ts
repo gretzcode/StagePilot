@@ -354,6 +354,7 @@ export function stageSessionReducer(
       nextState.presentation.mediaState = {
         status: "playing",
         currentTime,
+        duration: nextState.presentation.mediaState?.duration,
         playbackRate: 1.0,
         seekSequence: nextState.presentation.mediaState?.seekSequence,
         updatedAt: now,
@@ -368,6 +369,7 @@ export function stageSessionReducer(
       nextState.presentation.mediaState = {
         status: "paused",
         currentTime,
+        duration: nextState.presentation.mediaState?.duration,
         playbackRate: 1.0,
         seekSequence: nextState.presentation.mediaState?.seekSequence,
         updatedAt: now,
@@ -384,12 +386,48 @@ export function stageSessionReducer(
       nextState.presentation.mediaState = {
         status: isCurrentlyPlaying ? "playing" : "paused",
         currentTime: Math.max(0, targetTime),
+        duration: nextState.presentation.mediaState?.duration,
         playbackRate: 1.0,
         seekSequence: currentSeq + 1,
         updatedAt: now,
       };
       nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
       nextState.presentation.updatedAt = now;
+      break;
+    }
+
+    case "MEDIA_STOP": {
+      const currentSeq = nextState.presentation.mediaState?.seekSequence || 0;
+      nextState.presentation.mediaState = {
+        status: "stopped",
+        currentTime: 0,
+        duration: nextState.presentation.mediaState?.duration,
+        playbackRate: 1.0,
+        seekSequence: currentSeq + 1,
+        updatedAt: now,
+      };
+      nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+      nextState.presentation.updatedAt = now;
+      break;
+    }
+
+    case "MEDIA_DURATION_UPDATE": {
+      const { duration } = command.payload;
+      if (duration > 0) {
+        if (nextState.presentation.mediaState) {
+          nextState.presentation.mediaState.duration = duration;
+        } else {
+          nextState.presentation.mediaState = {
+            status: "paused",
+            currentTime: 0,
+            duration,
+            playbackRate: 1.0,
+            updatedAt: now,
+          };
+        }
+        nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+        nextState.presentation.updatedAt = now;
+      }
       break;
     }
 

@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { MediaPlaybackState } from "@/core/types";
+import {
+  IVideoPresentationAdapter,
+  YouTubeVideoAdapter,
+  Html5VideoAdapter,
+  buildControlledYouTubeEmbedUrl,
+} from "../adapters/media-adapter";
+import { Play, Pause } from "lucide-react";
 
 interface SyncVideoPlayerProps {
   url: string;
@@ -10,211 +17,264 @@ interface SyncVideoPlayerProps {
   onMediaPlay?: (currentTime?: number) => void;
   onMediaPause?: (currentTime?: number) => void;
   onMediaSeek?: (targetTime: number) => void;
+  onMediaStop?: () => void;
+  onDurationDiscovered?: (duration: number) => void;
 }
 
 export function SyncVideoPlayer({
   url,
   role = "audience",
   mediaState,
+  onMediaPlay,
+  onMediaPause,
+  onDurationDiscovered,
 }: SyncVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const adapterRef = useRef<IVideoPresentationAdapter | null>(null);
 
-  const [isMuted, setIsMuted] = useState(role !== "control");
+  const isMuted = role !== "control";
+  const [playerError, setPlayerError] = useState<string | null>(null);
 
-  // Track the exact handled states to never re-trigger commands during continuous playback
+  // Track initialization and sequence updates
   const isInitializedRef = useRef(false);
   const lastStatusRef = useRef<string | undefined>(undefined);
   const lastSeekSeqRef = useRef<number | undefined>(undefined);
 
-  const isEmbedVideo =
+  const isYouTube =
     url.includes("youtube.com") ||
     url.includes("youtube-nocookie.com") ||
-    url.includes("youtu.be") ||
-    url.includes("vimeo.com");
+    url.includes("youtu.be");
 
-  const isYouTube = url.includes("youtube.com") || url.includes("youtube-nocookie.com") || url.includes("youtu.be");
   const isVimeo = url.includes("vimeo.com");
+  const isEmbedVideo = isYouTube || isVimeo;
 
+  // Generate controlled embed URL with native controls stripped
   const embedUrl = useMemo(() => {
     if (!isEmbedVideo) return url;
-    try {
-      const parsed = new URL(url);
-      if (isYouTube) {
-        parsed.searchParams.set("enablejsapi", "1");
-        parsed.searchParams.set("autoplay", "1");
-        parsed.searchParams.set("mute", "1");
-        parsed.searchParams.set("playsinline", "1");
-        if (typeof window !== "undefined") {
-          parsed.searchParams.set("origin", window.location.origin);
-          parsed.searchParams.set("widget_referrer", window.location.origin);
-        }
-        return parsed.toString();
-      }
-      if (isVimeo) {
+    if (isYouTube) {
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      return buildControlledYouTubeEmbedUrl(url, origin);
+    }
+    if (isVimeo) {
+      try {
+        const parsed = new URL(url);
         parsed.searchParams.set("api", "1");
         parsed.searchParams.set("autoplay", "1");
+        parsed.searchParams.set("controls", "0");
         return parsed.toString();
+      } catch {
+        return url;
       }
-    } catch {
-      return url;
     }
     return url;
   }, [url, isEmbedVideo, isYouTube, isVimeo]);
 
-  // Post message to embedded iframe players (YouTube & Vimeo JS API)
-  const postIframeCommand = useCallback(
-    (command: "play" | "pause" | "seek" | "unMute" | "mute", value?: number) => {
-      const iframeWindow = iframeRef.current?.contentWindow;
-      if (!iframeWindow) return;
+  // Initialize Media Adapter for YouTube Iframe
+  const handleIframeLoad = () => {
+    if (!iframeRef.current || !isYouTube) return;
 
-      if (isYouTube) {
-        if (command === "play") {
-          iframeWindow.postMessage(JSON.stringify({ event: "command", func: "playVideo", args: "" }), "*");
-        } else if (command === "pause") {
-          iframeWindow.postMessage(JSON.stringify({ event: "command", func: "pauseVideo", args: "" }), "*");
-        } else if (command === "seek" && typeof value === "number") {
-          iframeWindow.postMessage(JSON.stringify({ event: "command", func: "seekTo", args: [value, true] }), "*");
-        } else if (command === "unMute") {
-          iframeWindow.postMessage(JSON.stringify({ event: "command", func: "unMute", args: "" }), "*");
-        } else if (command === "mute") {
-          iframeWindow.postMessage(JSON.stringify({ event: "command", func: "mute", args: "" }), "*");
+    if (adapterRef.current) {
+      adapterRef.current.destroy();
+    }
+
+    const adapter = new YouTubeVideoAdapter(iframeRef.current, {
+      onReady: () => {
+        setPlayerError(null);
+      },
+      onDuration: (duration) => {
+        if (duration > 0 && role === "control") {
+          onDurationDiscovered?.(duration);
         }
-      } else if (isVimeo) {
-        if (command === "play") {
-          iframeWindow.postMessage(JSON.stringify({ method: "play" }), "*");
-        } else if (command === "pause") {
-          iframeWindow.postMessage(JSON.stringify({ method: "pause" }), "*");
-        } else if (command === "seek" && typeof value === "number") {
-          iframeWindow.postMessage(JSON.stringify({ method: "setCurrentTime", value }), "*");
+      },
+      onEnded: () => {
+        if (role === "control" && mediaState?.status === "playing") {
+          onMediaPause?.(mediaState.duration || mediaState.currentTime);
         }
+      },
+      onError: (err) => {
+        console.warn("[SyncVideoPlayer] YouTube error:", err);
+        setPlayerError(err);
+      },
+    });
+
+    adapter.initHandshake();
+    adapterRef.current = adapter;
+
+    // Synchronize initial state
+    if (!isInitializedRef.current && mediaState) {
+      isInitializedRef.current = true;
+      lastStatusRef.current = mediaState.status;
+      lastSeekSeqRef.current = mediaState.seekSequence;
+
+      const elapsed = (Date.now() - mediaState.updatedAt) / 1000;
+      const startTime =
+        mediaState.status === "playing"
+          ? mediaState.currentTime + Math.max(0, elapsed) * (mediaState.playbackRate || 1.0)
+          : mediaState.currentTime;
+
+      if (startTime > 1.5) {
+        adapter.seek(startTime);
       }
-    },
-    [isYouTube, isVimeo]
-  );
 
-  // Synchronize to authoritative mediaState across all screens
+      if (mediaState.status === "playing") {
+        adapter.play();
+      } else {
+        adapter.pause();
+      }
+    }
+  };
+
+  // Initialize Media Adapter for Native HTML5 <video>
+  const handleVideoLoadedMetadata = () => {
+    if (!videoRef.current || isEmbedVideo) return;
+
+    if (adapterRef.current) {
+      adapterRef.current.destroy();
+    }
+
+    const adapter = new Html5VideoAdapter(videoRef.current, {
+      onReady: () => {
+        setPlayerError(null);
+      },
+      onDuration: (duration) => {
+        if (duration > 0 && role === "control") {
+          onDurationDiscovered?.(duration);
+        }
+      },
+      onEnded: () => {
+        if (role === "control" && mediaState?.status === "playing") {
+          onMediaPause?.(mediaState.duration || mediaState.currentTime);
+        }
+      },
+      onError: (err) => {
+        console.warn("[SyncVideoPlayer] HTML5 video error:", err);
+        setPlayerError(err);
+      },
+    });
+
+    adapterRef.current = adapter;
+
+    // Synchronize initial state
+    if (!isInitializedRef.current && mediaState) {
+      isInitializedRef.current = true;
+      lastStatusRef.current = mediaState.status;
+      lastSeekSeqRef.current = mediaState.seekSequence;
+
+      const elapsed = (Date.now() - mediaState.updatedAt) / 1000;
+      const startTime =
+        mediaState.status === "playing"
+          ? mediaState.currentTime + Math.max(0, elapsed) * (mediaState.playbackRate || 1.0)
+          : mediaState.currentTime;
+
+      if (startTime > 1.5) {
+        adapter.seek(startTime);
+      }
+
+      if (mediaState.status === "playing") {
+        adapter.play();
+      } else {
+        adapter.pause();
+      }
+    }
+  };
+
+  // Synchronize to Authoritative StageRoom mediaState
   useEffect(() => {
-    if (!mediaState) return;
+    if (!mediaState || !adapterRef.current) return;
 
     const currentStatus = mediaState.status;
     const currentSeekSeq = mediaState.seekSequence;
 
-    // 1. Handle explicit seek commands ONLY
+    // 1. Explicit Seek Synchronization
     const hasNewSeek = currentSeekSeq !== undefined && currentSeekSeq !== lastSeekSeqRef.current;
     if (hasNewSeek) {
       lastSeekSeqRef.current = currentSeekSeq;
-
-      if (!isEmbedVideo && videoRef.current) {
-        videoRef.current.currentTime = mediaState.currentTime;
-      } else if (isEmbedVideo) {
-        postIframeCommand("seek", mediaState.currentTime);
-      }
+      adapterRef.current.seek(mediaState.currentTime);
     }
 
-    // 2. Handle Play / Pause transitions ONLY when status changes
+    // 2. Play / Pause Transition Synchronization
     const hasStatusChanged = currentStatus !== lastStatusRef.current;
     if (hasStatusChanged) {
       lastStatusRef.current = currentStatus;
-
-      if (!isEmbedVideo && videoRef.current) {
-        if (currentStatus === "playing") {
-          videoRef.current.play().catch(() => {
-            if (videoRef.current) {
-              videoRef.current.muted = true;
-              setIsMuted(true);
-              videoRef.current.play().catch(() => {});
-            }
-          });
-        } else if (currentStatus === "paused" || currentStatus === "stopped") {
-          videoRef.current.pause();
-        }
-      } else if (isEmbedVideo) {
-        if (currentStatus === "playing") {
-          postIframeCommand("play");
-        } else if (currentStatus === "paused" || currentStatus === "stopped") {
-          postIframeCommand("pause");
-        }
+      if (currentStatus === "playing") {
+        adapterRef.current.play();
+      } else if (currentStatus === "paused" || currentStatus === "stopped") {
+        adapterRef.current.pause();
       }
     }
-  }, [mediaState, isEmbedVideo, postIframeCommand]);
+  }, [mediaState]);
+
+  // Clean up adapter on unmount
+  useEffect(() => {
+    return () => {
+      if (adapterRef.current) {
+        adapterRef.current.destroy();
+        adapterRef.current = null;
+      }
+    };
+  }, []);
+
+  const isPlaying = mediaState?.status === "playing";
 
   return (
     <div className="w-full h-full bg-slate-950 flex items-center justify-center relative overflow-hidden select-none">
+      {/* Video Output Target */}
       {isEmbedVideo ? (
-        <iframe
-          key={embedUrl}
-          ref={iframeRef}
-          src={embedUrl}
-          onLoad={() => {
-            const iframeWindow = iframeRef.current?.contentWindow;
-            if (iframeWindow && isYouTube) {
-              iframeWindow.postMessage(JSON.stringify({ event: "listening" }), "*");
-            }
-
-            // On initial load only: sync current playback position if joining late
-            if (!isInitializedRef.current && mediaState) {
-              isInitializedRef.current = true;
-              lastStatusRef.current = mediaState.status;
-              lastSeekSeqRef.current = mediaState.seekSequence;
-
-              const elapsed = (Date.now() - mediaState.updatedAt) / 1000;
-              const startTime =
-                mediaState.status === "playing"
-                  ? mediaState.currentTime + Math.max(0, elapsed) * (mediaState.playbackRate || 1.0)
-                  : mediaState.currentTime;
-
-              if (startTime > 1.5) {
-                postIframeCommand("seek", startTime);
-              }
-
-              if (mediaState.status === "playing") {
-                postIframeCommand("play");
-              } else if (mediaState.status === "paused" || mediaState.status === "stopped") {
-                postIframeCommand("pause");
-              }
-            }
-          }}
-          className="w-full h-full border-0 pointer-events-auto"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-        />
+        <div className="w-full h-full relative flex items-center justify-center">
+          <iframe
+            key={embedUrl}
+            ref={iframeRef}
+            src={embedUrl}
+            onLoad={handleIframeLoad}
+            className="w-full h-full border-0 pointer-events-none select-none"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        </div>
       ) : (
         <video
           key={url}
           ref={videoRef}
           src={url}
-          className="max-w-full max-h-full object-contain pointer-events-auto"
+          className="max-w-full max-h-full object-contain pointer-events-none select-none"
           playsInline
           muted={isMuted}
-          onLoadedMetadata={() => {
-            if (!isInitializedRef.current && mediaState && videoRef.current) {
-              isInitializedRef.current = true;
-              lastStatusRef.current = mediaState.status;
-              lastSeekSeqRef.current = mediaState.seekSequence;
+          onLoadedMetadata={handleVideoLoadedMetadata}
+        />
+      )}
 
-              const elapsed = (Date.now() - mediaState.updatedAt) / 1000;
-              const startTime =
-                mediaState.status === "playing"
-                  ? mediaState.currentTime + Math.max(0, elapsed) * (mediaState.playbackRate || 1.0)
-                  : mediaState.currentTime;
-
-              if (startTime > 1.5) {
-                videoRef.current.currentTime = startTime;
-              }
-
-              if (mediaState.status === "playing") {
-                videoRef.current.play().catch(() => {
-                  if (videoRef.current) {
-                    videoRef.current.muted = true;
-                    setIsMuted(true);
-                    videoRef.current.play().catch(() => {});
-                  }
-                });
-              }
+      {/* Control Room Overlay: Click to Play/Pause & Status Feedback */}
+      {role === "control" && (
+        <div
+          onClick={() => {
+            if (isPlaying) {
+              onMediaPause?.(mediaState?.currentTime);
+            } else {
+              onMediaPlay?.(mediaState?.currentTime);
             }
           }}
-        />
+          className="absolute inset-0 z-20 cursor-pointer flex items-center justify-center group bg-transparent hover:bg-black/10 transition-colors"
+          title={isPlaying ? "Click to Pause" : "Click to Play"}
+        >
+          {/* Subtle Play/Pause watermark overlay visible on hover */}
+          <div className="w-16 h-16 rounded-full bg-slate-900/80 border border-slate-700/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-90 transition-opacity shadow-2xl backdrop-blur-sm">
+            {isPlaying ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 fill-white ml-0.5" />}
+          </div>
+        </div>
+      )}
+
+      {/* Error State Banner if Video Fails to Load */}
+      {playerError && (
+        <div className="absolute top-3 left-3 right-3 bg-rose-950/90 border border-rose-800 text-rose-200 text-xs px-3 py-2 rounded-xl z-30 flex items-center justify-between shadow-xl">
+          <span>{playerError}</span>
+          <button
+            onClick={() => setPlayerError(null)}
+            className="text-rose-400 hover:text-white font-bold ml-2 text-xs"
+          >
+            Dismiss
+          </button>
+        </div>
       )}
     </div>
   );

@@ -28,6 +28,8 @@ export type StageCommandType =
   | "MEDIA_PLAY"
   | "MEDIA_PAUSE"
   | "MEDIA_SEEK"
+  | "MEDIA_STOP"
+  | "MEDIA_DURATION_UPDATE"
   | "CONTROL_TAKEOVER";
 
 export interface BaseCommand {
@@ -200,6 +202,18 @@ export interface MediaSeekCommand extends BaseCommand {
   };
 }
 
+export interface MediaStopCommand extends BaseCommand {
+  type: "MEDIA_STOP";
+  payload?: Record<string, never>;
+}
+
+export interface MediaDurationUpdateCommand extends BaseCommand {
+  type: "MEDIA_DURATION_UPDATE";
+  payload: {
+    duration: number;
+  };
+}
+
 export interface ControlTakeoverCommand extends BaseCommand {
   type: "CONTROL_TAKEOVER";
   payload: {
@@ -232,4 +246,6 @@ export type StageCommand =
   | MediaPlayCommand
   | MediaPauseCommand
   | MediaSeekCommand
+  | MediaStopCommand
+  | MediaDurationUpdateCommand
   | ControlTakeoverCommand;

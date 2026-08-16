@@ -209,7 +209,7 @@ export function normalizeEmbedUrl(urlString: string): string {
         videoId = parsed.searchParams.get("v") || "";
       }
       if (videoId) {
-        return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
+        return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&enablejsapi=1&controls=0&disablekb=1&fs=0&iv_load_policy=3&rel=0`;
       }
     }
 

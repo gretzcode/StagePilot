@@ -19,6 +19,8 @@ interface SlideViewerProps {
   onMediaPlay?: (currentTime?: number) => void;
   onMediaPause?: (currentTime?: number) => void;
   onMediaSeek?: (targetTime: number) => void;
+  onMediaStop?: () => void;
+  onMediaDurationDiscovered?: (duration: number) => void;
 }
 
 // Global Memory-Mapped RAM Cache for Slide Images (0ms Sync Retrieval)
@@ -67,6 +69,8 @@ export function SlideViewer({
   onMediaPlay,
   onMediaPause,
   onMediaSeek,
+  onMediaStop,
+  onMediaDurationDiscovered,
 }: SlideViewerProps) {
   const activeSlide = currentSlide ?? currentPage ?? 1;
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -248,6 +252,8 @@ export function SlideViewer({
         onMediaPlay={onMediaPlay}
         onMediaPause={onMediaPause}
         onMediaSeek={onMediaSeek}
+        onMediaStop={onMediaStop}
+        onDurationDiscovered={onMediaDurationDiscovered}
       />
     );
   }

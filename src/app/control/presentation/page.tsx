@@ -301,7 +301,7 @@ function PresentationControlContent() {
   };
 
   const [reimportingMatId, setReimportingMatId] = useState<string | null>(null);
-  const [reimportError, setReimportError] = useState<string | null>(null);
+  const [_reimportError, setReimportError] = useState<string | null>(null);
 
   const handleReimportCanva = async (mat: Material) => {
     if (reimportingMatId) return;
@@ -660,9 +660,21 @@ function PresentationControlContent() {
               role="control"
               deviceId={deviceId}
               mediaState={state?.presentation.mediaState}
-              onMediaPlay={(time) => dispatchCommand("MEDIA_PLAY", { currentTime: time })}
-              onMediaPause={(time) => dispatchCommand("MEDIA_PAUSE", { currentTime: time })}
-              onMediaSeek={(target) => dispatchCommand("MEDIA_SEEK", { targetTime: target })}
+              onMediaPlay={(time) => dispatchCommand("MEDIA_PLAY", { currentTime: time ?? localVideoTime })}
+              onMediaPause={(time) => dispatchCommand("MEDIA_PAUSE", { currentTime: time ?? localVideoTime })}
+              onMediaSeek={(target) => {
+                setLocalVideoTime(target);
+                dispatchCommand("MEDIA_SEEK", { targetTime: target });
+              }}
+              onMediaStop={() => {
+                setLocalVideoTime(0);
+                dispatchCommand("MEDIA_STOP");
+              }}
+              onMediaDurationDiscovered={(duration) => {
+                if (duration > 0 && (!state?.presentation.mediaState?.duration || Math.abs(state.presentation.mediaState.duration - duration) > 1)) {
+                  dispatchCommand("MEDIA_DURATION_UPDATE", { duration });
+                }
+              }}
               onNumPagesDiscovered={handlePdfNumPagesDiscovered}
             />
           </div>
@@ -696,6 +708,18 @@ function PresentationControlContent() {
               {/* Playback Action Buttons */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center space-x-1.5 sm:space-x-2">
+                  <button
+                    onClick={() => {
+                      setLocalVideoTime(0);
+                      dispatchCommand("MEDIA_SEEK", { targetTime: 0 });
+                    }}
+                    className="p-2 sm:px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1 text-xs font-semibold cursor-pointer"
+                    title="Reset to 00:00"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">0:00</span>
+                  </button>
+
                   <button
                     onClick={() => {
                       const target = Math.max(0, localVideoTime - 10);

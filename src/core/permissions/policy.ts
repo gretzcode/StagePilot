@@ -107,6 +107,8 @@ export class PermissionPolicy {
       "MEDIA_PLAY",
       "MEDIA_PAUSE",
       "MEDIA_SEEK",
+      "MEDIA_STOP",
+      "MEDIA_DURATION_UPDATE",
       "CONTROL_TAKEOVER",
     ];
 
