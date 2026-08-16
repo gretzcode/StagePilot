@@ -154,6 +154,8 @@ export function stageSessionReducer(
       const totalSlides = Math.max(material?.totalPages || 1, material?.slides?.length || 1, startPage);
       ensureMaterialSlides(material, totalSlides);
 
+      const isVideoMaterial = material?.type === "video" || material?.mediaType === "video";
+
       nextState.presentation = {
         isPresenting: true,
         status: "live",
@@ -166,6 +168,14 @@ export function stageSessionReducer(
         nextSlideMetadata: material?.slides[startPage] || (startPage < totalSlides ? { index: startPage + 1, title: `Slide ${startPage + 1}` } : null),
         blanked: false,
         blackoutMode: false,
+        mediaState: isVideoMaterial
+          ? {
+              status: "playing",
+              currentTime: 0,
+              playbackRate: 1.0,
+              updatedAt: now,
+            }
+          : undefined,
         startedAt: now,
         updatedAt: now,
       };

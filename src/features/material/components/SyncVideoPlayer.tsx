@@ -21,7 +21,8 @@ export function SyncVideoPlayer({
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const [isMuted, setIsMuted] = useState(role !== "control");
-  const lastHandledStateRef = useRef<{ status?: string; updatedAt?: number; currentTime?: number }>({});
+  const lastStateRef = useRef<{ status?: string; updatedAt?: number; currentTime?: number }>({});
+  const isIframeReadyRef = useRef(false);
 
   const isEmbedVideo =
     url.includes("youtube.com") ||
@@ -93,45 +94,46 @@ export function SyncVideoPlayer({
   useEffect(() => {
     if (!mediaState) return;
 
-    const isNewTimestamp = lastHandledStateRef.current.updatedAt !== mediaState.updatedAt;
-    const isStatusChanged = lastHandledStateRef.current.status !== mediaState.status;
+    const isNewTimestamp = lastStateRef.current.updatedAt !== mediaState.updatedAt;
+    const isStatusChanged = lastStateRef.current.status !== mediaState.status;
 
     // Direct HTML5 Video Sync
     if (!isEmbedVideo && videoRef.current) {
       const video = videoRef.current;
-      const elapsedSinceUpdate = (Date.now() - mediaState.updatedAt) / 1000;
+      const elapsed = (Date.now() - mediaState.updatedAt) / 1000;
       const expectedTime =
         mediaState.status === "playing"
-          ? mediaState.currentTime + Math.max(0, elapsedSinceUpdate) * (mediaState.playbackRate || 1.0)
+          ? mediaState.currentTime + Math.max(0, elapsed) * (mediaState.playbackRate || 1.0)
           : mediaState.currentTime;
 
-      if (isNewTimestamp || isStatusChanged || Math.abs(video.currentTime - expectedTime) > 1.0) {
-        if (Math.abs(video.currentTime - expectedTime) > 0.5) {
+      if (isNewTimestamp) {
+        // Only jump if difference is substantial (> 1.5s) to prevent jitter
+        if (Math.abs(video.currentTime - expectedTime) > 1.5) {
           video.currentTime = Math.max(0, expectedTime);
         }
+      }
 
-        if (mediaState.status === "playing") {
-          video.play().catch(() => {
-            video.muted = true;
-            setIsMuted(true);
-            video.play().catch(() => {});
-          });
-        } else if (mediaState.status === "paused" || mediaState.status === "stopped") {
-          video.pause();
-        }
+      if (mediaState.status === "playing") {
+        video.play().catch(() => {
+          video.muted = true;
+          setIsMuted(true);
+          video.play().catch(() => {});
+        });
+      } else if (mediaState.status === "paused" || mediaState.status === "stopped") {
+        video.pause();
       }
     }
     // Embedded Iframe (YouTube / Vimeo) Sync
     else if (isEmbedVideo) {
-      // Only seek when an explicit command changed mediaState.updatedAt
       if (isNewTimestamp) {
-        const elapsedSinceUpdate = (Date.now() - mediaState.updatedAt) / 1000;
+        const elapsed = (Date.now() - mediaState.updatedAt) / 1000;
         const expectedTime =
           mediaState.status === "playing"
-            ? mediaState.currentTime + Math.max(0, elapsedSinceUpdate) * (mediaState.playbackRate || 1.0)
+            ? mediaState.currentTime + Math.max(0, elapsed) * (mediaState.playbackRate || 1.0)
             : mediaState.currentTime;
 
-        if (typeof mediaState.currentTime === "number") {
+        // If target seek time is explicitly set (> 1s or new seek), dispatch seek
+        if (isIframeReadyRef.current && typeof expectedTime === "number" && expectedTime > 0.5) {
           postIframeCommand("seek", expectedTime);
         }
       }
@@ -145,7 +147,7 @@ export function SyncVideoPlayer({
       }
     }
 
-    lastHandledStateRef.current = {
+    lastStateRef.current = {
       status: mediaState.status,
       updatedAt: mediaState.updatedAt,
       currentTime: mediaState.currentTime,
@@ -156,26 +158,28 @@ export function SyncVideoPlayer({
     <div className="w-full h-full bg-slate-950 flex items-center justify-center relative overflow-hidden select-none">
       {isEmbedVideo ? (
         <iframe
+          key={url}
           ref={iframeRef}
           src={embedUrl}
           onLoad={() => {
+            isIframeReadyRef.current = true;
             const iframeWindow = iframeRef.current?.contentWindow;
             if (iframeWindow && isYouTube) {
               iframeWindow.postMessage(JSON.stringify({ event: "listening" }), "*");
             }
             if (mediaState) {
-              const elapsedSinceUpdate = (Date.now() - mediaState.updatedAt) / 1000;
+              const elapsed = (Date.now() - mediaState.updatedAt) / 1000;
               const expectedTime =
                 mediaState.status === "playing"
-                  ? mediaState.currentTime + Math.max(0, elapsedSinceUpdate) * (mediaState.playbackRate || 1.0)
+                  ? mediaState.currentTime + Math.max(0, elapsed) * (mediaState.playbackRate || 1.0)
                   : mediaState.currentTime;
 
-              if (typeof expectedTime === "number") {
+              if (typeof expectedTime === "number" && expectedTime > 1.0) {
                 postIframeCommand("seek", expectedTime);
               }
               if (mediaState.status === "playing") {
                 postIframeCommand("play");
-              } else {
+              } else if (mediaState.status === "paused" || mediaState.status === "stopped") {
                 postIframeCommand("pause");
               }
             }
@@ -186,6 +190,7 @@ export function SyncVideoPlayer({
         />
       ) : (
         <video
+          key={url}
           ref={videoRef}
           src={url}
           className="max-w-full max-h-full object-contain"
