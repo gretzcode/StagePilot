@@ -9,8 +9,7 @@ export function getPersistentDeviceId(role: string, roomCode: string, searchPara
   if (searchParamDeviceId && searchParamDeviceId.trim()) {
     const trimmed = searchParamDeviceId.trim();
     if (typeof window !== "undefined") {
-      const groupRole = role === "host" || role === "control" ? "control" : role;
-      const storageKey = `stagepilot_dev_id_${groupRole}_${(roomCode || "default").toUpperCase()}`;
+      const storageKey = `stagepilot_dev_id_${role}_${(roomCode || "default").toUpperCase()}`;
       try {
         localStorage.setItem(storageKey, trimmed);
       } catch {}
@@ -22,8 +21,7 @@ export function getPersistentDeviceId(role: string, roomCode: string, searchPara
     return `dev-${role}-${Date.now().toString(36)}`;
   }
 
-  const groupRole = role === "host" || role === "control" ? "control" : role;
-  const storageKey = `stagepilot_dev_id_${groupRole}_${(roomCode || "default").toUpperCase()}`;
+  const storageKey = `stagepilot_dev_id_${role}_${(roomCode || "default").toUpperCase()}`;
   try {
     const existing = localStorage.getItem(storageKey);
     if (existing && existing.trim()) {

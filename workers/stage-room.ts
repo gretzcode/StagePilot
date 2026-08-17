@@ -122,9 +122,22 @@ export class StageRoom extends DurableObject {
       existingDevice.status = "online";
       existingDevice.lastSeenAt = Date.now();
       if (isHostRole) {
+        existingDevice.role = "host";
+        existingDevice.approvalStatus = "approved";
+        existingDevice.isHostDevice = true;
         this.state.host.isHostConnected = true;
         this.state.host.hostDeviceId = deviceId;
+        this.state.activeControllerDeviceId = deviceId;
       }
+      existingDevice.permissions = {
+        canControlPresentation: isHostRole || existingDevice.role === "control",
+        canControlTimer: isHostRole || existingDevice.role === "control",
+        canControlBrief: isHostRole || existingDevice.role === "control",
+        canBlankDisplay: isHostRole || existingDevice.role === "control",
+        canManageDevices: isHostRole || existingDevice.role === "control",
+        canManageRoom: isHostRole,
+        canTakeoverControl: isHostRole || existingDevice.role === "control",
+      };
     } else {
       const autoApprove = isHostRole;
       this.state.devices[deviceId] = {

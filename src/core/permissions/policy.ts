@@ -61,7 +61,11 @@ export class PermissionPolicy {
 
     // CONTROL role permissions check
     if (role === "control") {
-      if (sender.approvalStatus === "approved" && sender.permissions.canManageDevices) {
+      const hasDeviceMgmt = sender.permissions?.canManageDevices ?? true;
+      if (
+        (sender.approvalStatus === "approved" || sender.approvalStatus === "connected") &&
+        hasDeviceMgmt
+      ) {
         const allowedWithDeviceMgmt = [
           "DEVICE_APPROVE",
           "DEVICE_REJECT",
