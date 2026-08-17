@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { defaultPresentationAdapter } from "../adapter";
 import { Material } from "@/core/types";
 import { validateExternalUrl } from "../validator";
-import { Link as LinkIcon, AlertCircle, Upload, CheckCircle2, Loader2, Sparkles, Cloud, FileText } from "lucide-react";
+import { Link as LinkIcon, AlertCircle, Upload, Loader2, FileText, Plus } from "lucide-react";
 
 interface MaterialUploaderProps {
   roomCode?: string;
@@ -27,7 +26,6 @@ interface ProcessingStage {
   totalSteps: number;
   title: string;
   description: string;
-  stepsList: string[];
 }
 
 export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdded }: MaterialUploaderProps) {
@@ -114,167 +112,98 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
       const isVideo = validation.materialType === "video";
 
       if (isPdfOrDrive) {
-        const steps = [
-          "Memvalidasi tautan & nama dokumen",
-          "Mengunduh file PDF dari server sumber",
-          "Mengamankan berkas ke Google Drive",
-          "Menghitung halaman & menyiapkan antrean",
-        ];
-
         setProcessingStage({
           currentStep: 1,
           totalSteps: 4,
           title: "Memvalidasi Tautan",
-          description: "Memeriksa ketersediaan dokumen dan mengekstrak nama berkas...",
-          stepsList: steps,
+          description: "Memeriksa tautan & metadata berkas...",
         });
 
         stageTimerRef.current.push(
           setTimeout(() => {
-            setProcessingStage((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    currentStep: 2,
-                    title: "Mengunduh Berkas PDF",
-                    description: "Sedang mengambil data dokumen dari server sumber, mohon tunggu...",
-                  }
-                : null
-            );
+            setProcessingStage({
+              currentStep: 2,
+              totalSteps: 4,
+              title: "Mengunduh PDF",
+              description: "Mengunduh dokumen dari Google Drive...",
+            });
           }, 800)
         );
 
         stageTimerRef.current.push(
           setTimeout(() => {
-            setProcessingStage((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    currentStep: 3,
-                    title: "Mengamankan ke Google Drive",
-                    description: `Menyimpan dokumen ke folder room ${roomCode.toUpperCase()} di Google Drive...`,
-                  }
-                : null
-            );
+            setProcessingStage({
+              currentStep: 3,
+              totalSteps: 4,
+              title: "Menyimpan ke Drive",
+              description: `Menyimpan ke folder room ${roomCode.toUpperCase()} di Google Drive...`,
+            });
           }, 2400)
         );
 
         stageTimerRef.current.push(
           setTimeout(() => {
-            setProcessingStage((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    currentStep: 4,
-                    title: "Menghitung Halaman Dokumen",
-                    description: "Memverifikasi jumlah slide otentik agar kontrol panggung presisi...",
-                  }
-                : null
-            );
+            setProcessingStage({
+              currentStep: 4,
+              totalSteps: 4,
+              title: "Menyiapkan Dokumen",
+              description: "Menghitung total halaman & mendaftarkan ke antrean...",
+            });
           }, 4200)
         );
       } else if (isCanva) {
-        const steps = [
-          "Memvalidasi tautan desain Canva",
-          "Menghubungkan ke Canva Connect",
-          "Mengekspor slide presentasi",
-          "Mendaftarkan materi ke antrean",
-        ];
-
-        setProcessingStage({
-          currentStep: 1,
-          totalSteps: 4,
-          title: "Memeriksa Desain Canva",
-          description: "Mengekstrak ID presentasi Canva...",
-          stepsList: steps,
-        });
-
-        stageTimerRef.current.push(
-          setTimeout(() => {
-            setProcessingStage((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    currentStep: 2,
-                    title: "Menghubungkan ke Canva Connect",
-                    description: "Memverifikasi izin integrasi Canva operator...",
-                  }
-                : null
-            );
-          }, 900)
-        );
-
-        stageTimerRef.current.push(
-          setTimeout(() => {
-            setProcessingStage((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    currentStep: 3,
-                    title: "Mengimpor Slide Canva",
-                    description: "Mengonversi halaman presentasi Canva ke materi panggung...",
-                  }
-                : null
-            );
-          }, 2600)
-        );
-      } else if (isVideo) {
-        const steps = [
-          "Memeriksa URL video",
-          "Menganalisis judul & durasi",
-          "Mendaftarkan player sinkron ke antrean",
-        ];
-
         setProcessingStage({
           currentStep: 1,
           totalSteps: 3,
-          title: "Memeriksa Video",
-          description: "Mengekstrak ID video dan ketersediaan embed player...",
-          stepsList: steps,
+          title: "Memeriksa Canva",
+          description: "Memvalidasi tautan desain Canva...",
         });
 
         stageTimerRef.current.push(
           setTimeout(() => {
-            setProcessingStage((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    currentStep: 2,
-                    title: "Menganalisis Media",
-                    description: "Menyiapkan sinkronisasi playback play/pause untuk panggung...",
-                  }
-                : null
-            );
+            setProcessingStage({
+              currentStep: 2,
+              totalSteps: 3,
+              title: "Mengekspor Slide",
+              description: "Mengimpor slide Canva ke panggung...",
+            });
+          }, 1200)
+        );
+      } else if (isVideo) {
+        setProcessingStage({
+          currentStep: 1,
+          totalSteps: 2,
+          title: "Memeriksa Video",
+          description: "Mengambil informasi & durasi video...",
+        });
+
+        stageTimerRef.current.push(
+          setTimeout(() => {
+            setProcessingStage({
+              currentStep: 2,
+              totalSteps: 2,
+              title: "Sinkronisasi Media",
+              description: "Menyiapkan pemutar video untuk sesi panggung...",
+            });
           }, 1000)
         );
       } else {
-        const steps = [
-          "Memvalidasi tautan presentasi",
-          "Mendeteksi total halaman otomatis",
-          "Mendaftarkan ke antrean panggung",
-        ];
-
         setProcessingStage({
           currentStep: 1,
-          totalSteps: 3,
+          totalSteps: 2,
           title: "Memproses Tautan",
-          description: "Menganalisis struktur presentasi web...",
-          stepsList: steps,
+          description: "Menganalisis tautan presentasi...",
         });
 
         stageTimerRef.current.push(
           setTimeout(() => {
-            setProcessingStage((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    currentStep: 2,
-                    title: "Mendeteksi Halaman",
-                    description: "Menghitung slide presentasi otomatis...",
-                  }
-                : null
-            );
-          }, 1200)
+            setProcessingStage({
+              currentStep: 2,
+              totalSteps: 2,
+              title: "Menyiapkan Antrean",
+              description: "Mendaftarkan materi ke antrean panggung...",
+            });
+          }, 1000)
         );
       }
 
@@ -353,18 +282,11 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
     uploadStartTimeRef.current = Date.now();
     lastProgressRef.current = null;
 
-    const steps = [
-      "Mengunggah berkas ke server",
-      "Menyimpan ke Google Drive room",
-      "Memverifikasi halaman & mendaftarkan",
-    ];
-
     setProcessingStage({
       currentStep: 1,
       totalSteps: 3,
       title: "Mengunggah Berkas",
-      description: `Mengirim ${file.name} ke server...`,
-      stepsList: steps,
+      description: `Mengunggah ${file.name}...`,
     });
 
     try {
@@ -428,29 +350,21 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
           });
 
           if (percentage >= 100) {
-            setProcessingStage((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    currentStep: 2,
-                    title: "Menyimpan ke Google Drive",
-                    description: `Mengamankan ${file.name} ke folder room ${roomCode.toUpperCase()} di Google Drive...`,
-                  }
-                : null
-            );
+            setProcessingStage({
+              currentStep: 2,
+              totalSteps: 3,
+              title: "Menyimpan ke Google Drive",
+              description: `Menyimpan ${file.name} ke Google Drive...`,
+            });
 
             stageTimerRef.current.push(
               setTimeout(() => {
-                setProcessingStage((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        currentStep: 3,
-                        title: "Menganalisis Dokumen",
-                        description: "Menghitung total halaman & mendaftarkan ke antrean panggung...",
-                      }
-                    : null
-                );
+                setProcessingStage({
+                  currentStep: 3,
+                  totalSteps: 3,
+                  title: "Menyiapkan Dokumen",
+                  description: "Menghitung total halaman & mendaftarkan ke antrean...",
+                });
               }, 1800)
             );
           }
@@ -530,101 +444,43 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
 
   return (
     <div className="space-y-4">
-      <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl backdrop-blur">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-          <div className="flex items-center space-x-2">
-            <Sparkles className="w-4 h-4 text-purple-400" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-purple-300">Add Stage Material</h4>
-          </div>
-          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Room: {roomCode}</span>
+      <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl backdrop-blur">
+        <div className="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-800/80">
+          <h4 className="text-xs font-semibold text-slate-200">Add Stage Material</h4>
+          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Room: {roomCode}</span>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 rounded-xl bg-slate-950/80 p-1 border border-slate-800">
+        <div className="mb-3.5 grid grid-cols-2 rounded-xl bg-slate-950/70 p-1 border border-slate-800/80">
           <button
             type="button"
             onClick={() => setActiveTab("link")}
             disabled={loading}
-            className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition ${
-              activeTab === "link" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
+            className={`flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              activeTab === "link" ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            <LinkIcon className="w-4 h-4" />
+            <LinkIcon className="w-3.5 h-3.5" />
             Link
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("file")}
             disabled={loading}
-            className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition ${
-              activeTab === "file" ? "bg-purple-600 text-white shadow" : "text-slate-400 hover:text-white"
+            className={`flex items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              activeTab === "file" ? "bg-slate-800 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-3.5 h-3.5" />
             File Upload
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 p-3.5 rounded-2xl bg-rose-950/80 border border-rose-800/60 text-rose-200 text-xs flex items-start space-x-2.5 shadow-lg">
+          <div className="mb-3.5 p-3 rounded-xl bg-rose-950/50 border border-rose-900/50 text-rose-300 text-xs flex items-start space-x-2.5">
             <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold">Gagal Menambahkan Materi</p>
-              <p className="text-rose-300/90 text-[11px] mt-0.5 leading-relaxed">{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* ─── LIVE PROCESSING STAGE TRACKER ──────────────────────────────────────── */}
-        {loading && processingStage && (
-          <div className="mb-4 p-4 rounded-2xl bg-purple-950/40 border border-purple-500/50 shadow-xl shadow-purple-950/30 animate-in fade-in duration-300">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-7 h-7 rounded-xl bg-purple-600/30 border border-purple-500/50 flex items-center justify-center text-purple-300 flex-shrink-0">
-                  <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
-                </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400 bg-purple-950 px-2 py-0.5 rounded-md border border-purple-800/60">
-                      Langkah {processingStage.currentStep} dari {processingStage.totalSteps}
-                    </span>
-                    <span className="text-xs font-bold text-white">{processingStage.title}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">{processingStage.description}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Visual Step Timeline */}
-            <div className="space-y-1.5 pt-2 border-t border-purple-900/40 mt-3">
-              {processingStage.stepsList.map((stepName, idx) => {
-                const stepNum = idx + 1;
-                const isDone = stepNum < processingStage.currentStep;
-                const isCurrent = stepNum === processingStage.currentStep;
-
-                return (
-                  <div
-                    key={stepName}
-                    className={`flex items-center space-x-2 text-[11px] transition-all ${
-                      isDone
-                        ? "text-emerald-400 font-medium"
-                        : isCurrent
-                        ? "text-purple-200 font-bold"
-                        : "text-slate-500"
-                    }`}
-                  >
-                    {isDone ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                    ) : isCurrent ? (
-                      <div className="w-3.5 h-3.5 rounded-full border-2 border-purple-400 border-t-transparent animate-spin flex-shrink-0" />
-                    ) : (
-                      <div className="w-3.5 h-3.5 rounded-full border border-slate-700 flex items-center justify-center text-[9px] flex-shrink-0 text-slate-600">
-                        {stepNum}
-                      </div>
-                    )}
-                    <span className="truncate">{stepName}</span>
-                  </div>
-                );
-              })}
+              <p className="font-semibold text-rose-200">Gagal menambahkan materi</p>
+              <p className="text-rose-300/80 text-[11px] mt-0.5 leading-relaxed">{error}</p>
             </div>
           </div>
         )}
@@ -633,11 +489,11 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
           <form onSubmit={handleUrlSubmit} className="space-y-3">
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-medium text-slate-400">Judul Presentasi (Opsional)</label>
+                <label className="block text-[11px] font-medium text-slate-400">Judul Presentasi (Opsional)</label>
                 {isDiscoveringTitle && (
-                  <span className="text-[10px] text-purple-400 animate-pulse font-medium flex items-center space-x-1">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    <span>Mendeteksi judul otomatis...</span>
+                  <span className="text-[10px] text-indigo-400 animate-pulse font-medium flex items-center space-x-1">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                    <span>Mendeteksi judul...</span>
                   </span>
                 )}
               </div>
@@ -647,16 +503,16 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
                 value={urlTitle}
                 onChange={(e) => setUrlTitle(e.target.value)}
                 placeholder="Otomatis diambil dari metadata atau isi nama kustom"
-                className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:border-purple-500 transition disabled:opacity-50"
+                className="w-full px-3 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-600 transition disabled:opacity-50"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1">
+              <label className="block text-[11px] font-medium text-slate-400 mb-1">
                 Tautan Google Drive / Canva / PDF / YouTube / Vimeo
               </label>
               <div className="relative">
-                <LinkIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
                 <input
                   type="url"
                   required
@@ -671,24 +527,48 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
                   }}
                   onBlur={(e) => autoFetchTitle(e.target.value)}
                   placeholder="https://drive.google.com/file/d/... / canva.com/design/... / file.pdf"
-                  className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:border-purple-500 font-mono transition disabled:opacity-50"
+                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950/80 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-600 font-mono transition disabled:opacity-50"
                 />
               </div>
             </div>
 
+            {/* ─── MINIMALIST DYNAMIC STATUS (Linear/Vercel Style) ─────────────── */}
+            {loading && processingStage && (
+              <div className="pt-2 pb-1 space-y-2 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center space-x-2 min-w-0 pr-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-300 flex-shrink-0" />
+                    <span className="text-slate-200 text-[11px] font-medium truncate">
+                      {processingStage.description}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-700/60 flex-shrink-0">
+                    {processingStage.currentStep}/{processingStage.totalSteps}
+                  </span>
+                </div>
+                {/* Hairline 2px Progress Indicator */}
+                <div className="w-full h-1 bg-slate-800/90 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-slate-200 rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${(processingStage.currentStep / processingStage.totalSteps) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading || !urlInput.trim()}
-              className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs transition glow-purple shadow-md cursor-pointer mt-2 flex items-center justify-center space-x-2"
+              className="w-full py-2.5 rounded-xl bg-white hover:bg-slate-100 disabled:bg-slate-800 disabled:text-slate-500 disabled:opacity-60 text-slate-950 font-semibold text-xs transition shadow-sm cursor-pointer mt-1 flex items-center justify-center space-x-1.5"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{processingStage ? processingStage.title : "Memproses Materi..."}</span>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                  <span>Memproses Materi...</span>
                 </>
               ) : (
                 <>
-                  <PlusIcon className="w-4 h-4" />
+                  <Plus className="w-3.5 h-3.5" />
                   <span>Tambahkan ke Antrean</span>
                 </>
               )}
@@ -700,10 +580,10 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
-            className={`rounded-2xl border-2 border-dashed p-5 transition ${
+            className={`rounded-xl border border-dashed p-4 transition ${
               dragActive
-                ? "bg-purple-950/80 border-purple-500 shadow-lg shadow-purple-500/20"
-                : "bg-slate-950/50 border-slate-700 hover:border-slate-600"
+                ? "bg-slate-800/50 border-slate-500"
+                : "bg-slate-950/40 border-slate-800 hover:border-slate-700"
             }`}
           >
             <input
@@ -715,64 +595,47 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
               className="hidden"
             />
 
-            <div className="flex flex-col items-center justify-center space-y-3 py-6">
-              <div className="w-12 h-12 rounded-2xl bg-purple-950/80 border border-purple-800/60 flex items-center justify-center text-purple-400 shadow-inner">
-                {loading ? <Cloud className="w-6 h-6 animate-pulse" /> : <FileText className="w-6 h-6" />}
+            <div className="flex flex-col items-center justify-center space-y-2.5 py-4">
+              <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/60 flex items-center justify-center text-slate-300">
+                <FileText className="w-5 h-5" />
               </div>
               <div className="text-center">
-                <p className="text-xs font-bold text-slate-200 mb-1">Drag & drop file presentasi di sini</p>
-                <p className="text-[11px] text-slate-400">PDF, Gambar, atau Video (tersimpan otomatis ke Google Drive)</p>
+                <p className="text-xs font-semibold text-slate-200">Drag & drop file presentasi di sini</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">PDF, Gambar, atau Video (tersimpan ke Google Drive)</p>
               </div>
               <button
                 type="button"
                 disabled={loading}
                 onClick={() => fileInputRef.current?.click()}
-                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold transition shadow glow-purple cursor-pointer flex items-center space-x-2"
+                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-100 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 text-xs font-semibold transition cursor-pointer flex items-center space-x-1.5 shadow-sm"
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>{processingStage?.title || "Mengunggah..."}</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Pilih Berkas dari Komputer</span>
-                  </>
-                )}
+                <Upload className="w-3.5 h-3.5" />
+                <span>Pilih Berkas Komputer</span>
               </button>
             </div>
 
+            {/* ─── FILE UPLOAD DYNAMIC STATUS ─────────────────────────────────── */}
             {uploadProgress !== null && (
-              <div className="mt-4 p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2.5">
+              <div className="mt-3 p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-purple-300 flex items-center space-x-1.5">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-purple-400" />
-                    <span>{uploadProgress.percentage < 100 ? "Mengunggah..." : "Menyimpan ke Google Drive..."}</span>
+                  <span className="text-slate-300 font-medium flex items-center space-x-1.5">
+                    <Loader2 className="w-3 h-3 animate-spin text-slate-400" />
+                    <span>{uploadProgress.percentage < 100 ? "Mengunggah berkas..." : "Menyimpan ke Google Drive..."}</span>
                   </span>
-                  <span className="font-mono text-white font-bold">{uploadProgress.percentage}%</span>
+                  <span className="font-mono text-slate-300 text-[11px]">{uploadProgress.percentage}%</span>
                 </div>
 
-                <div className="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-purple-600 to-indigo-500 transition-all duration-300 rounded-full"
+                    className="h-full bg-slate-200 transition-all duration-300 rounded-full"
                     style={{ width: `${uploadProgress.percentage}%` }}
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
-                  <div className="text-center">
-                    <p className="font-bold text-slate-200">{uploadProgress.uploadedMB} / {uploadProgress.totalMB} MB</p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Ukuran</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="font-bold text-slate-200">{uploadProgress.speedMBps}</p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Kecepatan</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="font-bold text-slate-200">{uploadProgress.remainingSeconds}</p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Estimasi</p>
-                  </div>
+                <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-0.5">
+                  <span>{uploadProgress.uploadedMB} / {uploadProgress.totalMB} MB</span>
+                  <span>{uploadProgress.speedMBps}</span>
+                  <span>sisa {uploadProgress.remainingSeconds}</span>
                 </div>
               </div>
             )}
@@ -780,13 +643,5 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
         )}
       </div>
     </div>
-  );
-}
-
-function PlusIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-    </svg>
   );
 }
