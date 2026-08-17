@@ -4,7 +4,7 @@ import { checkRateLimit } from "@/lib/security/rate-limit";
 import { MaterialStorageResolver } from "@/features/material/storage";
 import { applySecurityHeaders } from "@/lib/security/headers";
 import { RoomRegistry } from "@/lib/rooms/registry";
-import { getLocalRoomStateReadOnly } from "@/app/api/ws/route";
+import { getLocalRoomStateReadOnly, registerLocalRoomMaterial } from "@/app/api/ws/route";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { Material, StageSessionState } from "@/core/types";
 
@@ -48,48 +48,64 @@ async function getReadOnlyRoomState(request: Request, roomCode: string): Promise
 }
 
 /**
- * Dispatch MATERIAL_ADD command to the room (Durable Object in production,
- * local in-memory fallback in development). This ensures materi baru yang
- * diunggah langsung masuk ke state DO dan tidak hilang saat polling.
+ * Dispatch MATERIAL_ADD command to the room directly via Durable Object stub
+ * or in-memory registry. This guarantees the uploaded material is immediately part
+ * of the authoritative session state without risky loopback HTTP fetches.
  */
 async function dispatchMaterialAddCommand(
-  request: Request,
+  _request: Request,
   roomCode: string,
   deviceId: string,
-  material: Material
+  material: Material,
+  env?: Record<string, unknown>
 ): Promise<void> {
-  try {
-    const url = new URL(request.url);
-    const wsUrl = new URL("/api/ws", url.origin);
+  const upperCode = roomCode.toUpperCase();
+  const command = {
+    commandId: `material-add-${material.id}-${Date.now()}`,
+    type: "MATERIAL_ADD" as const,
+    senderDeviceId: deviceId,
+    payload: { material },
+    timestamp: Date.now(),
+  };
 
-    const command = {
-      commandId: `material-add-${material.id}-${Date.now()}`,
-      type: "MATERIAL_ADD",
-      senderDeviceId: deviceId,
-      payload: { material },
-      timestamp: Date.now(),
-    };
-
-    await fetch(wsUrl.toString(), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        cookie: request.headers.get("cookie") || "",
-        authorization: request.headers.get("authorization") || "",
-      },
-      body: JSON.stringify({
-        roomCode: roomCode.toUpperCase(),
-        deviceId,
-        command,
-      }),
-    });
-  } catch {
-    // Non-fatal: material already persisted to registry; client will sync on next poll
+  // 1. Direct Durable Object binding dispatch (Cloudflare Production)
+  if (env && env.STAGE_ROOM) {
+    try {
+      const stageRoomNs = env.STAGE_ROOM as {
+        idFromName: (name: string) => { toString: () => string };
+        get: (id: unknown) => { fetch: (req: Request) => Promise<Response> };
+      };
+      const doId = stageRoomNs.idFromName(upperCode);
+      const stub = stageRoomNs.get(doId);
+      const doUrl = new URL("http://internal-stage-room/");
+      doUrl.searchParams.set("roomCode", upperCode);
+      doUrl.searchParams.set("deviceId", deviceId);
+      await stub.fetch(
+        new Request(doUrl.toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomCode: upperCode,
+            deviceId,
+            command,
+          }),
+        })
+      );
+      return;
+    } catch (err) {
+      console.warn("[dispatchMaterialAddCommand] DO direct dispatch warning:", err);
+    }
   }
+
+  // 2. Direct in-memory sync for development & test runtime
+  registerLocalRoomMaterial(upperCode, material);
 }
 
 export async function POST(request: Request) {
   try {
+    const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
+    const env = (cfCtx?.env || process.env) as Record<string, unknown>;
+
     const contentType = request.headers.get("content-type") || "";
     let roomCode = "DEFAULT";
     let deviceId: string | null = null;
@@ -219,7 +235,7 @@ export async function POST(request: Request) {
     //    local in-memory in development). This is the single source of truth
     //    and ensures the material persists across polling cycles.
     const senderDeviceId = deviceId || `dev-host-${ownerUserId.slice(-8)}`;
-    await dispatchMaterialAddCommand(request, upperRoomCode, senderDeviceId, newMaterial);
+    await dispatchMaterialAddCommand(request, upperRoomCode, senderDeviceId, newMaterial, env);
 
     const response = NextResponse.json({
       success: true,

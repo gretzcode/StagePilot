@@ -330,18 +330,7 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
         return;
       }
 
-      if (!res.ok) {
-        throw new Error(json.message || json.error || "Gagal memproses link presentasi.");
-      }
-
-      const fallbackMat = await defaultPresentationAdapter.loadMaterial(
-        urlInput.trim(),
-        title,
-        validation.materialType
-      );
-      onMaterialAdded(fallbackMat);
-      setUrlInput("");
-      setUrlTitle("");
+      throw new Error(json.message || json.error || "Gagal memproses link presentasi.");
     } catch (err: unknown) {
       clearStageTimers();
       const errMsg = err instanceof Error ? err.message : "Gagal memproses link presentasi.";
