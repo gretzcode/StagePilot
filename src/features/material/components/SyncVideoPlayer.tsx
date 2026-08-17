@@ -8,6 +8,7 @@ import {
   Html5VideoAdapter,
   buildControlledYouTubeEmbedUrl,
 } from "../adapters/media-adapter";
+import { useAspectFit } from "../hooks/useAspectFit";
 import { Play, Pause } from "lucide-react";
 
 interface SyncVideoPlayerProps {
@@ -32,6 +33,14 @@ export function SyncVideoPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const adapterRef = useRef<IVideoPresentationAdapter | null>(null);
+
+  // Dynamic aspect ratio calculation
+  const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number }>({
+    width: 1920,
+    height: 1080,
+  });
+
+  const fit = useAspectFit(videoDimensions.width, videoDimensions.height);
 
   // Audio Routing: ONLY the audience display outputs audio. Host/Control and Confidence displays are always muted.
   const shouldUnmute = role === "audience";
@@ -152,6 +161,13 @@ export function SyncVideoPlayer({
   const handleVideoLoadedMetadata = () => {
     if (!videoRef.current || isEmbedVideo) return;
 
+    if (videoRef.current.videoWidth && videoRef.current.videoHeight) {
+      setVideoDimensions({
+        width: videoRef.current.videoWidth,
+        height: videoRef.current.videoHeight,
+      });
+    }
+
     if (adapterRef.current) {
       adapterRef.current.destroy();
     }
@@ -251,51 +267,60 @@ export function SyncVideoPlayer({
   const isPlaying = mediaState?.status === "playing";
 
   return (
-    <div className="w-full h-full bg-slate-950 flex items-center justify-center relative overflow-hidden select-none">
-      {/* Video Output Target */}
-      {isEmbedVideo ? (
-        <div className="w-full h-full relative flex items-center justify-center">
-          <iframe
-            key={embedUrl}
-            ref={iframeRef}
-            src={embedUrl}
-            onLoad={handleIframeLoad}
-            className="w-full h-full border-0 pointer-events-none select-none"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowFullScreen
-          />
-        </div>
-      ) : (
-        <video
-          key={url}
-          ref={videoRef}
-          src={url}
-          className="max-w-full max-h-full object-contain pointer-events-none select-none"
-          playsInline
-          muted
-          onLoadedMetadata={handleVideoLoadedMetadata}
-        />
-      )}
-
-      {/* Control Room Overlay: Click to Play/Pause & Status Feedback */}
-      {role === "control" && (
-        <div
-          onClick={() => {
-            if (isPlaying) {
-              onMediaPause?.(mediaState?.currentTime);
-            } else {
-              onMediaPlay?.(mediaState?.currentTime);
-            }
-          }}
-          className="absolute inset-0 z-20 cursor-pointer flex items-center justify-center group bg-transparent hover:bg-black/10 transition-colors"
-          title={isPlaying ? "Click to Pause" : "Click to Play"}
-        >
-          {/* Subtle Play/Pause watermark overlay visible on hover */}
-          <div className="w-16 h-16 rounded-full bg-slate-900/80 border border-slate-700/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-90 transition-opacity shadow-2xl backdrop-blur-sm">
-            {isPlaying ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 fill-white ml-0.5" />}
+    <div
+      ref={fit.containerRef}
+      className="w-full h-full bg-slate-950 flex items-center justify-center p-0 relative overflow-hidden select-none"
+    >
+      {/* Aspect-Ratio Stage Box: fits container constraint without distortion */}
+      <div
+        style={fit.style}
+        className="relative flex items-center justify-center overflow-hidden shrink-0 shadow-2xl transition-[width,height] duration-75"
+      >
+        {/* Video Output Target */}
+        {isEmbedVideo ? (
+          <div className="w-full h-full relative flex items-center justify-center">
+            <iframe
+              key={embedUrl}
+              ref={iframeRef}
+              src={embedUrl}
+              onLoad={handleIframeLoad}
+              className="w-full h-full border-0 pointer-events-none select-none"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
           </div>
-        </div>
-      )}
+        ) : (
+          <video
+            key={url}
+            ref={videoRef}
+            src={url}
+            className="w-full h-full object-contain pointer-events-none select-none"
+            playsInline
+            muted
+            onLoadedMetadata={handleVideoLoadedMetadata}
+          />
+        )}
+
+        {/* Control Room Overlay: Click to Play/Pause & Status Feedback */}
+        {role === "control" && (
+          <div
+            onClick={() => {
+              if (isPlaying) {
+                onMediaPause?.(mediaState?.currentTime);
+              } else {
+                onMediaPlay?.(mediaState?.currentTime);
+              }
+            }}
+            className="absolute inset-0 z-20 cursor-pointer flex items-center justify-center group bg-transparent hover:bg-black/10 transition-colors"
+            title={isPlaying ? "Click to Pause" : "Click to Play"}
+          >
+            {/* Subtle Play/Pause watermark overlay visible on hover */}
+            <div className="w-16 h-16 rounded-full bg-slate-900/80 border border-slate-700/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-90 transition-opacity shadow-2xl backdrop-blur-sm">
+              {isPlaying ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7 fill-white ml-0.5" />}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Error State Banner if Video Fails to Load */}
       {playerError && (

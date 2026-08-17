@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Material, MediaPlaybackState, SlideMetadata } from "@/core/types";
 import { PdfSlideViewer } from "./PdfSlideViewer";
 import { SyncVideoPlayer } from "./SyncVideoPlayer";
+import { useAspectFit } from "../hooks/useAspectFit";
 
 interface SlideViewerProps {
   material: Material | null;
@@ -20,6 +21,7 @@ interface SlideViewerProps {
   onMediaPause?: (currentTime?: number) => void;
   onMediaSeek?: (targetTime: number) => void;
   onMediaStop?: () => void;
+  onDurationDiscovered?: (duration: number) => void;
   onMediaDurationDiscovered?: (duration: number) => void;
 }
 
@@ -71,11 +73,32 @@ export function SlideViewer({
   onMediaPause,
   onMediaSeek,
   onMediaStop,
+  onDurationDiscovered,
   onMediaDurationDiscovered,
 }: SlideViewerProps) {
+  const handleDurationDiscovered = onDurationDiscovered || onMediaDurationDiscovered;
   const activeSlide = currentSlide ?? currentPage ?? 1;
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [renderError, _setRenderError] = useState<string | null>(null);
+
+  // Dynamic intrinsic dimensions of presentation content
+  const [contentDimensions, setContentDimensions] = useState<{ width: number; height: number }>({
+    width: material?.metadata?.width || 1920,
+    height: material?.metadata?.height || 1080,
+  });
+
+  const fit = useAspectFit(contentDimensions.width, contentDimensions.height);
+
+  const updateDimensionsFromImg = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { naturalWidth, naturalHeight } = e.currentTarget;
+    if (naturalWidth > 0 && naturalHeight > 0) {
+      setContentDimensions((prev) =>
+        prev.width === naturalWidth && prev.height === naturalHeight
+          ? prev
+          : { width: naturalWidth, height: naturalHeight }
+      );
+    }
+  }, []);
 
   const rawUrl = appendAssetAccessParams(material?.externalUrl || material?.url || "", deviceId);
   const isGoogleSlides = rawUrl.includes("docs.google.com/presentation");
@@ -240,7 +263,7 @@ export function SlideViewer({
         onMediaPause={onMediaPause}
         onMediaSeek={onMediaSeek}
         onMediaStop={onMediaStop}
-        onDurationDiscovered={onMediaDurationDiscovered}
+        onDurationDiscovered={handleDurationDiscovered}
       />
     );
   }
@@ -249,17 +272,17 @@ export function SlideViewer({
     // ── Google Slides: double-buffer crossfade rendering ──────────────────────
     if (isGoogleSlides && googlePresentationId && !useFallbackIframe) {
       return (
-        <div className="w-full h-full bg-slate-950 relative overflow-hidden flex items-center justify-center">
+        <div
+          ref={fit.containerRef}
+          className="w-full h-full bg-slate-950 flex items-center justify-center p-0 relative overflow-hidden select-none"
+        >
+          {/* Aspect-Ratio Stage Box */}
           <div
-            className={`w-full h-full relative flex items-center justify-center ${
+            style={fit.style}
+            className={`relative flex items-center justify-center overflow-hidden shrink-0 shadow-2xl transition-[width,height] duration-75 ${
               role !== "control" ? "pointer-events-none" : ""
             }`}
           >
-            {/* Two image layers stacked on top of each other.
-                The "front" layer is fully opaque; the "back" layer is invisible
-                while it loads the next slide. When the back layer fires onLoad,
-                both layers' opacities are swapped — a smooth crossfade with
-                zero black frames between slides. */}
             {(["a", "b"] as const).map((layer) => (
               <img
                 key={layer}
@@ -268,13 +291,13 @@ export function SlideViewer({
                 className="absolute inset-0 w-full h-full object-contain"
                 style={{
                   opacity: layers.front === layer ? 1 : 0,
-                  // 220ms is imperceptibly short in live presentation but long
-                  // enough to suppress any browser-repaint flicker.
                   transition: "opacity 220ms ease-in-out",
-                  // Only the front layer should receive pointer events
                   pointerEvents: layers.front === layer ? "auto" : "none",
                 }}
-                onLoad={() => handleLayerLoad(layer)}
+                onLoad={(e) => {
+                  updateDimensionsFromImg(e);
+                  handleLayerLoad(layer);
+                }}
                 onError={() => setUseFallbackIframe(true)}
               />
             ))}
@@ -287,8 +310,16 @@ export function SlideViewer({
     if (useFallbackIframe && isGoogleSlides && googlePresentationId) {
       const embedUrl = `https://docs.google.com/presentation/d/${googlePresentationId}/embed?rm=minimal&start=false&loop=false&delayms=60000#slide=id.p${activeSlide}`;
       return (
-        <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
-          <div className={`w-full h-full relative ${role !== "control" ? "pointer-events-none" : ""}`}>
+        <div
+          ref={fit.containerRef}
+          className="w-full h-full bg-slate-950 flex items-center justify-center p-0 relative overflow-hidden select-none"
+        >
+          <div
+            style={fit.style}
+            className={`relative flex items-center justify-center overflow-hidden shrink-0 shadow-2xl transition-[width,height] duration-75 ${
+              role !== "control" ? "pointer-events-none" : ""
+            }`}
+          >
             <iframe
               ref={iframeRef}
               key={`gslide-iframe-${googlePresentationId}`}
@@ -305,24 +336,34 @@ export function SlideViewer({
     // ── Canva Connect API: Native Slide Image Rendering (100% Synced) ───────
     if (material.type === "canva") {
       const activeSlideData = slide || material.slides?.[activeSlide - 1] || material.slides?.[0];
-      const slideImageUrl = activeSlideData?.contentUrl || material.metadata?.thumbnailUrl || activeSlideData?.thumbnailUrl;
+      const slideImageUrl =
+        activeSlideData?.contentUrl || material.metadata?.thumbnailUrl || activeSlideData?.thumbnailUrl;
 
       if (slideImageUrl && !slideImageUrl.includes("/design/") && !slideImageUrl.includes("/view")) {
         return (
-          <div className="w-full h-full bg-slate-950 flex items-center justify-center p-2 sm:p-4 overflow-hidden select-none">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={slideImageUrl}
-              alt={activeSlideData?.title || `${material.name} — Slide ${activeSlide}`}
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-150"
-            />
+          <div
+            ref={fit.containerRef}
+            className="w-full h-full bg-slate-950 flex items-center justify-center p-0 relative overflow-hidden select-none"
+          >
+            <div
+              style={fit.style}
+              className="relative flex items-center justify-center overflow-hidden shrink-0 shadow-2xl transition-[width,height] duration-75"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={slideImageUrl}
+                alt={activeSlideData?.title || `${material.name} — Slide ${activeSlide}`}
+                className="w-full h-full object-contain block shadow-2xl transition-opacity duration-150"
+                onLoad={updateDimensionsFromImg}
+              />
+            </div>
           </div>
         );
       }
 
       // If Canva material has no exported slide assets yet
       return (
-        <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none">
           <div className="w-12 h-12 rounded-2xl bg-purple-950/80 border border-purple-800/60 flex items-center justify-center text-purple-400 font-bold text-lg mb-3">
             C
           </div>
@@ -341,9 +382,15 @@ export function SlideViewer({
     const sandboxAttrs = "allow-scripts allow-same-origin allow-popups allow-forms";
 
     return (
-      <div className="w-full h-full bg-slate-950 relative overflow-hidden flex flex-col items-center justify-center">
+      <div
+        ref={fit.containerRef}
+        className="w-full h-full bg-slate-950 flex items-center justify-center p-0 relative overflow-hidden select-none"
+      >
         <div
-          className={`w-full h-full relative ${role !== "control" ? "pointer-events-none select-none" : ""}`}
+          style={fit.style}
+          className={`relative flex items-center justify-center overflow-hidden shrink-0 shadow-2xl transition-[width,height] duration-75 ${
+            role !== "control" ? "pointer-events-none select-none" : ""
+          }`}
         >
           <iframe
             ref={iframeRef}
@@ -362,13 +409,22 @@ export function SlideViewer({
 
   if (resolvedMediaType === "image" || material.type === "image") {
     return (
-      <div className="w-full h-full bg-slate-950 flex items-center justify-center p-4 overflow-hidden">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={slide?.contentUrl || material.url || rawUrl}
-          alt={material.name}
-          className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-opacity duration-150"
-        />
+      <div
+        ref={fit.containerRef}
+        className="w-full h-full bg-slate-950 flex items-center justify-center p-0 relative overflow-hidden select-none"
+      >
+        <div
+          style={fit.style}
+          className="relative flex items-center justify-center overflow-hidden shrink-0 shadow-2xl transition-[width,height] duration-75"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={slide?.contentUrl || material.url || rawUrl}
+            alt={material.name}
+            className="w-full h-full object-contain block shadow-2xl transition-opacity duration-150"
+            onLoad={updateDimensionsFromImg}
+          />
+        </div>
       </div>
     );
   }
