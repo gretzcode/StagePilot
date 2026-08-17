@@ -49,7 +49,6 @@ const interceptor = `const url = new URL(request.url);
                 const wsUrl = new URL(request.url);
                 wsUrl.searchParams.set("hostUserId", hostUserId);
                 wsUrl.searchParams.set("title", roomTitle);
-                console.log("⚡ [INJECTED WS INTERCEPTOR]", { roomCode, hostUserId, roomTitle, hasDO: Boolean(env.STAGE_ROOM) });
                 const doId = env.STAGE_ROOM.idFromName(roomCode);
                 const stub = env.STAGE_ROOM.get(doId);
                 return stub.fetch(new Request(wsUrl.toString(), request));

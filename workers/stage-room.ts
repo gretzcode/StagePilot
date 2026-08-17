@@ -53,13 +53,6 @@ export class StageRoom extends DurableObject {
         const deviceId = body.deviceId || "unknown-dev";
         const command = body.command;
 
-        console.log("🔌 [STAGE-ROOM DO POST]", {
-          roomCode,
-          deviceId,
-          commandType: command?.type,
-          payload: command?.payload,
-        });
-
         await this.ensureStateLoaded(roomCode, title, hostUserId);
 
         if (command && this.state) {
@@ -89,7 +82,6 @@ export class StageRoom extends DurableObject {
           this.state = CommandDispatcher.dispatch(this.state, command);
           await this.persistState();
           this.broadcastState();
-          console.log("✅ [STAGE-ROOM DO POST] Command applied successfully:", command.type);
         }
 
         return new Response(
@@ -98,7 +90,6 @@ export class StageRoom extends DurableObject {
         );
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Command error";
-        console.error("❌ [STAGE-ROOM DO POST ERROR]", err);
         return new Response(JSON.stringify({ error: msg }), { status: 500 });
       }
     }
@@ -115,6 +106,15 @@ export class StageRoom extends DurableObject {
     }
 
     const isHostRole = requestedRole === "host";
+
+    if (isHostRole) {
+      // Purge any stale previous host device entries so host count remains exactly 1
+      for (const id of Object.keys(this.state.devices)) {
+        if (id !== deviceId && (this.state.devices[id].role === "host" || this.state.devices[id].isHostDevice)) {
+          delete this.state.devices[id];
+        }
+      }
+    }
 
     // Register or update device connection status in state
     const existingDevice = this.state.devices[deviceId];
@@ -220,13 +220,6 @@ export class StageRoom extends DurableObject {
         const command = clientMsg.payload as StageCommand;
         command.senderDeviceId = senderDeviceId;
 
-        console.log("📨 [STAGE-ROOM DO wsMessage EXECUTE_COMMAND]", {
-          commandType: command.type,
-          senderDeviceId,
-          payload: command.payload,
-          roomCode: this.state?.session?.roomCode,
-        });
-
         if (!this.state) {
           throw new Error("Room state is uninitialized");
         }
@@ -238,11 +231,6 @@ export class StageRoom extends DurableObject {
         // Broadcast updated state to all connected WebSockets
         this.broadcastState();
 
-        console.log("✅ [STAGE-ROOM DO wsMessage SUCCESS]", command.type, {
-          newVersion: this.state.version,
-          deviceCount: Object.keys(this.state.devices).length,
-        });
-
         // Acknowledge command sender
         const ack: ServerMessage = {
           type: "COMMAND_ACK",
@@ -253,15 +241,8 @@ export class StageRoom extends DurableObject {
         ws.send(JSON.stringify(ack));
         return;
       }
-
-      console.warn("[STAGE-ROOM-UNKNOWN-EVENT]", {
-        type: (clientMsg as { type?: string })?.type || "RAW_UNKNOWN",
-        senderDeviceId,
-        timestamp: Date.now(),
-      });
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Internal command error";
-      console.error("💥 [STAGE-ROOM DO wsMessage ERROR]", err);
       const errResponse: ServerMessage = {
         type: "ERROR",
         code: "COMMAND_FAILED",
@@ -302,6 +283,21 @@ export class StageRoom extends DurableObject {
     const savedStateStr = await this.ctx.storage.get<string>("state");
     if (savedStateStr) {
       this.state = JSON.parse(savedStateStr);
+      // Deduplicate host devices in state: keep at most 1 active host device
+      if (this.state && this.state.devices) {
+        const devices = this.state.devices;
+        const hostIds = Object.keys(devices).filter(
+          (id) => devices[id]?.role === "host" || devices[id]?.isHostDevice
+        );
+        if (hostIds.length > 1) {
+          const primaryHostId = this.state.host.hostDeviceId || hostIds[0];
+          for (const id of hostIds) {
+            if (id !== primaryHostId) {
+              delete devices[id];
+            }
+          }
+        }
+      }
     } else {
       this.state = createInitialSessionState(roomCode, roomCode, title, hostUserId);
       await this.persistState();

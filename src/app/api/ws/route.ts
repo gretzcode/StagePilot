@@ -251,13 +251,6 @@ export async function POST(request: Request) {
       const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
       const env = (cfCtx?.env || process.env) as Record<string, unknown>;
 
-      console.log("🌐 [api/ws/POST] Incoming command:", {
-        roomCode,
-        deviceId,
-        commandType: command.type,
-        hasSTAGE_ROOM: Boolean(env && env.STAGE_ROOM),
-      });
-
       if (env && env.STAGE_ROOM) {
         const stageRoomNs = env.STAGE_ROOM as {
           idFromName: (name: string) => { toString: () => string };

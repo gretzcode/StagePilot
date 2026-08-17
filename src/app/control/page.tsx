@@ -44,41 +44,23 @@ function ControlRoomContent() {
 
   const handleApprove = useCallback(
     (targetDeviceId: string) => {
-      console.log("👉 [CONTROL UI] Clicked Approve for device:", targetDeviceId, {
-        senderDeviceId: deviceId,
-        isHost,
-        canManageDevices,
-        roomCode,
-      });
       dispatchCommand("DEVICE_APPROVE", { targetDeviceId });
     },
-    [dispatchCommand, deviceId, isHost, canManageDevices, roomCode]
+    [dispatchCommand]
   );
 
   const handleReject = useCallback(
     (targetDeviceId: string) => {
-      console.log("👉 [CONTROL UI] Clicked Reject for device:", targetDeviceId, {
-        senderDeviceId: deviceId,
-        isHost,
-        canManageDevices,
-        roomCode,
-      });
       dispatchCommand("DEVICE_REJECT", { targetDeviceId });
     },
-    [dispatchCommand, deviceId, isHost, canManageDevices, roomCode]
+    [dispatchCommand]
   );
 
   const handleRemove = useCallback(
     (targetDeviceId: string) => {
-      console.log("👉 [CONTROL UI] Clicked Remove for device:", targetDeviceId, {
-        senderDeviceId: deviceId,
-        isHost,
-        canManageDevices,
-        roomCode,
-      });
       dispatchCommand("DEVICE_REMOVE", { targetDeviceId });
     },
-    [dispatchCommand, deviceId, isHost, canManageDevices, roomCode]
+    [dispatchCommand]
   );
 
   // 1. Technical & Room Access Errors
@@ -109,7 +91,15 @@ function ControlRoomContent() {
 
   const allDevices = state ? Object.values(state.devices) : [];
   const pendingDevices = allDevices.filter((d) => d.approvalStatus === "pending");
-  const approvedDevices = allDevices.filter((d) => d.approvalStatus === "approved" || d.approvalStatus === "connected");
+
+  // Deduplicate host entries: exactly 1 host entry + all approved guest devices
+  const nonHostApproved = allDevices.filter(
+    (d) => (d.approvalStatus === "approved" || d.approvalStatus === "connected") && d.role !== "host" && !d.isHostDevice
+  );
+  const activeHostDevice = allDevices.find(
+    (d) => (d.approvalStatus === "approved" || d.approvalStatus === "connected") && (d.role === "host" || d.isHostDevice)
+  );
+  const approvedDevices = activeHostDevice ? [activeHostDevice, ...nonHostApproved] : nonHostApproved;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
