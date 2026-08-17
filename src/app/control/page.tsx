@@ -92,7 +92,7 @@ function ControlRoomContent() {
   const approvedDevices = allDevices.filter((d) => d.approvalStatus === "approved" || d.approvalStatus === "connected");
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col select-none">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       {/* Top Header Bar — Ultra-Clean Single Row */}
       <header className="h-14 px-3 sm:px-6 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between z-20">
         <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
@@ -157,16 +157,16 @@ function ControlRoomContent() {
                     </div>
                     <p className="text-[10px] text-slate-400 font-mono truncate">{device.id}</p>
 
-                    <div className="flex items-center space-x-1.5 pt-1">
+                    <div className="flex items-center space-x-2 pt-1">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleApprove(device.id);
                         }}
-                        className="relative before:absolute before:-inset-2 before:content-[''] flex-1 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 active:scale-95 text-white text-[10px] font-bold transition flex items-center justify-center space-x-1 shadow-sm touch-manipulation cursor-pointer select-none"
+                        className="flex-1 min-h-[36px] py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 active:scale-95 text-white text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-sm touch-manipulation cursor-pointer select-none"
                       >
-                        <CheckCircle className="w-3 h-3 pointer-events-none" />
+                        <CheckCircle className="w-3.5 h-3.5 pointer-events-none" />
                         <span className="pointer-events-none">Approve</span>
                       </button>
                       <button
@@ -175,10 +175,10 @@ function ControlRoomContent() {
                           e.stopPropagation();
                           handleReject(device.id);
                         }}
-                        className="relative before:absolute before:-inset-2 before:content-[''] px-2.5 py-1.5 rounded-xl bg-rose-950 border border-rose-800 hover:bg-rose-900 active:bg-rose-950 active:scale-95 text-rose-300 text-[10px] font-bold transition flex items-center justify-center touch-manipulation cursor-pointer select-none"
+                        className="min-h-[36px] min-w-[36px] px-3 py-2 rounded-xl bg-rose-950/80 border border-rose-800/80 hover:bg-rose-900 active:bg-rose-950 active:scale-95 text-rose-300 text-xs font-bold transition flex items-center justify-center touch-manipulation cursor-pointer select-none"
                         title="Reject Request"
                       >
-                        <XCircle className="w-3 h-3 pointer-events-none" />
+                        <XCircle className="w-3.5 h-3.5 pointer-events-none" />
                       </button>
                     </div>
                   </div>
@@ -222,10 +222,10 @@ function ControlRoomContent() {
                           e.stopPropagation();
                           handleRemove(device.id);
                         }}
-                        className="relative before:absolute before:-inset-2.5 before:content-[''] p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-400 active:bg-rose-900 active:text-rose-200 active:scale-95 text-slate-400 transition cursor-pointer touch-manipulation flex items-center justify-center select-none"
+                        className="min-h-[36px] min-w-[36px] p-2 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-400 active:bg-rose-900 active:text-rose-200 active:scale-95 text-slate-400 transition cursor-pointer touch-manipulation flex items-center justify-center select-none"
                         title="Revoke Permission"
                       >
-                        <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
+                        <Trash2 className="w-4 h-4 pointer-events-none" />
                       </button>
                     )}
                   </div>
@@ -352,7 +352,7 @@ function ControlRoomContent() {
                                 body: JSON.stringify({ materialId: mat.id }),
                               }).catch(() => {});
                             }}
-                            className="relative before:absolute before:-inset-2 before:content-[''] p-2.5 rounded-xl bg-slate-800 hover:bg-rose-950 hover:text-rose-400 active:bg-rose-900 active:text-rose-200 active:scale-95 text-slate-400 transition cursor-pointer flex-shrink-0 touch-manipulation flex items-center justify-center"
+                            className="min-h-[40px] min-w-[40px] p-2.5 rounded-xl bg-slate-800 hover:bg-rose-950 hover:text-rose-400 active:bg-rose-900 active:text-rose-200 active:scale-95 text-slate-400 transition cursor-pointer flex-shrink-0 touch-manipulation flex items-center justify-center select-none"
                             title="Delete Material Permanently from Database"
                           >
                             <Trash2 className="w-4 h-4 pointer-events-none" />
