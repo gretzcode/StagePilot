@@ -137,6 +137,19 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     return { data: await response.arrayBuffer(), mimeType: response.headers.get("content-type") };
   }
 
+  async getFileMetadata(fileId: string): Promise<{ name?: string; mimeType?: string; size?: number } | null> {
+    try {
+      const token = await this.getAccessToken();
+      const response = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,size`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return null;
+      return (await response.json().catch(() => null)) as { name?: string; mimeType?: string; size?: number } | null;
+    } catch {
+      return null;
+    }
+  }
+
   private async getReadyRecord(input: MaterialResolveInput): Promise<MaterialRecord> {
     const registry = new MaterialRegistryService(this.env);
     const record = await registry.getMaterialById(input.materialId);

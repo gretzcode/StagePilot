@@ -94,7 +94,10 @@ export async function GET(request: Request) {
       return new Response("Material ID required", { status: 400 });
     }
 
-    const registry = new MaterialRegistryService(process.env as Record<string, unknown>);
+    const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
+    const env = (cfCtx?.env || process.env) as Record<string, unknown>;
+
+    const registry = new MaterialRegistryService(env);
     const record = await registry.getMaterialById(materialId);
 
     if (!record || record.status === "deleted") {
@@ -119,35 +122,103 @@ export async function GET(request: Request) {
       if (!record.storageReference) {
         return new Response("No Google Drive file associated with this material.", { status: 404 });
       }
-      const provider = new GoogleDriveStorageProvider(process.env as Record<string, unknown>);
+      const provider = new GoogleDriveStorageProvider(env);
 
       const driveAsset = await provider.getFile(record.storageReference).catch(() => null);
       if (!driveAsset) {
         return new Response("Materi Google Drive tidak tersedia. Periksa koneksi storage atau unggah ulang materi.", { status: 502 });
       }
-      return new Response(driveAsset.data as unknown as BodyInit, {
+
+      const rawData = driveAsset.data;
+      const totalLength = rawData.byteLength;
+      const mimeType = driveAsset.mimeType || record.mimeType || "application/pdf";
+      const rangeHeader = request.headers.get("range");
+
+      if (rangeHeader && rangeHeader.startsWith("bytes=")) {
+        const parts = rangeHeader.replace("bytes=", "").split("-");
+        const start = parseInt(parts[0], 10) || 0;
+        const end = parts[1] ? parseInt(parts[1], 10) : totalLength - 1;
+
+        if (start >= totalLength || end >= totalLength || start > end) {
+          return new Response(null, {
+            status: 416,
+            headers: {
+              "Content-Range": `bytes */${totalLength}`,
+            },
+          });
+        }
+
+        const chunk = rawData.slice(start, end + 1);
+        return new Response(chunk as unknown as BodyInit, {
+          status: 206,
+          headers: {
+            "Content-Type": mimeType,
+            "Content-Range": `bytes ${start}-${end}/${totalLength}`,
+            "Content-Length": String(chunk.byteLength),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "private, max-age=3600",
+          },
+        });
+      }
+
+      return new Response(rawData as unknown as BodyInit, {
         status: 200,
         headers: {
-          "Content-Type": driveAsset.mimeType || record.mimeType || "application/octet-stream",
+          "Content-Type": mimeType,
+          "Content-Length": String(totalLength),
+          "Accept-Ranges": "bytes",
           "Cache-Control": "private, max-age=3600",
         },
       });
     }
 
-
     if (!record.objectKey) {
       return new Response("No binary asset associated with this material.", { status: 404 });
     }
 
-    const r2Asset = await getR2Object(process.env as Record<string, unknown>, record.objectKey);
+    const r2Asset = await getR2Object(env, record.objectKey);
     if (!r2Asset) {
       return new Response("Asset file not found in storage.", { status: 404 });
     }
 
-    return new Response(r2Asset.data as unknown as BodyInit, {
+    const rawData = r2Asset.data;
+    const totalLength = rawData.byteLength;
+    const mimeType = r2Asset.mimeType || record.mimeType || "application/octet-stream";
+    const rangeHeader = request.headers.get("range");
+
+    if (rangeHeader && rangeHeader.startsWith("bytes=")) {
+      const parts = rangeHeader.replace("bytes=", "").split("-");
+      const start = parseInt(parts[0], 10) || 0;
+      const end = parts[1] ? parseInt(parts[1], 10) : totalLength - 1;
+
+      if (start >= totalLength || end >= totalLength || start > end) {
+        return new Response(null, {
+          status: 416,
+          headers: {
+            "Content-Range": `bytes */${totalLength}`,
+          },
+        });
+      }
+
+      const chunk = rawData.slice(start, end + 1);
+      return new Response(chunk as unknown as BodyInit, {
+        status: 206,
+        headers: {
+          "Content-Type": mimeType,
+          "Content-Range": `bytes ${start}-${end}/${totalLength}`,
+          "Content-Length": String(chunk.byteLength),
+          "Accept-Ranges": "bytes",
+          "Cache-Control": "private, max-age=3600",
+        },
+      });
+    }
+
+    return new Response(rawData as unknown as BodyInit, {
       status: 200,
       headers: {
-        "Content-Type": r2Asset.mimeType || record.mimeType || "application/octet-stream",
+        "Content-Type": mimeType,
+        "Content-Length": String(totalLength),
+        "Accept-Ranges": "bytes",
         "Cache-Control": "private, max-age=3600",
       },
     });

@@ -5,7 +5,7 @@ import { checkRateLimit } from "@/lib/security/rate-limit";
 import { MaterialStorageResolver } from "@/features/material/storage";
 import { applySecurityHeaders } from "@/lib/security/headers";
 import { defaultPresentationAdapter } from "@/features/material/adapter";
-import { detectSlideCountFromUrl } from "@/features/material/validator";
+import { detectSlideCountFromUrl, resolvePdfFilename } from "@/features/material/validator";
 import { RoomRegistry } from "@/lib/rooms/registry";
 import { Material } from "@/core/types";
 import { CanvaService } from "@/features/integrations/canva/canva.service";
@@ -152,6 +152,8 @@ export async function POST(request: Request) {
       }
 
       let pdfArrayBuffer: ArrayBuffer | null = null;
+      let contentDispositionHeader: string | null = null;
+      let driveMetadataName: string | null = null;
 
       if (isGoogleDrivePdf) {
         const match =
@@ -166,6 +168,12 @@ export async function POST(request: Request) {
               { status: 400 }
             )
           );
+        }
+
+        // Try getting Google Drive metadata to extract the real filename
+        const meta = await googleProvider.getFileMetadata(fileId).catch(() => null);
+        if (meta?.name) {
+          driveMetadataName = meta.name;
         }
 
         try {
@@ -192,6 +200,8 @@ export async function POST(request: Request) {
                 const head = new TextDecoder("ascii").decode(new Uint8Array(buf.slice(0, 1024)));
                 if (head.includes("%PDF-")) {
                   pdfArrayBuffer = buf;
+                  const cd = res.headers.get("content-disposition");
+                  if (cd && !driveMetadataName) contentDispositionHeader = cd;
                   break;
                 }
               }
@@ -254,6 +264,8 @@ export async function POST(request: Request) {
           );
         }
 
+        contentDispositionHeader = res.headers.get("content-disposition");
+
         pdfArrayBuffer = await res.arrayBuffer();
         if (pdfArrayBuffer.byteLength < 4) {
           return applySecurityHeaders(
@@ -281,20 +293,13 @@ export async function POST(request: Request) {
         }
       }
 
-      // Determine clean filename
-      let fileName = "Presentation.pdf";
-      try {
-        const parsedUrl = new URL(urlString);
-        const segments = parsedUrl.pathname.split("/").filter(Boolean);
-        const lastSegment = segments[segments.length - 1];
-        if (lastSegment && lastSegment.toLowerCase().endsWith(".pdf")) {
-          fileName = decodeURIComponent(lastSegment.split("?")[0]);
-        } else if (title && title !== "External Presentation") {
-          fileName = `${title.replace(/[/\\?%*:|"<>]/g, "-")}.pdf`;
-        }
-      } catch {
-        fileName = "Presentation.pdf";
-      }
+      // Determine deterministic, clean filename
+      const fileName = resolvePdfFilename({
+        contentDisposition: contentDispositionHeader,
+        googleDriveName: driveMetadataName,
+        url: urlString,
+        userTitle: title,
+      });
 
       // Upload PDF bytes to Google Drive room folder
       const pdfBlob = new Blob([pdfArrayBuffer], { type: "application/pdf" });

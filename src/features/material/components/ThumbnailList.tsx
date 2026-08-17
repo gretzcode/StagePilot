@@ -163,13 +163,9 @@ interface PdfThumbnailListProps {
 
 function PdfThumbnailList({ material, currentSlide, currentPage, onSelectSlide, deviceId }: PdfThumbnailListProps) {
   const activeSlide = currentSlide ?? currentPage ?? 1;
-  const rawUrl = appendAssetAccessParams(material.externalUrl || material.url || "", deviceId);
-  const driveMatch = rawUrl.includes("drive.google.com")
-    ? rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/) || rawUrl.match(/[?&]id=([A-Za-z0-9_-]+)/)
-    : null;
-  const googleFileId = driveMatch ? driveMatch[1] : null;
+  const pdfUrl = appendAssetAccessParams(material.url || "", deviceId);
 
-  const { pdfDoc, numPages, loading, error } = usePdfDocument(rawUrl, googleFileId);
+  const { pdfDoc, numPages, loading, error } = usePdfDocument(pdfUrl);
 
   // Effective count: use real numPages from PDF.js when available, else fall back to material metadata
   const effectiveCount = numPages > 0 ? numPages : Math.max(material.totalPages || 1, 1);

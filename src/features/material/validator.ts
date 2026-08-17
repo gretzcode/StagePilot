@@ -195,6 +195,111 @@ export function isPdfMaterialStale(material: {
   return false;
 }
 
+export function extractFilenameFromContentDisposition(header: string | null | undefined): string | null {
+  if (!header || typeof header !== "string") return null;
+
+  // 1. Try filename*=UTF-8''... (RFC 5987)
+  const utf8Match = header.match(/filename\*\s*=\s*UTF-8''([^;\r\n]+)/i);
+  if (utf8Match && utf8Match[1]) {
+    try {
+      const decoded = decodeURIComponent(utf8Match[1].trim().replace(/^["']|["']$/g, ""));
+      if (decoded) return decoded;
+    } catch {
+      // Continue to next parser
+    }
+  }
+
+  // 2. Try quoted filename="..."
+  const quotedMatch = header.match(/filename\s*=\s*"([^"]+)"/i);
+  if (quotedMatch && quotedMatch[1]) {
+    const val = quotedMatch[1].trim();
+    if (val) return val;
+  }
+
+  // 3. Try unquoted filename=...
+  const plainMatch = header.match(/filename\s*=\s*([^;\s\r\n]+)/i);
+  if (plainMatch && plainMatch[1]) {
+    const val = plainMatch[1].trim().replace(/^["']|["']$/g, "");
+    if (val) return val;
+  }
+
+  return null;
+}
+
+export function sanitizePdfFilename(name: string | null | undefined, fallback = "Presentation.pdf"): string {
+  if (!name || typeof name !== "string") return fallback;
+  let cleaned = name.trim();
+
+  // Strip query strings or URL hashes if accidentally passed
+  cleaned = cleaned.split("?")[0].split("#")[0];
+
+  try {
+    cleaned = decodeURIComponent(cleaned);
+  } catch {
+    // Keep as is
+  }
+
+  // Remove path separators, directory traversal sequences, and forbidden path characters
+  cleaned = cleaned.replace(/[/\\?%*:|"<>]/g, " ");
+  cleaned = cleaned.replace(/\.\.+/g, " ");
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  // Remove leading/trailing dots and spaces
+  cleaned = cleaned.replace(/^\.+|\.+$/g, "").trim();
+
+  if (!cleaned) return fallback;
+
+  if (!cleaned.toLowerCase().endsWith(".pdf")) {
+    cleaned = `${cleaned}.pdf`;
+  }
+
+  return cleaned;
+}
+
+export function resolvePdfFilename(options: {
+  contentDisposition?: string | null;
+  url?: string | null;
+  googleDriveName?: string | null;
+  userTitle?: string | null;
+}): string {
+  // 1. Content-Disposition header
+  const cdName = extractFilenameFromContentDisposition(options.contentDisposition);
+  if (cdName) {
+    return sanitizePdfFilename(cdName);
+  }
+
+  // 2. Google Drive metadata name
+  if (options.googleDriveName && options.googleDriveName.trim()) {
+    return sanitizePdfFilename(options.googleDriveName);
+  }
+
+  // 3. URL pathname basename
+  if (options.url && typeof options.url === "string") {
+    try {
+      const parsed = new URL(options.url.trim());
+      const segments = parsed.pathname.split("/").filter(Boolean);
+      const last = segments[segments.length - 1];
+      if (last && last.toLowerCase().endsWith(".pdf")) {
+        return sanitizePdfFilename(last);
+      }
+    } catch {
+      // Invalid URL string
+    }
+  }
+
+  // 4. User provided title (if not default placeholder)
+  if (
+    options.userTitle &&
+    options.userTitle.trim() &&
+    options.userTitle.trim() !== "External Presentation" &&
+    options.userTitle.trim() !== "Presentation.pdf"
+  ) {
+    return sanitizePdfFilename(options.userTitle);
+  }
+
+  // 5. Safe canonical fallback
+  return "Presentation.pdf";
+}
+
 export function normalizeEmbedUrl(urlString: string): string {
   if (!urlString || typeof urlString !== "string") return urlString;
   const trimmed = urlString.trim();

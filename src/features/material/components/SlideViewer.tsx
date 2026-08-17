@@ -78,7 +78,6 @@ export function SlideViewer({
 
   const rawUrl = appendAssetAccessParams(material?.externalUrl || material?.url || "", deviceId);
   const isGoogleSlides = rawUrl.includes("docs.google.com/presentation");
-  const isGoogleDrive = rawUrl.includes("drive.google.com");
 
   const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
   const googlePresentationId = match ? match[1] : null;
@@ -216,10 +215,11 @@ export function SlideViewer({
   const resolvedMediaType = material.mediaType ?? material.type;
 
   // PDF files are served as PDF binary via /api/material/asset.
-  if (resolvedMediaType === "pdf" || material.type === "pdf" || isGoogleDrive) {
+  if (resolvedMediaType === "pdf" || material.type === "pdf") {
+    const pdfAssetUrl = appendAssetAccessParams(slide?.contentUrl || material.url || "", deviceId);
     return (
       <PdfSlideViewer
-        url={rawUrl}
+        url={pdfAssetUrl}
         currentSlide={activeSlide}
         role={role}
         title={material.name}
