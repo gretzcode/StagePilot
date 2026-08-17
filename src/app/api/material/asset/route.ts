@@ -123,8 +123,9 @@ export async function GET(request: Request) {
         return new Response("No Google Drive file associated with this material.", { status: 404 });
       }
       const provider = new GoogleDriveStorageProvider(env);
+      const rangeHeader = request.headers.get("range");
 
-      const driveAsset = await provider.getFile(record.storageReference).catch(() => null);
+      const driveAsset = await provider.getFile(record.storageReference, rangeHeader).catch(() => null);
       if (!driveAsset) {
         return new Response("Materi Google Drive tidak tersedia. Periksa koneksi storage atau unggah ulang materi.", { status: 502 });
       }
@@ -132,9 +133,21 @@ export async function GET(request: Request) {
       const rawData = driveAsset.data;
       const totalLength = rawData.byteLength;
       const mimeType = driveAsset.mimeType || record.mimeType || "application/pdf";
-      const rangeHeader = request.headers.get("range");
 
-      if (rangeHeader && rangeHeader.startsWith("bytes=")) {
+      if (rangeHeader && (driveAsset.status === 206 || rangeHeader.startsWith("bytes="))) {
+        if (driveAsset.contentRange) {
+          return new Response(rawData as unknown as BodyInit, {
+            status: 206,
+            headers: {
+              "Content-Type": mimeType,
+              "Content-Range": driveAsset.contentRange,
+              "Content-Length": String(totalLength),
+              "Accept-Ranges": "bytes",
+              "Cache-Control": "private, max-age=3600, immutable",
+            },
+          });
+        }
+
         const parts = rangeHeader.replace("bytes=", "").split("-");
         const start = parseInt(parts[0], 10) || 0;
         const end = parts[1] ? parseInt(parts[1], 10) : totalLength - 1;
@@ -156,7 +169,7 @@ export async function GET(request: Request) {
             "Content-Range": `bytes ${start}-${end}/${totalLength}`,
             "Content-Length": String(chunk.byteLength),
             "Accept-Ranges": "bytes",
-            "Cache-Control": "private, max-age=3600",
+            "Cache-Control": "private, max-age=3600, immutable",
           },
         });
       }
@@ -167,7 +180,7 @@ export async function GET(request: Request) {
           "Content-Type": mimeType,
           "Content-Length": String(totalLength),
           "Accept-Ranges": "bytes",
-          "Cache-Control": "private, max-age=3600",
+          "Cache-Control": "private, max-age=3600, immutable",
         },
       });
     }

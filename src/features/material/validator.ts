@@ -1,5 +1,6 @@
 import { MATERIAL_CONFIG } from "@/core/config/material";
 import { MaterialType, MaterialSourceType } from "@/core/types";
+import { estimatePdfPageCountFromBytes } from "./pdf-page-count";
 
 export interface ValidationResult {
   valid: boolean;
@@ -391,17 +392,9 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
 
           if (pdfRes.ok && (pdfRes.headers.get("content-type")?.includes("pdf") || pdfRes.headers.get("content-type")?.includes("octet-stream"))) {
             const arrayBuf = await pdfRes.arrayBuffer();
-            const text = new TextDecoder("latin1").decode(new Uint8Array(arrayBuf));
-            const countMatches = text.match(/\/Count\s+(\d+)/g);
-            if (countMatches) {
-              for (const m of countMatches) {
-                const num = parseInt(m.replace(/\/Count\s+/, ""), 10);
-                if (num > 0) return { totalPages: num };
-              }
-            }
-            const pageTypeMatches = text.match(/\/Type\s*\/Page\b/g);
-            if (pageTypeMatches && pageTypeMatches.length > 0) {
-              return { totalPages: pageTypeMatches.length };
+            const totalPages = estimatePdfPageCountFromBytes(arrayBuf);
+            if (totalPages && totalPages > 0) {
+              return { totalPages };
             }
           }
         } catch {

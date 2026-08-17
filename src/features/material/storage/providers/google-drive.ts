@@ -126,15 +126,35 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     await registry.deleteMaterial(input.materialId);
   }
 
-  async getFile(fileId: string): Promise<{ data: ArrayBuffer; mimeType: string | null }> {
+  async getFile(
+    fileId: string,
+    rangeHeader?: string | null
+  ): Promise<{
+    data: ArrayBuffer;
+    mimeType: string | null;
+    contentRange?: string | null;
+    contentLength?: string | null;
+    status: number;
+  }> {
     const token = await this.getAccessToken();
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+    if (rangeHeader) {
+      headers["Range"] = rangeHeader;
+    }
+
     const response = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
     });
-    if (!response.ok) {
+    if (!response.ok && response.status !== 206) {
       throw new Error("File Google Drive tidak tersedia.");
     }
-    return { data: await response.arrayBuffer(), mimeType: response.headers.get("content-type") };
+    return {
+      data: await response.arrayBuffer(),
+      mimeType: response.headers.get("content-type"),
+      contentRange: response.headers.get("content-range"),
+      contentLength: response.headers.get("content-length"),
+      status: response.status,
+    };
   }
 
   async getFileMetadata(fileId: string): Promise<{ name?: string; mimeType?: string; size?: number } | null> {
