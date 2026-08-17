@@ -26,32 +26,44 @@ export interface IVideoPresentationAdapter {
  * Extracts YouTube Video ID from any standard or embed URL.
  */
 export function extractYouTubeVideoId(url: string): string | null {
-  if (!url || typeof url !== "string") return null;
+  const result = extractYouTubeIds(url);
+  return result.videoId;
+}
+
+/**
+ * Extracts YouTube Video ID and/or Playlist ID from any standard URL.
+ */
+export function extractYouTubeIds(url: string): { videoId: string | null; listId: string | null } {
+  if (!url || typeof url !== "string") return { videoId: null, listId: null };
   try {
     const trimmed = url.trim();
     if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) {
-      return trimmed;
+      return { videoId: trimmed, listId: null };
     }
     const parsed = new URL(trimmed);
     const host = parsed.hostname.toLowerCase();
+    const listId = parsed.searchParams.get("list") || null;
+
     if (host.includes("youtu.be")) {
-      return parsed.pathname.slice(1).split("?")[0] || null;
+      return { videoId: parsed.pathname.slice(1).split("?")[0] || null, listId };
     }
     if (parsed.pathname.includes("/embed/")) {
-      return parsed.pathname.split("/embed/")[1].split("?")[0] || null;
+      const embedId = parsed.pathname.split("/embed/")[1].split("?")[0];
+      return { videoId: embedId === "videoseries" ? null : (embedId || null), listId };
     }
-    return parsed.searchParams.get("v") || null;
+    return { videoId: parsed.searchParams.get("v") || null, listId };
   } catch {
-    return null;
+    return { videoId: null, listId: null };
   }
 }
 
 /**
  * Builds a strictly controlled YouTube embed URL with native controls disabled.
+ * Supports single videos, playlists, and video+playlist combinations.
  */
 export function buildControlledYouTubeEmbedUrl(url: string, origin?: string, isMuted = true): string {
-  const videoId = extractYouTubeVideoId(url);
-  if (!videoId) return url;
+  const { videoId, listId } = extractYouTubeIds(url);
+  if (!videoId && !listId) return url;
 
   const params = new URLSearchParams({
     enablejsapi: "1",
@@ -66,12 +78,19 @@ export function buildControlledYouTubeEmbedUrl(url: string, origin?: string, isM
     modestbranding: "1",
   });
 
+  if (listId) {
+    params.set("list", listId);
+    params.set("listType", "playlist");
+  }
+
   if (origin && typeof origin === "string") {
     params.set("origin", origin);
     params.set("widget_referrer", origin);
   }
 
-  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+  // Playlist-only URL (no specific video): use /embed/videoseries
+  const embedPath = videoId || "videoseries";
+  return `https://www.youtube-nocookie.com/embed/${embedPath}?${params.toString()}`;
 }
 
 /**
