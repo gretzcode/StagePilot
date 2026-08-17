@@ -43,6 +43,15 @@ export function SyncVideoPlayer({
   const lastSeekSeqRef = useRef<number | undefined>(undefined);
   const hasTriedUnmuteRef = useRef(false);
 
+  // Reset player initialization flags when video URL changes (e.g. playlist slide switch)
+  useEffect(() => {
+    isInitializedRef.current = false;
+    hasTriedUnmuteRef.current = false;
+    lastStatusRef.current = undefined;
+    lastSeekSeqRef.current = undefined;
+    setPlayerError(null);
+  }, [url]);
+
   const isYouTube =
     url.includes("youtube.com") ||
     url.includes("youtube-nocookie.com") ||
