@@ -278,12 +278,15 @@ export function ThumbnailList({
     : null;
   const googleDriveFileId = driveMatch ? driveMatch[1] : null;
   const isPdf = material?.type === "pdf" || Boolean(googleDriveFileId);
+  const isVideo = material?.type === "video";
 
   const match = rawUrl.match(/\/presentation\/d\/([A-Za-z0-9_-]+)/);
   const googlePresentationId = match ? match[1] : null;
 
   const effectiveCount = isPdf
     ? 1
+    : isVideo
+    ? Math.max(material?.slides?.length || 0, material?.totalPages || 1, 1)
     : Math.max(
         placeholderCount || material?.totalPages || 1,
         material?.totalPages || 1,
@@ -300,7 +303,7 @@ export function ThumbnailList({
   // This means thumbnails self-discover the true slide count without relying
   // on a separate async scan running on a different page/component.
   //
-  const [revealedCount, setRevealedCount] = useState(1);
+  const [revealedCount, setRevealedCount] = useState(() => (isVideo ? effectiveCount : 1));
   const [localMax, setLocalMax] = useState(() => Math.max(effectiveCount, 1));
   const probeImgRef = useRef<HTMLImageElement | null>(null);
   const probeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -308,11 +311,15 @@ export function ThumbnailList({
   // Sync localMax upward when external effectiveCount grows (e.g. MATERIAL_ADD broadcast)
   useEffect(() => {
     setLocalMax((prev) => Math.max(prev, effectiveCount));
-  }, [effectiveCount]);
+    if (material?.type === "video") {
+      setRevealedCount(effectiveCount);
+    }
+  }, [effectiveCount, material?.type]);
 
   // Reset everything when switching to a different material
   useEffect(() => {
-    setRevealedCount(1);
+    const isVid = material?.type === "video";
+    setRevealedCount(isVid ? effectiveCount : 1);
     setLocalMax(Math.max(effectiveCount, 1));
     if (timerRef.current) clearTimeout(timerRef.current);
     if (probeTimeoutRef.current) clearTimeout(probeTimeoutRef.current);
@@ -323,16 +330,16 @@ export function ThumbnailList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [material?.id]);
 
-  // Sequential reveal timer — increments revealedCount by 1 every LOAD_INTERVAL ms
+  // Sequential reveal timer — increments revealedCount by 1 every LOAD_INTERVAL ms (skipped for video/PDF)
   useEffect(() => {
-    if (isPdf || revealedCount >= localMax) return;
+    if (isPdf || isVideo || revealedCount >= localMax) return;
     timerRef.current = setTimeout(() => {
       setRevealedCount((prev) => Math.min(prev + 1, localMax));
     }, LOAD_INTERVAL);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [revealedCount, localMax, isPdf]);
+  }, [revealedCount, localMax, isPdf, isVideo]);
 
   // Self-discovering probe — once all current slides are revealed and this is
   // a Google Slides presentation, attempt to load the NEXT slide image.
@@ -407,8 +414,6 @@ export function ThumbnailList({
   // ─────────────────────────────────────────────────────────────────────────
   // Non-PDF path (Google Slides, image, etc.)
   // ─────────────────────────────────────────────────────────────────────────
-
-  const isVideo = material.type === "video";
 
   const displaySlides = Array.from({ length: localMax }, (_, i) => {
     const slideIdx = i + 1;

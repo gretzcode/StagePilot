@@ -81,103 +81,178 @@ export interface PlaylistItem {
   url: string;
 }
 
+function extractPlaylistVideosFromData(
+  obj: unknown,
+  results: PlaylistItem[] = [],
+  seen = new Set<string>()
+): void {
+  if (!obj || typeof obj !== "object") return;
+
+  const record = obj as Record<string, unknown>;
+
+  if (record.playlistVideoRenderer && typeof record.playlistVideoRenderer === "object") {
+    const r = record.playlistVideoRenderer as Record<string, unknown>;
+    const videoId = r.videoId;
+    if (videoId && typeof videoId === "string" && !seen.has(videoId)) {
+      seen.add(videoId);
+
+      let title = "";
+      const titleObj = r.title as Record<string, unknown> | undefined;
+      if (titleObj?.runs && Array.isArray(titleObj.runs)) {
+        title = titleObj.runs.map((x: Record<string, unknown>) => (x.text as string) || "").join("").trim();
+      } else if (typeof titleObj?.simpleText === "string") {
+        title = titleObj.simpleText.trim();
+      }
+
+      if (!title) {
+        title = `Video ${results.length + 1}`;
+      }
+
+      let thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+      const thumbObj = r.thumbnail as Record<string, unknown> | undefined;
+      if (thumbObj?.thumbnails && Array.isArray(thumbObj.thumbnails) && thumbObj.thumbnails.length > 0) {
+        const last = thumbObj.thumbnails[thumbObj.thumbnails.length - 1] as Record<string, unknown>;
+        if (typeof last?.url === "string") {
+          thumbnailUrl = last.url;
+        }
+      }
+
+      results.push({
+        videoId,
+        title: decodeXmlEntities(title),
+        thumbnailUrl,
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+      });
+    }
+    return;
+  }
+
+  for (const key of Object.keys(record)) {
+    extractPlaylistVideosFromData(record[key], results, seen);
+  }
+}
+
 export async function fetchYouTubePlaylist(listId: string): Promise<{ title: string | null; items: PlaylistItem[] }> {
   const items: PlaylistItem[] = [];
   let playlistTitle: string | null = null;
+  const seenIds = new Set<string>();
 
-  // 1. Primary: YouTube Atom RSS Feed (official, free, fast XML endpoint for playlists)
+  // 1. Primary: YouTube Playlist HTML Scraping (Full list of up to 100+ videos from ytInitialData)
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
-    const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(listId)}`;
-    const res = await fetch(feedUrl, {
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const playlistUrl = `https://www.youtube.com/playlist?list=${encodeURIComponent(listId)}`;
+    const res = await fetch(playlistUrl, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Accept: "application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
     });
     clearTimeout(timeout);
 
     if (res.ok) {
-      const xml = await res.text();
+      const html = await res.text();
 
-      // Extract feed title
-      const feedTitleMatch = xml.match(/<title>([^<]+)<\/title>/);
-      if (feedTitleMatch && feedTitleMatch[1]) {
-        playlistTitle = decodeXmlEntities(feedTitleMatch[1]).trim();
+      // Extract playlist title from <title> or og:title
+      const ogTitleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i);
+      const titleTagMatch = html.match(/<title>([^<]+)<\/title>/i);
+      if (ogTitleMatch && ogTitleMatch[1]) {
+        playlistTitle = decodeXmlEntities(ogTitleMatch[1]).trim();
+      } else if (titleTagMatch && titleTagMatch[1]) {
+        playlistTitle = decodeXmlEntities(titleTagMatch[1].replace(/- YouTube$/i, "")).trim();
       }
 
-      // Extract all <entry> blocks
-      const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
-      let match: RegExpExecArray | null;
+      // Extract ytInitialData JSON
+      const ytInitialDataMatch = html.match(/(?:var\s+ytInitialData|window\["ytInitialData"\])\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
+      if (ytInitialDataMatch && ytInitialDataMatch[1]) {
+        try {
+          const initialData = JSON.parse(ytInitialDataMatch[1]);
+          extractPlaylistVideosFromData(initialData, items, seenIds);
+        } catch {
+          // Fall through to regex extraction
+        }
+      }
 
-      while ((match = entryRegex.exec(xml)) !== null) {
-        const entryXml = match[1];
-        const videoIdMatch = entryXml.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
-        const titleMatch = entryXml.match(/<title>([^<]+)<\/title>/);
-        const thumbMatch = entryXml.match(/<media:thumbnail\s+[^>]*url="([^"]+)"/);
+      // Regex fallback if ytInitialData parsing extracted nothing
+      if (items.length === 0) {
+        const videoIdMatches = Array.from(html.matchAll(/"videoId":"([A-Za-z0-9_-]{11})"/g)).map((m) => m[1]);
+        const uniqueIds = Array.from(new Set(videoIdMatches));
 
-        if (videoIdMatch && videoIdMatch[1]) {
-          const videoId = videoIdMatch[1].trim();
-          const title =
-            titleMatch && titleMatch[1]
-              ? decodeXmlEntities(titleMatch[1]).trim()
-              : `Video ${items.length + 1}`;
-          const thumbnailUrl =
-            thumbMatch && thumbMatch[1]
-              ? thumbMatch[1]
-              : `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-
-          items.push({
-            videoId,
-            title,
-            thumbnailUrl,
-            url: `https://www.youtube.com/watch?v=${videoId}`,
-          });
+        for (const vId of uniqueIds) {
+          if (!seenIds.has(vId)) {
+            seenIds.add(vId);
+            items.push({
+              videoId: vId,
+              title: `Video ${items.length + 1}`,
+              thumbnailUrl: `https://img.youtube.com/vi/${vId}/hqdefault.jpg`,
+              url: `https://www.youtube.com/watch?v=${vId}`,
+            });
+          }
         }
       }
     }
   } catch {
-    // Silently proceed to HTML fallback
+    // Silently fall back to RSS feed
   }
 
-  // 2. Fallback: YouTube Playlist HTML Scraping
+  // 2. Secondary Fallback: YouTube Atom RSS Feed (returns first 15 videos if HTML was blocked)
   if (items.length === 0) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 4000);
-      const playlistUrl = `https://www.youtube.com/playlist?list=${encodeURIComponent(listId)}`;
-      const res = await fetch(playlistUrl, {
+      const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(listId)}`;
+      const res = await fetch(feedUrl, {
         signal: controller.signal,
         headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Accept-Language": "en-US,en;q=0.9",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          Accept: "application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8",
         },
       });
       clearTimeout(timeout);
 
       if (res.ok) {
-        const html = await res.text();
+        const xml = await res.text();
 
-        // Extract title tag
-        const titleTagMatch = html.match(/<title>([^<]+)<\/title>/);
-        if (titleTagMatch && titleTagMatch[1]) {
-          playlistTitle = titleTagMatch[1].replace("- YouTube", "").trim();
+        if (!playlistTitle) {
+          const feedTitleMatch = xml.match(/<title>([^<]+)<\/title>/);
+          if (feedTitleMatch && feedTitleMatch[1]) {
+            playlistTitle = decodeXmlEntities(feedTitleMatch[1]).trim();
+          }
         }
 
-        // Match video IDs from ytInitialData or HTML
-        const videoIdMatches = Array.from(html.matchAll(/"videoId":"([A-Za-z0-9_-]{11})"/g)).map((m) => m[1]);
-        const uniqueIds = Array.from(new Set(videoIdMatches));
+        const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
+        let match: RegExpExecArray | null;
 
-        for (const vId of uniqueIds) {
-          items.push({
-            videoId: vId,
-            title: `Video ${items.length + 1}`,
-            thumbnailUrl: `https://img.youtube.com/vi/${vId}/hqdefault.jpg`,
-            url: `https://www.youtube.com/watch?v=${vId}`,
-          });
+        while ((match = entryRegex.exec(xml)) !== null) {
+          const entryXml = match[1];
+          const videoIdMatch = entryXml.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+          const titleMatch = entryXml.match(/<title>([^<]+)<\/title>/);
+          const thumbMatch = entryXml.match(/<media:thumbnail\s+[^>]*url="([^"]+)"/);
+
+          if (videoIdMatch && videoIdMatch[1]) {
+            const videoId = videoIdMatch[1].trim();
+            if (!seenIds.has(videoId)) {
+              seenIds.add(videoId);
+              const title =
+                titleMatch && titleMatch[1]
+                  ? decodeXmlEntities(titleMatch[1]).trim()
+                  : `Video ${items.length + 1}`;
+              const thumbnailUrl =
+                thumbMatch && thumbMatch[1]
+                  ? thumbMatch[1]
+                  : `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+              items.push({
+                videoId,
+                title,
+                thumbnailUrl,
+                url: `https://www.youtube.com/watch?v=${videoId}`,
+              });
+            }
+          }
         }
       }
     } catch {
