@@ -220,6 +220,8 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
                 broadcastChannel?.postMessage({ type: "SYNC_STATE", state: socketState });
               } catch {}
             }
+          } else if (msg.type === "ERROR") {
+            console.error("[useStageRoomSession] Server command error:", msg.message || msg);
           }
         } catch {
           // Ignore

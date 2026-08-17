@@ -12,7 +12,7 @@ export class PermissionPolicy {
     senderDeviceId: string,
     command: StageCommand
   ): PermissionCheckResult {
-    const sender = state.devices[senderDeviceId];
+    let sender = state.devices[senderDeviceId];
 
     // Room creation before device registration is allowed if senderId matches host or system
     if (command.type === "ROOM_CREATE" || command.type === "DEVICE_REQUEST_JOIN") {
@@ -21,7 +21,7 @@ export class PermissionPolicy {
 
     if (!sender) {
       // Auto-register missing sender device as an approved controller for zero-friction operation
-      state.devices[senderDeviceId] = {
+      sender = {
         id: senderDeviceId,
         name: "Stage Controller",
         userAgent: "System / Controller",
@@ -41,9 +41,10 @@ export class PermissionPolicy {
         lastSeenAt: Date.now(),
         isHostDevice: true,
       };
+      state.devices[senderDeviceId] = sender;
     }
 
-    const role = sender.role;
+    const role = sender.role || "host";
 
     // Audience and Confidence displays can NEVER send control commands
     if (role === "audience" || role === "confidence") {
