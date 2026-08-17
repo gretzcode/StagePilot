@@ -193,7 +193,7 @@ export async function GET(request: Request) {
         canControlTimer: isHostRole || requestedRole === "control",
         canControlBrief: isHostRole || requestedRole === "control",
         canBlankDisplay: isHostRole || requestedRole === "control",
-        canManageDevices: isHostRole,
+        canManageDevices: isHostRole || requestedRole === "control",
         canManageRoom: isHostRole,
         canTakeoverControl: isHostRole || requestedRole === "control",
       },

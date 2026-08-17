@@ -26,12 +26,14 @@ function ControlRoomContent() {
   const [deviceId] = useState(() => getPersistentDeviceId(requestedRole, roomCode, searchParams.get("deviceId")));
   const [showUploader, setShowUploader] = useState(false);
 
-  const { state, roomError, roomName, approvalStatus, dispatchCommand } = useStageRoomSession({
+  const { state, roomError, roomName, approvalStatus, myDevice, dispatchCommand } = useStageRoomSession({
     roomCode,
     role: requestedRole,
     deviceId,
     deviceName: isHost ? "Host Primary Controller" : "Brief Controller",
   });
+
+  const canManageDevices = isHost || (myDevice?.approvalStatus === "approved" && Boolean(myDevice?.permissions?.canManageDevices));
 
   useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
 
@@ -120,8 +122,8 @@ function ControlRoomContent() {
 
       {/* Main Workspace Body - Responsive Edge-to-Edge Layout */}
       <div className="flex-1 w-full px-3 sm:px-6 py-4 sm:py-6 flex flex-col lg:grid lg:grid-cols-12 gap-4 sm:gap-6 overflow-y-auto lg:overflow-hidden">
-        {/* Left Column: Device Authorization (Host Only - Compact Sidebar) */}
-        {isHost && (
+        {/* Left Column: Device Authorization (Host & Approved Controller - Compact Sidebar) */}
+        {canManageDevices && (
           <aside className="col-span-12 lg:col-span-3 space-y-4 border-b lg:border-b-0 lg:border-r border-slate-800/80 pb-4 lg:pb-0 pr-0 lg:pr-6 lg:overflow-y-auto lg:max-h-[calc(100vh-6rem)]">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5">
@@ -235,8 +237,8 @@ function ControlRoomContent() {
           </aside>
         )}
 
-        {/* Right Area: Brief & Stage Control Center (Full-Width for Non-Host, Grid for Host) */}
-        <main className={`${isHost ? "col-span-12 lg:col-span-9" : "col-span-12"} space-y-6 overflow-y-auto max-h-[calc(100vh-6rem)] pr-1`}>
+        {/* Right Area: Brief & Stage Control Center (Full-Width for Non-Manager, Grid for Manager) */}
+        <main className={`${canManageDevices ? "col-span-12 lg:col-span-9" : "col-span-12"} space-y-6 overflow-y-auto max-h-[calc(100vh-6rem)] pr-1`}>
 
           {/* Grid: Timer & Brief Controls */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

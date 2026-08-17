@@ -60,6 +60,16 @@ export class PermissionPolicy {
 
     // CONTROL role permissions check
     if (role === "control") {
+      if (sender.approvalStatus === "approved" && sender.permissions.canManageDevices) {
+        const allowedWithDeviceMgmt = [
+          "DEVICE_APPROVE",
+          "DEVICE_REJECT",
+          "DEVICE_REMOVE",
+        ];
+        if (allowedWithDeviceMgmt.includes(command.type)) {
+          return { allowed: true };
+        }
+      }
       return this.checkControlPermissions(state, sender, command);
     }
 
@@ -71,7 +81,6 @@ export class PermissionPolicy {
     _sender: DeviceState,
     command: StageCommand
   ): PermissionCheckResult {
-    // Restricted administrative commands for CONTROL
     const restrictedForControl = [
       "DEVICE_APPROVE",
       "DEVICE_REJECT",
@@ -121,6 +130,7 @@ export class PermissionPolicy {
       reason: `Command '${command.type}' is unauthorized for Control role`,
     };
   }
+
 
   static assertCanExecute(
     state: StageSessionState,

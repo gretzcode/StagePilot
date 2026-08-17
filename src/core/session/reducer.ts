@@ -94,8 +94,7 @@ export function stageSessionReducer(
     case "DEVICE_REMOVE": {
       const { targetDeviceId } = command.payload;
       if (nextState.devices[targetDeviceId]) {
-        nextState.devices[targetDeviceId].approvalStatus = "revoked";
-        nextState.devices[targetDeviceId].status = "offline";
+        delete nextState.devices[targetDeviceId];
         if (nextState.activeControllerDeviceId === targetDeviceId) {
           nextState.activeControllerDeviceId = nextState.host.hostDeviceId;
         }

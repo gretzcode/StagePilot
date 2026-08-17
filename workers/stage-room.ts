@@ -108,15 +108,6 @@ export class StageRoom extends DurableObject {
 
     const isHostRole = requestedRole === "host";
 
-    if (isHostRole) {
-      // Purge any stale previous host device entries so host count never increments on refresh/reconnect
-      for (const id of Object.keys(this.state.devices)) {
-        if (id !== deviceId && (this.state.devices[id].role === "host" || this.state.devices[id].isHostDevice)) {
-          delete this.state.devices[id];
-        }
-      }
-    }
-
     // Register or update device connection status in state
     const existingDevice = this.state.devices[deviceId];
     if (existingDevice) {
@@ -140,7 +131,7 @@ export class StageRoom extends DurableObject {
           canControlTimer: isHostRole || requestedRole === "control",
           canControlBrief: isHostRole || requestedRole === "control",
           canBlankDisplay: isHostRole || requestedRole === "control",
-          canManageDevices: isHostRole,
+          canManageDevices: isHostRole || requestedRole === "control",
           canManageRoom: isHostRole,
           canTakeoverControl: isHostRole || requestedRole === "control",
         },
