@@ -164,7 +164,7 @@ export async function POST(request: Request) {
     }
 
     // 3. Centralized Provider Resolution
-    const resolver = new MaterialStorageResolver(process.env as Record<string, unknown>);
+    const resolver = new MaterialStorageResolver(env);
     const isUploadAvailable = await resolver.isUploadAvailable();
 
     if (!isUploadAvailable) {
@@ -229,7 +229,9 @@ export async function POST(request: Request) {
         title: storedMaterial.title || file.name,
         pageCount: totalPages,
         fileSize: file.size,
-        mimeType: storedMaterial.mimeType,
+        mimeType: storedMaterial.mimeType || file.type || "application/pdf",
+        storageProvider: storedMaterial.storageProvider || "google_drive",
+        storageReference: storedMaterial.storageReference || storedMaterial.objectKey || undefined,
       },
     };
 

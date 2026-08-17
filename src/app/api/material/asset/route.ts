@@ -175,6 +175,40 @@ export async function GET(request: Request) {
     } else {
       const registry = new MaterialRegistryService(env);
       record = await registry.getMaterialById(materialId);
+
+      if (!record || record.status === "deleted") {
+        // Fallback: check authoritative StageRoom session state if roomCode is available
+        if (roomCode) {
+          const state = await getReadOnlyRoomState(request, roomCode);
+          const mat = state?.materials?.find((m: Material) => m.id === materialId);
+          if (mat) {
+            record = {
+              id: mat.id,
+              ownerUserId: mat.ownerUserId || state?.host?.hostUserId || "host",
+              roomCode: roomCode.toUpperCase(),
+              sourceType: mat.sourceType || "UPLOADED_FILE",
+              materialType: mat.type,
+              storageProvider:
+                (mat.metadata?.storageProvider as "google_drive" | "r2") ||
+                (mat.type === "pdf" ? "google_drive" : "external_url"),
+              storageReference:
+                mat.metadata?.storageReference || mat.objectKey || mat.externalUrl || undefined,
+              title: mat.name,
+              mimeType:
+                mat.metadata?.mimeType ||
+                (mat.type === "pdf" ? "application/pdf" : "application/octet-stream"),
+              sizeBytes: mat.metadata?.fileSize || 0,
+              objectKey: mat.objectKey,
+              externalUrl: mat.externalUrl,
+              slideCount: mat.totalPages || 1,
+              status: "ready",
+              createdAt: mat.uploadedAt || now,
+              expiresAt: mat.expiresAt || now + 3600000,
+            };
+          }
+        }
+      }
+
       if (record && record.status !== "deleted") {
         materialMetadataCache.set(materialId, { record, cachedAt: now });
       }

@@ -373,7 +373,7 @@ export async function POST(request: Request) {
     const slideCount = detection ? detection.totalPages : undefined;
 
     // 3. Delegate to MaterialStorageResolver ExternalUrlStorageProvider (for video, Google Slides, web pages)
-    const resolver = new MaterialStorageResolver(process.env as Record<string, unknown>);
+    const resolver = new MaterialStorageResolver(env);
     const urlProvider = resolver.getUrlProvider();
 
     const storedMaterial = await urlProvider.registerExternalUrl({

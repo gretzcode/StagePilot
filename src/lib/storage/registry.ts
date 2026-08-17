@@ -42,50 +42,56 @@ export class MaterialRegistryService {
   }
 
   async createMaterial(record: MaterialRecord): Promise<MaterialRecord> {
+    memoryD1Registry.set(record.id, record);
     if (this.d1Binding) {
-      const sql = `
-        INSERT INTO material_registry (
-          id, owner_user_id, room_code, source_type, material_type, title,
-          original_file_name, mime_type, size_bytes, object_key, external_url,
-          slide_count, status, created_at, expires_at, deleted_at,
-          storage_provider, storage_reference
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
-      await this.d1Binding
-        .prepare(sql)
-        .bind(
-          record.id,
-          record.ownerUserId,
-          record.roomCode || null,
-          record.sourceType,
-          record.materialType,
-          record.title,
-          record.originalFileName || null,
-          record.mimeType || null,
-          record.sizeBytes || 0,
-          record.objectKey || null,
-          record.externalUrl || null,
-          record.slideCount || 1,
-          record.status,
-          record.createdAt,
-          record.expiresAt,
-          record.deletedAt || null,
-          record.storageProvider || "external_url",
-          record.storageReference || record.externalUrl || record.objectKey || null
-        )
-        .run();
-    } else {
-      memoryD1Registry.set(record.id, record);
+      try {
+        const sql = `
+          INSERT INTO material_registry (
+            id, owner_user_id, room_code, source_type, material_type, title,
+            original_file_name, mime_type, size_bytes, object_key, external_url,
+            slide_count, status, created_at, expires_at, deleted_at,
+            storage_provider, storage_reference
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        await this.d1Binding
+          .prepare(sql)
+          .bind(
+            record.id,
+            record.ownerUserId,
+            record.roomCode || null,
+            record.sourceType,
+            record.materialType,
+            record.title,
+            record.originalFileName || null,
+            record.mimeType || null,
+            record.sizeBytes || 0,
+            record.objectKey || null,
+            record.externalUrl || null,
+            record.slideCount || 1,
+            record.status,
+            record.createdAt,
+            record.expiresAt,
+            record.deletedAt || null,
+            record.storageProvider || "external_url",
+            record.storageReference || record.externalUrl || record.objectKey || null
+          )
+          .run();
+      } catch (err) {
+        console.warn("[MaterialRegistryService] D1 insert failed, stored in memory fallback:", err);
+      }
     }
     return record;
   }
 
   async getMaterialById(id: string): Promise<MaterialRecord | null> {
     if (this.d1Binding) {
-      const sql = `SELECT * FROM material_registry WHERE id = ?`;
-      const row = await this.d1Binding.prepare(sql).bind(id).first<Record<string, unknown>>();
-      if (!row) return null;
-      return this.mapRowToRecord(row);
+      try {
+        const sql = `SELECT * FROM material_registry WHERE id = ?`;
+        const row = await this.d1Binding.prepare(sql).bind(id).first<Record<string, unknown>>();
+        if (row) return this.mapRowToRecord(row);
+      } catch (err) {
+        console.warn("[MaterialRegistryService] D1 getMaterialById query error:", err);
+      }
     }
 
     const record = memoryD1Registry.get(id);

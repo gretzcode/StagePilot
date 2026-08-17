@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { MaterialStorageResolver } from "@/features/material/storage";
 import { applySecurityHeaders } from "@/lib/security/headers";
 
 export async function GET(request: Request) {
   try {
+    const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
+    const env = (cfCtx?.env || process.env) as Record<string, unknown>;
+
     const { searchParams } = new URL(request.url);
     const materialId = searchParams.get("materialId") || searchParams.get("id");
     const roomCode = searchParams.get("roomCode");
@@ -13,7 +17,7 @@ export async function GET(request: Request) {
       return applySecurityHeaders(badReq);
     }
 
-    const resolver = new MaterialStorageResolver(process.env as Record<string, unknown>);
+    const resolver = new MaterialStorageResolver(env);
     const provider = await resolver.getProviderForMaterial(materialId);
     const resolved = await provider.resolve({ materialId, roomCode: roomCode || undefined });
 

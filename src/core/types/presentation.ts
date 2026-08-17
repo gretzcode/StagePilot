@@ -22,6 +22,8 @@ export interface MaterialMetadata {
   fileSize?: number;
   mimeType?: string;
   thumbnailUrl?: string;
+  storageProvider?: string;
+  storageReference?: string;
 }
 
 export interface Material {
