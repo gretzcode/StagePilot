@@ -33,7 +33,8 @@ export function SyncVideoPlayer({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const adapterRef = useRef<IVideoPresentationAdapter | null>(null);
 
-  const isMuted = role !== "control";
+  // Audio Routing: ONLY the audience display outputs audio. Host/Control and Confidence displays are always muted.
+  const isMuted = role !== "audience";
   const [playerError, setPlayerError] = useState<string | null>(null);
 
   // Track initialization and sequence updates
@@ -54,7 +55,7 @@ export function SyncVideoPlayer({
     if (!isEmbedVideo) return url;
     if (isYouTube) {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      return buildControlledYouTubeEmbedUrl(url, origin);
+      return buildControlledYouTubeEmbedUrl(url, origin, isMuted);
     }
     if (isVimeo) {
       try {
@@ -62,13 +63,14 @@ export function SyncVideoPlayer({
         parsed.searchParams.set("api", "1");
         parsed.searchParams.set("autoplay", "1");
         parsed.searchParams.set("controls", "0");
+        parsed.searchParams.set("muted", isMuted ? "1" : "0");
         return parsed.toString();
       } catch {
         return url;
       }
     }
     return url;
-  }, [url, isEmbedVideo, isYouTube, isVimeo]);
+  }, [url, isEmbedVideo, isYouTube, isVimeo, isMuted]);
 
   // Initialize Media Adapter for YouTube Iframe
   const handleIframeLoad = () => {
@@ -81,6 +83,7 @@ export function SyncVideoPlayer({
     const adapter = new YouTubeVideoAdapter(iframeRef.current, {
       onReady: () => {
         setPlayerError(null);
+        adapter.setMuted(isMuted);
       },
       onDuration: (duration) => {
         if (duration > 0 && role === "control") {
@@ -99,6 +102,7 @@ export function SyncVideoPlayer({
     });
 
     adapter.initHandshake();
+    adapter.setMuted(isMuted);
     adapterRef.current = adapter;
 
     // Synchronize initial state
@@ -136,6 +140,7 @@ export function SyncVideoPlayer({
     const adapter = new Html5VideoAdapter(videoRef.current, {
       onReady: () => {
         setPlayerError(null);
+        adapter.setMuted(isMuted);
       },
       onDuration: (duration) => {
         if (duration > 0 && role === "control") {
@@ -153,6 +158,7 @@ export function SyncVideoPlayer({
       },
     });
 
+    adapter.setMuted(isMuted);
     adapterRef.current = adapter;
 
     // Synchronize initial state

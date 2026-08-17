@@ -49,7 +49,7 @@ export function extractYouTubeVideoId(url: string): string | null {
 /**
  * Builds a strictly controlled YouTube embed URL with native controls disabled.
  */
-export function buildControlledYouTubeEmbedUrl(url: string, origin?: string): string {
+export function buildControlledYouTubeEmbedUrl(url: string, origin?: string, isMuted = true): string {
   const videoId = extractYouTubeVideoId(url);
   if (!videoId) return url;
 
@@ -61,7 +61,7 @@ export function buildControlledYouTubeEmbedUrl(url: string, origin?: string): st
     iv_load_policy: "3", // Suppress video annotations
     rel: "0", // Suppress unrelated videos
     autoplay: "1",
-    mute: "1",
+    mute: isMuted ? "1" : "0",
     playsinline: "1",
     modestbranding: "1",
   });

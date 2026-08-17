@@ -513,5 +513,37 @@ describe("Video Presentation Architecture & Single Controller (Phase 1-20)", () 
       expect(state.presentation.currentSlide).toBe(2);
       expect(state.presentation.currentSlideMetadata?.title).toBe("Product");
     });
+
+    it("15. buildControlledYouTubeEmbedUrl configures mute=0 for audience and mute=1 for others", () => {
+      const url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+      const audienceUrl = buildControlledYouTubeEmbedUrl(url, "https://stagepilot.live", false);
+      const controlUrl = buildControlledYouTubeEmbedUrl(url, "https://stagepilot.live", true);
+
+      expect(audienceUrl).toContain("mute=0");
+      expect(controlUrl).toContain("mute=1");
+    });
+
+    it("16. Media adapters support mute and unmute commands for role-based audio separation", () => {
+      const postMessageMock = vi.fn();
+      const mockIframe = {
+        contentWindow: {
+          postMessage: postMessageMock,
+        },
+      } as unknown as HTMLIFrameElement;
+
+      const ytAdapter = new YouTubeVideoAdapter(mockIframe);
+      ytAdapter.setMuted(false);
+      expect(postMessageMock).toHaveBeenCalledWith(
+        JSON.stringify({ event: "command", func: "unMute", args: "" }),
+        "*"
+      );
+
+      ytAdapter.setMuted(true);
+      expect(postMessageMock).toHaveBeenCalledWith(
+        JSON.stringify({ event: "command", func: "mute", args: "" }),
+        "*"
+      );
+      ytAdapter.destroy();
+    });
   });
 });
