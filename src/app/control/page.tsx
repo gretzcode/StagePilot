@@ -320,7 +320,9 @@ function ControlRoomContent() {
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400">
-                            {mat.type.toUpperCase()} • {mat.totalPages} SLIDES
+                            {mat.type === "video"
+                              ? (mat.totalPages > 1 ? `VIDEO PLAYLIST • ${mat.totalPages} VIDEOS` : "VIDEO")
+                              : `${mat.type.toUpperCase()} • ${mat.totalPages} SLIDES`}
                           </span>
 
                           {isLive ? (

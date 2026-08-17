@@ -28,6 +28,8 @@ import {
   PanelLeftOpen,
   Trash2,
   RefreshCw,
+  Film,
+  Video,
 } from "lucide-react";
 import { useStageRoomSession } from "@/core/realtime/useStageRoomSession";
 import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
@@ -103,6 +105,9 @@ function PresentationControlContent() {
 
   const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
   const isLiveVideo = Boolean(state?.presentation.isPresenting && activeMaterial?.type === "video");
+  const isLivePlaylist = Boolean(
+    isLiveVideo && ((activeMaterial?.totalPages || 0) > 1 || (activeMaterial?.slides?.length || 0) > 1)
+  );
 
   const [localVideoTime, setLocalVideoTime] = useState(0);
 
@@ -490,24 +495,26 @@ function PresentationControlContent() {
                 <button
                   onClick={() => setLeftTab("playlist")}
                   className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition flex items-center justify-center space-x-1.5 cursor-pointer ${
-                    leftTab === "playlist" || isLiveVideo ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-white"
+                    leftTab === "playlist" ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-white"
                   }`}
                 >
                   <ListVideo className="w-3.5 h-3.5" />
-                  <span>PLAYLIST ({state?.materials.length || 0})</span>
+                  <span>QUEUE ({state?.materials.length || 0})</span>
                 </button>
 
-                {!isLiveVideo && (
-                  <button
-                    onClick={() => setLeftTab("slides")}
-                    className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition flex items-center justify-center space-x-1.5 cursor-pointer ${
-                      leftTab === "slides" ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    <Layers className="w-3.5 h-3.5" />
-                    <span>SLIDES ({state?.presentation.totalPages || 0})</span>
-                  </button>
-                )}
+                <button
+                  onClick={() => setLeftTab("slides")}
+                  className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[11px] transition flex items-center justify-center space-x-1.5 cursor-pointer ${
+                    leftTab === "slides" ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {isLiveVideo ? <Video className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
+                  <span>
+                    {isLiveVideo
+                      ? `VIDEOS (${state?.presentation.totalPages || activeMaterial?.totalPages || activeMaterial?.slides?.length || 1})`
+                      : `SLIDES (${state?.presentation.totalPages || activeMaterial?.totalPages || 0})`}
+                  </span>
+                </button>
               </div>
 
               {/* Close Drawer Button (Mobile Only) */}
@@ -522,7 +529,7 @@ function PresentationControlContent() {
 
             {/* Left Column Content View */}
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-              {leftTab === "playlist" || isLiveVideo ? (
+              {leftTab === "playlist" ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Queue</span>
@@ -575,7 +582,9 @@ function PresentationControlContent() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
                                 <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400 block mb-0.5">
-                                  {mat.type === "video" ? "VIDEO" : `${mat.type.toUpperCase()} • ${mat.totalPages} SLIDES`}
+                                  {mat.type === "video"
+                                    ? (mat.totalPages > 1 ? `VIDEO PLAYLIST • ${mat.totalPages} VIDEOS` : "VIDEO")
+                                    : `${mat.type.toUpperCase()} • ${mat.totalPages} SLIDES`}
                                 </span>
                                 <h4 className="text-xs font-bold text-white line-clamp-1">{mat.name}</h4>
                               </div>
@@ -628,9 +637,7 @@ function PresentationControlContent() {
                                   <button
                                     onClick={() => {
                                       dispatchCommand("PRESENTATION_START", { materialId: mat.id, startPage: 1 });
-                                      if (mat.type !== "video") {
-                                        setLeftTab("slides");
-                                      }
+                                      setLeftTab("slides");
                                     }}
                                     className="flex-1 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 glow-purple cursor-pointer shadow"
                                   >
@@ -645,6 +652,14 @@ function PresentationControlContent() {
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </>
+                              ) : mat.type === "video" && mat.totalPages > 1 ? (
+                                <button
+                                  onClick={() => setLeftTab("slides")}
+                                  className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition flex items-center justify-center space-x-1.5 cursor-pointer"
+                                >
+                                  <Video className="w-3.5 h-3.5 text-purple-400" />
+                                  <span>VIEW VIDEOS LIST ({mat.totalPages})</span>
+                                </button>
                               ) : mat.type === "video" ? (
                                 <div className="w-full py-1.5 rounded-lg bg-purple-950/60 border border-purple-800/40 text-purple-300 font-mono text-[10px] flex items-center justify-center space-x-1.5">
                                   <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
@@ -667,13 +682,18 @@ function PresentationControlContent() {
                   </div>
                 </div>
               ) : (
-                /* Slides Thumbnails List View */
+                /* Slides / Videos Thumbnails List View */
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                      {activeMaterial?.name || "Active Presentation"}
+                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wider truncate mr-2">
+                      {isLiveVideo
+                        ? (activeMaterial?.totalPages && activeMaterial.totalPages > 1
+                            ? `Playlist (${activeMaterial.totalPages} Videos)`
+                            : "Video")
+                        : (activeMaterial?.name || "Active Presentation")}
                     </span>
-                    <span className="text-[10px] font-mono text-purple-400 font-bold">
+                    <span className="text-[10px] font-mono text-purple-400 font-bold shrink-0">
+                      {isLiveVideo ? "VIDEO " : "SLIDE "}
                       {state?.presentation.currentSlide || 1} / {state?.presentation.totalSlides || state?.presentation.totalPages || 1}
                     </span>
                   </div>
@@ -755,6 +775,33 @@ function PresentationControlContent() {
               {/* Playback Action Buttons */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center space-x-1.5 sm:space-x-2">
+                  {isLivePlaylist && (
+                    <div className="flex items-center space-x-1 mr-1 border-r border-slate-800 pr-2">
+                      <button
+                        onClick={() => dispatchCommand("SLIDE_PREVIOUS")}
+                        disabled={!state?.presentation.currentSlide || state.presentation.currentSlide <= 1}
+                        className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 hover:text-white transition cursor-pointer"
+                        title="Previous Video in Playlist"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="text-[10px] font-mono text-purple-300 font-bold px-1 whitespace-nowrap">
+                        #{state?.presentation.currentSlide || 1}/{state?.presentation.totalSlides || state?.presentation.totalPages || 1}
+                      </span>
+                      <button
+                        onClick={() => dispatchCommand("SLIDE_NEXT")}
+                        disabled={
+                          !state?.presentation.currentSlide ||
+                          state.presentation.currentSlide >= (state?.presentation.totalSlides || state?.presentation.totalPages || 1)
+                        }
+                        className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 hover:text-white transition cursor-pointer"
+                        title="Next Video in Playlist"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
                   <button
                     onClick={() => {
                       setLocalVideoTime(0);

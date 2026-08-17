@@ -21,10 +21,18 @@ interface ThumbnailItemProps {
   isSelected: boolean;
   thumbnailUrl: string | null;
   googlePresentationId?: string | null;
+  isVideo?: boolean;
   onSelectSlide: (pageNumber: number) => void;
 }
 
-function ThumbnailItem({ slide, isSelected, thumbnailUrl, googlePresentationId, onSelectSlide }: ThumbnailItemProps) {
+function ThumbnailItem({
+  slide,
+  isSelected,
+  thumbnailUrl,
+  googlePresentationId,
+  isVideo,
+  onSelectSlide,
+}: ThumbnailItemProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
   const [fallbackAttempt, setFallbackAttempt] = useState(0);
@@ -47,16 +55,19 @@ function ThumbnailItem({ slide, isSelected, thumbnailUrl, googlePresentationId, 
     }
   }, [currentSrc]);
 
+  const defaultItemTitle = isVideo ? `Video ${slide.index}` : `Slide ${slide.index}`;
+  const displayTitle = slide.title && slide.title !== `Slide ${slide.index}` ? slide.title : defaultItemTitle;
+
   return (
     <button
       onClick={() => onSelectSlide(slide.index)}
-      className={`w-full text-left rounded-2xl border transition-all duration-200 group overflow-hidden relative ${
+      className={`w-full text-left rounded-2xl border transition-all duration-200 group overflow-hidden relative cursor-pointer ${
         isSelected
           ? "border-purple-500 ring-2 ring-purple-500/40 bg-purple-950/30 shadow-xl"
           : "border-slate-800/90 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-800/60"
       }`}
     >
-      {/* 16:9 Aspect Ratio Mini Slide Preview Canvas */}
+      {/* 16:9 Aspect Ratio Mini Preview Canvas */}
       <div className={`w-full aspect-video relative flex flex-col justify-between p-3 overflow-hidden border-b border-slate-800/60 ${currentSrc && !imageError ? "bg-slate-950" : "bg-slate-900/80"}`}>
         {currentSrc && !imageError ? (
           <>
@@ -64,7 +75,7 @@ function ThumbnailItem({ slide, isSelected, thumbnailUrl, googlePresentationId, 
             <img
               ref={imgRef}
               src={currentSrc}
-              alt={slide.title || `Slide ${slide.index}`}
+              alt={displayTitle}
               onLoad={() => setIsLoading(false)}
               onError={() => {
                 if (fallbackAttempt === 0 && googlePresentationId) {
@@ -94,7 +105,7 @@ function ThumbnailItem({ slide, isSelected, thumbnailUrl, googlePresentationId, 
           </div>
         ) : null}
 
-        {/* Mini Slide Card Header Badge */}
+        {/* Mini Card Header Badge */}
         <div className="flex items-center justify-between z-10 relative">
           <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold ${
             isSelected ? "bg-purple-600 text-white" : "bg-slate-800/90 text-slate-300"
@@ -102,12 +113,16 @@ function ThumbnailItem({ slide, isSelected, thumbnailUrl, googlePresentationId, 
             #{slide.index.toString().padStart(2, "0")}
           </span>
 
-          {isSelected && (
+          {isSelected ? (
             <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white text-[9px] font-extrabold uppercase tracking-wider flex items-center space-x-1 animate-pulse">
               <Play className="w-2.5 h-2.5 fill-current" />
               <span>LIVE</span>
             </span>
-          )}
+          ) : isVideo ? (
+            <span className="p-1 rounded-full bg-slate-900/80 border border-slate-700/60 text-slate-300 group-hover:text-purple-300 transition">
+              <Play className="w-2.5 h-2.5 fill-current" />
+            </span>
+          ) : null}
         </div>
 
         {!thumbnailUrl && (
@@ -124,7 +139,7 @@ function ThumbnailItem({ slide, isSelected, thumbnailUrl, googlePresentationId, 
 
         <div className="z-10 relative">
           <span className="text-[10px] text-slate-300 font-medium block truncate drop-shadow">
-            Slide {slide.index}
+            {defaultItemTitle}
           </span>
         </div>
       </div>
@@ -132,7 +147,7 @@ function ThumbnailItem({ slide, isSelected, thumbnailUrl, googlePresentationId, 
       {/* Bottom Meta Bar */}
       <div className="px-3 py-1.5 flex items-center justify-between bg-slate-900/90">
         <span className={`text-[11px] font-semibold truncate ${isSelected ? "text-purple-300" : "text-slate-400 group-hover:text-white"}`}>
-          {slide.title || `Slide ${slide.index}`}
+          {displayTitle}
         </span>
         <span className="text-[10px] text-slate-500 font-mono">
           {isSelected ? "Active" : "Select"}
@@ -393,12 +408,15 @@ export function ThumbnailList({
   // Non-PDF path (Google Slides, image, etc.)
   // ─────────────────────────────────────────────────────────────────────────
 
+  const isVideo = material.type === "video";
+
   const displaySlides = Array.from({ length: localMax }, (_, i) => {
     const slideIdx = i + 1;
+    const defaultTitle = isVideo ? `Video ${slideIdx}` : `Slide ${slideIdx}`;
     return (
       material.slides?.[i] || {
         index: slideIdx,
-        title: `Slide ${slideIdx}`,
+        title: defaultTitle,
         url: rawUrl,
         contentUrl: rawUrl,
       }
@@ -417,7 +435,7 @@ export function ThumbnailList({
         <div className="mb-3 rounded-2xl border border-purple-500/20 bg-purple-950/20 p-3 shadow-inner">
           <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-400">
             <span>Preparing previews</span>
-            <span>{placeholderCount} slides</span>
+            <span>{placeholderCount} {isVideo ? "videos" : "slides"}</span>
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
             <div className="h-full w-2/3 animate-pulse rounded-full bg-gradient-to-r from-purple-500 via-fuchsia-500 to-violet-500" />
@@ -448,6 +466,7 @@ export function ThumbnailList({
               isSelected={isSelected}
               thumbnailUrl={thumbnailUrl ?? null}
               googlePresentationId={googlePresentationId}
+              isVideo={isVideo}
               onSelectSlide={onSelectSlide}
             />
           );
