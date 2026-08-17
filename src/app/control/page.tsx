@@ -122,7 +122,7 @@ function ControlRoomContent() {
       <div className="flex-1 w-full px-3 sm:px-6 py-4 sm:py-6 flex flex-col lg:grid lg:grid-cols-12 gap-4 sm:gap-6 overflow-y-auto lg:overflow-hidden">
         {/* Left Column: Device Authorization (Host Only - Compact Sidebar) */}
         {isHost && (
-          <aside className="col-span-12 lg:col-span-3 space-y-4 border-b lg:border-b-0 lg:border-r border-slate-800/80 pb-4 lg:pb-0 pr-0 lg:pr-6 overflow-y-auto max-h-[300px] lg:max-h-[calc(100vh-6rem)]">
+          <aside className="col-span-12 lg:col-span-3 space-y-4 border-b lg:border-b-0 lg:border-r border-slate-800/80 pb-4 lg:pb-0 pr-0 lg:pr-6 lg:overflow-y-auto lg:max-h-[calc(100vh-6rem)]">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5">
                 <Users className="w-4 h-4 text-purple-400" />
@@ -159,17 +159,26 @@ function ControlRoomContent() {
 
                     <div className="flex items-center space-x-1.5 pt-1">
                       <button
-                        onClick={() => handleApprove(device.id)}
-                        className="flex-1 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold transition flex items-center justify-center space-x-1 shadow-sm"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleApprove(device.id);
+                        }}
+                        className="relative before:absolute before:-inset-2 before:content-[''] flex-1 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 active:scale-95 text-white text-[10px] font-bold transition flex items-center justify-center space-x-1 shadow-sm touch-manipulation cursor-pointer select-none"
                       >
-                        <CheckCircle className="w-3 h-3" />
-                        <span>Approve</span>
+                        <CheckCircle className="w-3 h-3 pointer-events-none" />
+                        <span className="pointer-events-none">Approve</span>
                       </button>
                       <button
-                        onClick={() => handleReject(device.id)}
-                        className="px-2.5 py-1.5 rounded-xl bg-rose-950 border border-rose-800 hover:bg-rose-900 text-rose-300 text-[10px] font-bold transition flex items-center justify-center"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReject(device.id);
+                        }}
+                        className="relative before:absolute before:-inset-2 before:content-[''] px-2.5 py-1.5 rounded-xl bg-rose-950 border border-rose-800 hover:bg-rose-900 active:bg-rose-950 active:scale-95 text-rose-300 text-[10px] font-bold transition flex items-center justify-center touch-manipulation cursor-pointer select-none"
+                        title="Reject Request"
                       >
-                        <XCircle className="w-3 h-3" />
+                        <XCircle className="w-3 h-3 pointer-events-none" />
                       </button>
                     </div>
                   </div>
@@ -208,11 +217,15 @@ function ControlRoomContent() {
 
                     {!device.isHostDevice && (
                       <button
-                        onClick={() => handleRemove(device.id)}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-400 transition"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemove(device.id);
+                        }}
+                        className="relative before:absolute before:-inset-2.5 before:content-[''] p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-400 active:bg-rose-900 active:text-rose-200 active:scale-95 text-slate-400 transition cursor-pointer touch-manipulation flex items-center justify-center select-none"
                         title="Revoke Permission"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5 pointer-events-none" />
                       </button>
                     )}
                   </div>
@@ -318,17 +331,19 @@ function ControlRoomContent() {
 
                       <div className="pt-3 mt-3 border-t border-slate-800/80 flex items-center space-x-2">
                         <button
+                          type="button"
                           onClick={() => {
                             dispatchCommand("PRESENTATION_START", { materialId: mat.id, startPage: 1 });
                             router.push(`/control/presentation?roomCode=${encodeURIComponent(roomCode)}${isHost ? "&role=host" : "&role=control"}`);
                           }}
-                          className="flex-1 py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 glow-purple shadow-md cursor-pointer"
+                          className="flex-1 py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 active:bg-purple-700 active:scale-95 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 glow-purple shadow-md cursor-pointer touch-manipulation"
                         >
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>{isLive ? "VIEW LIVE PRESENTATION" : "GO LIVE / PRESENT"}</span>
+                          <Play className="w-3.5 h-3.5 fill-current pointer-events-none" />
+                          <span className="pointer-events-none">{isLive ? "VIEW LIVE PRESENTATION" : "GO LIVE / PRESENT"}</span>
                         </button>
                         {!isLive && (
                           <button
+                            type="button"
                             onClick={() => {
                               dispatchCommand("MATERIAL_REMOVE", { materialId: mat.id });
                               fetch("/api/material/delete", {
@@ -337,10 +352,10 @@ function ControlRoomContent() {
                                 body: JSON.stringify({ materialId: mat.id }),
                               }).catch(() => {});
                             }}
-                            className="p-2.5 rounded-xl bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-400 transition cursor-pointer flex-shrink-0"
+                            className="relative before:absolute before:-inset-2 before:content-[''] p-2.5 rounded-xl bg-slate-800 hover:bg-rose-950 hover:text-rose-400 active:bg-rose-900 active:text-rose-200 active:scale-95 text-slate-400 transition cursor-pointer flex-shrink-0 touch-manipulation flex items-center justify-center"
                             title="Delete Material Permanently from Database"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4 pointer-events-none" />
                           </button>
                         )}
                       </div>
