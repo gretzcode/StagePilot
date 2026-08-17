@@ -282,12 +282,22 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         timestamp: Date.now(),
       } as StageCommand;
 
+      console.log("🚀 [useStageRoomSession] dispatchCommand:", type, {
+        commandPayload,
+        wsState: socketRef.current ? socketRef.current.readyState : "NO_SOCKET",
+        deviceId,
+        role,
+      });
+
       // Optimistic local state update for 0ms UI responsiveness
       setState((prevState) => {
         if (!prevState) return prevState;
         try {
-          return stageSessionReducer(prevState, commandPayload);
-        } catch {
+          const next = stageSessionReducer(prevState, commandPayload);
+          console.log("⚡ [useStageRoomSession] Optimistic reducer SUCCESS for:", type);
+          return next;
+        } catch (err) {
+          console.error("❌ [useStageRoomSession] Optimistic reducer ERROR for:", type, err);
           return prevState;
         }
       });
@@ -295,6 +305,7 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
       // Try WebSocket send first
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
         try {
+          console.log("📤 [useStageRoomSession] Sending command via WebSocket:", type);
           socketRef.current.send(
             JSON.stringify({
               type: "EXECUTE_COMMAND",
@@ -302,13 +313,14 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
             })
           );
           return;
-        } catch {
-          // Fall back to HTTP POST
+        } catch (wsErr) {
+          console.warn("⚠️ [useStageRoomSession] WS send failed, falling back to HTTP POST:", wsErr);
         }
       }
 
       // HTTP POST fallback
       try {
+        console.log("🌐 [useStageRoomSession] Sending command via HTTP POST fallback:", type);
         const res = await fetch("/api/ws", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -319,17 +331,22 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
           }),
         });
 
+        console.log("🌐 [useStageRoomSession] HTTP POST response status:", res.status);
         if (res.ok) {
-          const data = (await res.json()) as { type?: string; state?: StageSessionState };
+          const data = (await res.json()) as { type?: string; state?: StageSessionState; error?: string };
+          console.log("🌐 [useStageRoomSession] HTTP POST response payload:", data);
           if (data.type === "SYNC_STATE" && data.state) {
             setState(data.state);
           }
+        } else {
+          const errBody = await res.text();
+          console.error("❌ [useStageRoomSession] HTTP POST error response:", res.status, errBody);
         }
-      } catch {
-        // Command dispatch error
+      } catch (postErr) {
+        console.error("❌ [useStageRoomSession] HTTP POST network failure:", postErr);
       }
     },
-    [normalizedRoomCode, deviceId]
+    [normalizedRoomCode, deviceId, role]
   );
 
   const myDevice = state?.devices ? state.devices[deviceId] : null;

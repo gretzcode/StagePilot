@@ -44,7 +44,6 @@ export class StageRoom extends DurableObject {
 
     // ── HTTP POST: command execution fallback (when WebSocket is unavailable) ──
     if (request.method === "POST") {
-
       try {
         const body = (await request.json().catch(() => ({}))) as {
           roomCode?: string;
@@ -53,6 +52,13 @@ export class StageRoom extends DurableObject {
         };
         const deviceId = body.deviceId || "unknown-dev";
         const command = body.command;
+
+        console.log("🔌 [STAGE-ROOM DO POST]", {
+          roomCode,
+          deviceId,
+          commandType: command?.type,
+          payload: command?.payload,
+        });
 
         await this.ensureStateLoaded(roomCode, title, hostUserId);
 
@@ -83,6 +89,7 @@ export class StageRoom extends DurableObject {
           this.state = CommandDispatcher.dispatch(this.state, command);
           await this.persistState();
           this.broadcastState();
+          console.log("✅ [STAGE-ROOM DO POST] Command applied successfully:", command.type);
         }
 
         return new Response(
@@ -91,6 +98,7 @@ export class StageRoom extends DurableObject {
         );
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Command error";
+        console.error("❌ [STAGE-ROOM DO POST ERROR]", err);
         return new Response(JSON.stringify({ error: msg }), { status: 500 });
       }
     }
@@ -199,6 +207,13 @@ export class StageRoom extends DurableObject {
         const command = clientMsg.payload as StageCommand;
         command.senderDeviceId = senderDeviceId;
 
+        console.log("📨 [STAGE-ROOM DO wsMessage EXECUTE_COMMAND]", {
+          commandType: command.type,
+          senderDeviceId,
+          payload: command.payload,
+          roomCode: this.state?.session?.roomCode,
+        });
+
         if (!this.state) {
           throw new Error("Room state is uninitialized");
         }
@@ -209,6 +224,11 @@ export class StageRoom extends DurableObject {
 
         // Broadcast updated state to all connected WebSockets
         this.broadcastState();
+
+        console.log("✅ [STAGE-ROOM DO wsMessage SUCCESS]", command.type, {
+          newVersion: this.state.version,
+          deviceCount: Object.keys(this.state.devices).length,
+        });
 
         // Acknowledge command sender
         const ack: ServerMessage = {
@@ -228,6 +248,7 @@ export class StageRoom extends DurableObject {
       });
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Internal command error";
+      console.error("💥 [STAGE-ROOM DO wsMessage ERROR]", err);
       const errResponse: ServerMessage = {
         type: "ERROR",
         code: "COMMAND_FAILED",

@@ -139,6 +139,20 @@ export class PermissionPolicy {
     command: StageCommand
   ): void {
     const result = this.canExecuteCommand(state, senderDeviceId, command);
+    console.log("🛡️ [PermissionPolicy.assertCanExecute]", {
+      commandType: command.type,
+      senderDeviceId,
+      allowed: result.allowed,
+      reason: result.reason,
+      deviceInState: state.devices[senderDeviceId]
+        ? {
+            role: state.devices[senderDeviceId].role,
+            status: state.devices[senderDeviceId].status,
+            approvalStatus: state.devices[senderDeviceId].approvalStatus,
+            canManageDevices: state.devices[senderDeviceId].permissions?.canManageDevices,
+          }
+        : "NOT_FOUND",
+    });
     if (!result.allowed) {
       throw new ForbiddenError(result.reason || "Permission denied");
     }

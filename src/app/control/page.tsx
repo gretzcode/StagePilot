@@ -44,23 +44,41 @@ function ControlRoomContent() {
 
   const handleApprove = useCallback(
     (targetDeviceId: string) => {
+      console.log("👉 [CONTROL UI] Clicked Approve for device:", targetDeviceId, {
+        senderDeviceId: deviceId,
+        isHost,
+        canManageDevices,
+        roomCode,
+      });
       dispatchCommand("DEVICE_APPROVE", { targetDeviceId });
     },
-    [dispatchCommand]
+    [dispatchCommand, deviceId, isHost, canManageDevices, roomCode]
   );
 
   const handleReject = useCallback(
     (targetDeviceId: string) => {
+      console.log("👉 [CONTROL UI] Clicked Reject for device:", targetDeviceId, {
+        senderDeviceId: deviceId,
+        isHost,
+        canManageDevices,
+        roomCode,
+      });
       dispatchCommand("DEVICE_REJECT", { targetDeviceId });
     },
-    [dispatchCommand]
+    [dispatchCommand, deviceId, isHost, canManageDevices, roomCode]
   );
 
   const handleRemove = useCallback(
     (targetDeviceId: string) => {
+      console.log("👉 [CONTROL UI] Clicked Remove for device:", targetDeviceId, {
+        senderDeviceId: deviceId,
+        isHost,
+        canManageDevices,
+        roomCode,
+      });
       dispatchCommand("DEVICE_REMOVE", { targetDeviceId });
     },
-    [dispatchCommand]
+    [dispatchCommand, deviceId, isHost, canManageDevices, roomCode]
   );
 
   // 1. Technical & Room Access Errors
