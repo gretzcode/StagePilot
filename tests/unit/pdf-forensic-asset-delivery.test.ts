@@ -100,6 +100,15 @@ describe("PDF Forensic Asset Delivery & Filename Resolution (Parts 1-13)", () =>
       expect(filename).toBe("Keynote Presentation 2026.pdf");
     });
 
+    it("Test 15: Explicit user-provided title takes highest priority over Google Drive metadata name and URL", () => {
+      const filename = resolvePdfFilename({
+        userTitle: "Presentasi Pembuka Keynote",
+        googleDriveName: "RawDocument_12345.pdf",
+        url: "https://drive.google.com/file/d/1BxiMVs0/view",
+      });
+      expect(filename).toBe("Presentasi Pembuka Keynote.pdf");
+    });
+
     it("Sanitizes path traversal and forbidden characters while preserving normal filenames", () => {
       expect(sanitizePdfFilename("../../etc/passwd.pdf")).toBe("etc passwd.pdf");
       expect(sanitizePdfFilename('Report "Final" <2026>.pdf')).toBe("Report Final 2026 .pdf");

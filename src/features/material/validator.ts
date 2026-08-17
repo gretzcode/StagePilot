@@ -261,10 +261,14 @@ export function resolvePdfFilename(options: {
   googleDriveName?: string | null;
   userTitle?: string | null;
 }): string {
-  // 1. Content-Disposition header
-  const cdName = extractFilenameFromContentDisposition(options.contentDisposition);
-  if (cdName) {
-    return sanitizePdfFilename(cdName);
+  // 1. User provided title (Highest priority: if user explicitly typed a title, respect it)
+  if (
+    options.userTitle &&
+    options.userTitle.trim() &&
+    options.userTitle.trim() !== "External Presentation" &&
+    options.userTitle.trim() !== "Presentation.pdf"
+  ) {
+    return sanitizePdfFilename(options.userTitle);
   }
 
   // 2. Google Drive metadata name
@@ -272,7 +276,13 @@ export function resolvePdfFilename(options: {
     return sanitizePdfFilename(options.googleDriveName);
   }
 
-  // 3. URL pathname basename
+  // 3. Content-Disposition header
+  const cdName = extractFilenameFromContentDisposition(options.contentDisposition);
+  if (cdName) {
+    return sanitizePdfFilename(cdName);
+  }
+
+  // 4. URL pathname basename
   if (options.url && typeof options.url === "string") {
     try {
       const parsed = new URL(options.url.trim());
@@ -284,16 +294,6 @@ export function resolvePdfFilename(options: {
     } catch {
       // Invalid URL string
     }
-  }
-
-  // 4. User provided title (if not default placeholder)
-  if (
-    options.userTitle &&
-    options.userTitle.trim() &&
-    options.userTitle.trim() !== "External Presentation" &&
-    options.userTitle.trim() !== "Presentation.pdf"
-  ) {
-    return sanitizePdfFilename(options.userTitle);
   }
 
   // 5. Safe canonical fallback

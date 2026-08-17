@@ -66,7 +66,8 @@ export class ExternalUrlStorageProvider implements MaterialStorageProvider {
       initialSlideCount
     );
 
-    const resolvedTitle = parsed.name || title;
+    const isCustomTitle = Boolean(input.title && input.title.trim() && input.title.trim() !== "External Presentation");
+    const resolvedTitle = isCustomTitle ? input.title.trim() : (parsed.name || title);
     const effectiveSlideCount = initialSlideCount || parsed.totalPages || 1;
 
     // 4. Save metadata reference in D1 (NO binary copy stored in StagePilot)
