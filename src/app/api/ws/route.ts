@@ -137,32 +137,25 @@ export async function GET(request: Request) {
     }
   }
 
-  // 3. Durable Object Upgrade for Cloudflare Workers Production Environment
-  if (process.env.NODE_ENV === "production") {
-    try {
-      let env: Record<string, unknown> | undefined;
-      try {
-        const cfCtx = await getCloudflareContext({ async: true });
-        env = cfCtx.env as Record<string, unknown>;
-      } catch {
-        env = process.env as Record<string, unknown>;
-      }
+  // 3. Durable Object Upgrade for Cloudflare Workers Environment
+  try {
+    const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
+    const env = (cfCtx?.env || process.env) as Record<string, unknown>;
 
-      if (env && env.STAGE_ROOM) {
-        const stageRoomNs = env.STAGE_ROOM as {
-          idFromName: (name: string) => { toString: () => string };
-          get: (id: unknown) => { fetch: (req: Request) => Promise<Response> };
-        };
-        const doId = stageRoomNs.idFromName(roomCode);
-        const stub = stageRoomNs.get(doId);
-        const doUrl = new URL(request.url);
-        doUrl.searchParams.set("hostUserId", roomRecord.hostUserId);
-        doUrl.searchParams.set("title", roomRecord.name);
-        return await stub.fetch(new Request(doUrl.toString(), request));
-      }
-    } catch {
-      // Fall through to local state handler
+    if (env && env.STAGE_ROOM) {
+      const stageRoomNs = env.STAGE_ROOM as {
+        idFromName: (name: string) => { toString: () => string };
+        get: (id: unknown) => { fetch: (req: Request) => Promise<Response> };
+      };
+      const doId = stageRoomNs.idFromName(roomCode);
+      const stub = stageRoomNs.get(doId);
+      const doUrl = new URL(request.url);
+      doUrl.searchParams.set("hostUserId", roomRecord.hostUserId);
+      doUrl.searchParams.set("title", roomRecord.name);
+      return await stub.fetch(new Request(doUrl.toString(), request));
     }
+  } catch (err) {
+    console.warn("[api/ws/GET] DO forward fallback:", err);
   }
 
   // 4. Local Dev / HTTP Fallback Handler
@@ -254,32 +247,25 @@ export async function POST(request: Request) {
     command.senderDeviceId = deviceId;
 
     // ── Durable Object Forwarding ───────────────────────────────────────────
-    if (process.env.NODE_ENV === "production") {
-      try {
-        let env: Record<string, unknown> | undefined;
-        try {
-          const cfCtx = await getCloudflareContext({ async: true });
-          env = cfCtx.env as Record<string, unknown>;
-        } catch {
-          env = process.env as Record<string, unknown>;
-        }
+    try {
+      const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
+      const env = (cfCtx?.env || process.env) as Record<string, unknown>;
 
-        if (env && env.STAGE_ROOM) {
-          const stageRoomNs = env.STAGE_ROOM as {
-            idFromName: (name: string) => { toString: () => string };
-            get: (id: unknown) => { fetch: (req: Request) => Promise<Response> };
-          };
-          const doId = stageRoomNs.idFromName(roomCode);
-          const stub = stageRoomNs.get(doId);
-          const doUrl = new URL(request.url);
-          doUrl.searchParams.set("roomCode", roomCode);
-          doUrl.searchParams.set("hostUserId", roomRecord.hostUserId);
-          doUrl.searchParams.set("title", roomRecord.name);
-          return await stub.fetch(new Request(doUrl.toString(), request));
-        }
-      } catch {
-        // Fall back to local room handling
+      if (env && env.STAGE_ROOM) {
+        const stageRoomNs = env.STAGE_ROOM as {
+          idFromName: (name: string) => { toString: () => string };
+          get: (id: unknown) => { fetch: (req: Request) => Promise<Response> };
+        };
+        const doId = stageRoomNs.idFromName(roomCode);
+        const stub = stageRoomNs.get(doId);
+        const doUrl = new URL(request.url);
+        doUrl.searchParams.set("roomCode", roomCode);
+        doUrl.searchParams.set("hostUserId", roomRecord.hostUserId);
+        doUrl.searchParams.set("title", roomRecord.name);
+        return await stub.fetch(new Request(doUrl.toString(), request));
       }
+    } catch (err) {
+      console.warn("[api/ws/POST] DO forward fallback:", err);
     }
 
     localRoom.state = CommandDispatcher.dispatch(localRoom.state, command);

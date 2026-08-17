@@ -178,7 +178,7 @@ export class StageRoom extends DurableObject {
     try {
       const clientMsg: ClientMessage = JSON.parse(message);
       const tags = this.ctx.getTags(ws);
-      const senderDeviceId = tags[0] || "unknown-device";
+      const tagSenderId = tags && tags.length > 0 ? tags[0] : undefined;
 
       // Hibernation state safety: Ensure state is loaded from storage after wake up
       await this.ensureStateLoaded("ROOM", "Stage Room", "host-user");
@@ -196,6 +196,7 @@ export class StageRoom extends DurableObject {
 
       if (clientMsg.type === "EXECUTE_COMMAND") {
         const command = clientMsg.payload as StageCommand;
+        const senderDeviceId = tagSenderId || command.senderDeviceId || "unknown-device";
         command.senderDeviceId = senderDeviceId;
 
         if (!this.state) {
