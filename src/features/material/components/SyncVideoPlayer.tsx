@@ -34,13 +34,14 @@ export function SyncVideoPlayer({
   const adapterRef = useRef<IVideoPresentationAdapter | null>(null);
 
   // Audio Routing: ONLY the audience display outputs audio. Host/Control and Confidence displays are always muted.
-  const isMuted = role !== "audience";
+  const shouldUnmute = role === "audience";
   const [playerError, setPlayerError] = useState<string | null>(null);
 
   // Track initialization and sequence updates
   const isInitializedRef = useRef(false);
   const lastStatusRef = useRef<string | undefined>(undefined);
   const lastSeekSeqRef = useRef<number | undefined>(undefined);
+  const hasTriedUnmuteRef = useRef(false);
 
   const isYouTube =
     url.includes("youtube.com") ||
@@ -50,12 +51,13 @@ export function SyncVideoPlayer({
   const isVimeo = url.includes("vimeo.com");
   const isEmbedVideo = isYouTube || isVimeo;
 
-  // Generate controlled embed URL with native controls stripped
+  // Generate controlled embed URL — always start MUTED for browser autoplay policy compliance.
+  // Audience devices will be unmuted programmatically after playback starts.
   const embedUrl = useMemo(() => {
     if (!isEmbedVideo) return url;
     if (isYouTube) {
       const origin = typeof window !== "undefined" ? window.location.origin : "";
-      return buildControlledYouTubeEmbedUrl(url, origin, isMuted);
+      return buildControlledYouTubeEmbedUrl(url, origin, true); // always muted for autoplay
     }
     if (isVimeo) {
       try {
@@ -63,14 +65,14 @@ export function SyncVideoPlayer({
         parsed.searchParams.set("api", "1");
         parsed.searchParams.set("autoplay", "1");
         parsed.searchParams.set("controls", "0");
-        parsed.searchParams.set("muted", isMuted ? "1" : "0");
+        parsed.searchParams.set("muted", "1"); // always muted for autoplay
         return parsed.toString();
       } catch {
         return url;
       }
     }
     return url;
-  }, [url, isEmbedVideo, isYouTube, isVimeo, isMuted]);
+  }, [url, isEmbedVideo, isYouTube, isVimeo]);
 
   // Initialize Media Adapter for YouTube Iframe
   const handleIframeLoad = () => {
@@ -83,11 +85,19 @@ export function SyncVideoPlayer({
     const adapter = new YouTubeVideoAdapter(iframeRef.current, {
       onReady: () => {
         setPlayerError(null);
-        adapter.setMuted(isMuted);
+        // Always start muted for autoplay
+        adapter.setMuted(true);
       },
       onDuration: (duration) => {
         if (duration > 0 && role === "control") {
           onDurationDiscovered?.(duration);
+        }
+      },
+      onStateChange: (state) => {
+        // Auto-unmute audience after playback starts (satisfies autoplay policy)
+        if (state === "playing" && shouldUnmute && !hasTriedUnmuteRef.current) {
+          hasTriedUnmuteRef.current = true;
+          setTimeout(() => adapter.setMuted(false), 300);
         }
       },
       onEnded: () => {
@@ -102,7 +112,7 @@ export function SyncVideoPlayer({
     });
 
     adapter.initHandshake();
-    adapter.setMuted(isMuted);
+    adapter.setMuted(true); // always start muted
     adapterRef.current = adapter;
 
     // Synchronize initial state
@@ -140,11 +150,19 @@ export function SyncVideoPlayer({
     const adapter = new Html5VideoAdapter(videoRef.current, {
       onReady: () => {
         setPlayerError(null);
-        adapter.setMuted(isMuted);
+        // Always start muted for autoplay
+        adapter.setMuted(true);
       },
       onDuration: (duration) => {
         if (duration > 0 && role === "control") {
           onDurationDiscovered?.(duration);
+        }
+      },
+      onStateChange: (state) => {
+        // Auto-unmute audience after playback starts (satisfies autoplay policy)
+        if (state === "playing" && shouldUnmute && !hasTriedUnmuteRef.current) {
+          hasTriedUnmuteRef.current = true;
+          setTimeout(() => adapter.setMuted(false), 300);
         }
       },
       onEnded: () => {
@@ -158,7 +176,7 @@ export function SyncVideoPlayer({
       },
     });
 
-    adapter.setMuted(isMuted);
+    adapter.setMuted(true); // always start muted
     adapterRef.current = adapter;
 
     // Synchronize initial state
@@ -245,7 +263,7 @@ export function SyncVideoPlayer({
           src={url}
           className="max-w-full max-h-full object-contain pointer-events-none select-none"
           playsInline
-          muted={isMuted}
+          muted
           onLoadedMetadata={handleVideoLoadedMetadata}
         />
       )}

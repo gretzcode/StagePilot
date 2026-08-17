@@ -217,6 +217,7 @@ export class Html5VideoAdapter implements IVideoPresentationAdapter {
 
   private onLoadedMetadata: () => void;
   private onTimeUpdate: () => void;
+  private onPlaying: () => void;
   private onEnded: () => void;
   private onError: () => void;
 
@@ -237,6 +238,11 @@ export class Html5VideoAdapter implements IVideoPresentationAdapter {
       this.callbacks.onTimeUpdate?.(this.video.currentTime);
     };
 
+    this.onPlaying = () => {
+      if (this.isDestroyed) return;
+      this.callbacks.onStateChange?.("playing");
+    };
+
     this.onEnded = () => {
       if (this.isDestroyed) return;
       this.callbacks.onStateChange?.("ended");
@@ -250,6 +256,7 @@ export class Html5VideoAdapter implements IVideoPresentationAdapter {
 
     this.video.addEventListener("loadedmetadata", this.onLoadedMetadata);
     this.video.addEventListener("timeupdate", this.onTimeUpdate);
+    this.video.addEventListener("playing", this.onPlaying);
     this.video.addEventListener("ended", this.onEnded);
     this.video.addEventListener("error", this.onError);
   }
@@ -282,6 +289,7 @@ export class Html5VideoAdapter implements IVideoPresentationAdapter {
     this.isDestroyed = true;
     this.video.removeEventListener("loadedmetadata", this.onLoadedMetadata);
     this.video.removeEventListener("timeupdate", this.onTimeUpdate);
+    this.video.removeEventListener("playing", this.onPlaying);
     this.video.removeEventListener("ended", this.onEnded);
     this.video.removeEventListener("error", this.onError);
   }
