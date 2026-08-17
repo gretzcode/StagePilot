@@ -102,6 +102,14 @@ export function PdfSlideViewer({
         if (isMounted) {
           setPageRendering(false);
           renderTaskRef.current = null;
+
+          // Proactively warm up adjacent pages in PDF.js worker cache
+          if (pageNum + 1 <= pdfDoc.numPages) {
+            pdfDoc.getPage(pageNum + 1).catch(() => {});
+          }
+          if (pageNum - 1 >= 1) {
+            pdfDoc.getPage(pageNum - 1).catch(() => {});
+          }
         }
       })
       .catch((err: unknown) => {

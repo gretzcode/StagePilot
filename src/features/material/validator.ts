@@ -518,3 +518,19 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
 
   return null;
 }
+
+export function appendAssetAccessParams(url: string, deviceId?: string): string {
+  if (!url || !deviceId) return url;
+  if (!url.startsWith("/api/material/asset")) return url;
+  try {
+    const isAbsolute = url.startsWith("http://") || url.startsWith("https://");
+    const parsed = new URL(url, isAbsolute ? undefined : "http://localhost");
+    if (!parsed.searchParams.has("deviceId")) {
+      parsed.searchParams.set("deviceId", deviceId);
+    }
+    return isAbsolute ? parsed.toString() : `${parsed.pathname}${parsed.search}`;
+  } catch {
+    const separator = url.includes("?") ? "&" : "?";
+    return `${url}${separator}deviceId=${encodeURIComponent(deviceId)}`;
+  }
+}

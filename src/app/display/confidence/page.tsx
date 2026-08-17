@@ -12,6 +12,7 @@ import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { useTimerTicker } from "@/features/timer/hooks/useTimerTicker";
 import { useAutoHideCursor } from "@/core/hooks/useAutoHideCursor";
 import { formatStageTimer } from "@/features/timer/utils/timer-formatter";
+import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
 
 function getBriefFontSize(length: number): string {
   if (length <= 35) return "text-5xl sm:text-6xl md:text-7xl lg:text-8xl";
@@ -33,6 +34,8 @@ function ConfidenceDisplayContent() {
     deviceId,
     deviceName: "Confidence Display",
   });
+
+  useMaterialQueuePreloader(state?.materials, deviceId);
 
   const now = useTimerTicker(state?.timer.status === "running");
 

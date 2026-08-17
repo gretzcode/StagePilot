@@ -9,6 +9,7 @@ import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { useAutoHideCursor } from "@/core/hooks/useAutoHideCursor";
+import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
 
 function AudienceDisplayContent() {
   const searchParams = useSearchParams();
@@ -23,6 +24,8 @@ function AudienceDisplayContent() {
     deviceId,
     deviceName: "Audience Display",
   });
+
+  useMaterialQueuePreloader(state?.materials, deviceId);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {

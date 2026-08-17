@@ -35,6 +35,7 @@ import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
 import { isCanvaMaterialStale, isPdfMaterialStale } from "@/features/material/validator";
+import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
 
 function formatVideoTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return "00:00";
@@ -58,6 +59,8 @@ function PresentationControlContent() {
     deviceId,
     deviceName: requestedRole === "host" ? "Host Primary Controller" : "Presentation Controller",
   });
+
+  useMaterialQueuePreloader(state?.materials, deviceId);
 
   // Keyboard Navigation & Shortcuts
   useEffect(() => {

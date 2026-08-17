@@ -19,6 +19,37 @@ async function loadPdfDocument(fetchTarget: string): Promise<PDFDocumentProxy> {
   return pdfjsLib.getDocument(fetchTarget).promise;
 }
 
+/**
+ * Proactively preload and parse a PDF document in background memory
+ * so that when the user starts the presentation (Go Live), it opens with 0ms delay.
+ */
+export function preloadPdfDocument(url: string): Promise<PDFDocumentProxy | null> {
+  if (!url || typeof window === "undefined") return Promise.resolve(null);
+  const cacheKey = url;
+  if (pdfDocCache.has(cacheKey)) {
+    return Promise.resolve(pdfDocCache.get(cacheKey)!);
+  }
+  if (pdfLoadingPromises.has(cacheKey)) {
+    return pdfLoadingPromises.get(cacheKey)!;
+  }
+
+  const fetchTarget = buildFetchTarget(url);
+  const loadPromise = loadPdfDocument(fetchTarget);
+  pdfLoadingPromises.set(cacheKey, loadPromise);
+
+  return loadPromise
+    .then((doc) => {
+      pdfDocCache.set(cacheKey, doc);
+      pdfLoadingPromises.delete(cacheKey);
+      return doc;
+    })
+    .catch((err: unknown) => {
+      pdfLoadingPromises.delete(cacheKey);
+      console.warn("[PDF Preloader] Background preload skipped or failed:", err);
+      return null;
+    });
+}
+
 interface UsePdfDocumentResult {
   pdfDoc: PDFDocumentProxy | null;
   numPages: number;

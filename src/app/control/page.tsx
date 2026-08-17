@@ -13,6 +13,7 @@ import { BriefControl } from "@/features/brief/components/BriefControl";
 import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
 import { MaterialUploader } from "@/features/material/components/MaterialUploader";
 import { Material } from "@/core/types";
+import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
 
 function ControlRoomContent() {
   const router = useRouter();
@@ -31,6 +32,8 @@ function ControlRoomContent() {
     deviceId,
     deviceName: isHost ? "Host Primary Controller" : "Brief Controller",
   });
+
+  useMaterialQueuePreloader(state?.materials, deviceId);
 
   const handleMaterialAdd = (newMaterial: Material) => {
     setShowUploader(false);
