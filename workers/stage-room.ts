@@ -11,6 +11,8 @@ export interface Env {
 
 export class StageRoom extends DurableObject {
   private state: StageSessionState | null = null;
+  private dirty = false;
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -80,7 +82,7 @@ export class StageRoom extends DurableObject {
             };
           }
           this.state = CommandDispatcher.dispatch(this.state, command);
-          await this.persistState();
+          await this.persistStateNow();
           this.broadcastState();
         }
 
@@ -168,7 +170,7 @@ export class StageRoom extends DurableObject {
       }
     }
 
-    await this.persistState();
+    await this.persistStateNow();
     this.broadcastState();
 
     // ── HTTP GET (non-WebSocket): return current state for polling ─────────────
@@ -203,20 +205,22 @@ export class StageRoom extends DurableObject {
       const senderDeviceId = tagSenderId || (clientMsg as { payload?: { senderDeviceId?: string } })?.payload?.senderDeviceId || "unknown-device";
 
       // Hibernation state safety: Ensure state is loaded from storage after wake up
-      await this.ensureStateLoaded("ROOM", "Stage Room", "host-user");
-
       if (clientMsg.type === "PING") {
+        ws.send(JSON.stringify({ type: "PONG", timestamp: Date.now() }));
+        return;
+      }
+
+      if (clientMsg.type === "REQUEST_SYNC") {
+        await this.ensureStateLoaded("ROOM", "Stage Room", "host-user");
         if (this.state) {
           const syncMsg: ServerMessage = { type: "SYNC_STATE", state: this.state, timestamp: Date.now() };
           ws.send(JSON.stringify(syncMsg));
-        } else {
-          const pong: ServerMessage = { type: "PONG", timestamp: Date.now() };
-          ws.send(JSON.stringify(pong));
         }
         return;
       }
 
       if (clientMsg.type === "EXECUTE_COMMAND") {
+        await this.ensureStateLoaded("ROOM", "Stage Room", "host-user");
         const command = clientMsg.payload as StageCommand;
         command.senderDeviceId = senderDeviceId;
 
@@ -226,7 +230,7 @@ export class StageRoom extends DurableObject {
 
         // Execute command deterministically through domain reducer & validators
         this.state = CommandDispatcher.dispatch(this.state, command);
-        await this.persistState();
+        this.persistState();
 
         // Broadcast updated state to all connected WebSockets
         this.broadcastState();
@@ -267,7 +271,7 @@ export class StageRoom extends DurableObject {
         this.state.host.isHostConnected = false;
       }
 
-      await this.persistState();
+      await this.persistStateNow();
       this.broadcastState();
     }
   }
@@ -300,11 +304,29 @@ export class StageRoom extends DurableObject {
       }
     } else {
       this.state = createInitialSessionState(roomCode, roomCode, title, hostUserId);
-      await this.persistState();
+      await this.persistStateNow();
     }
   }
 
-  private async persistState(): Promise<void> {
+  private persistState(): void {
+    this.dirty = true;
+    if (!this.flushTimer) {
+      this.flushTimer = setTimeout(() => {
+        this.flushTimer = null;
+        if (this.dirty && this.state) {
+          this.dirty = false;
+          this.ctx.storage.put("state", JSON.stringify(this.state));
+        }
+      }, 100);
+    }
+  }
+
+  private async persistStateNow(): Promise<void> {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    this.dirty = false;
     if (this.state) {
       await this.ctx.storage.put("state", JSON.stringify(this.state));
     }

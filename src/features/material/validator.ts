@@ -396,6 +396,8 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
             if (totalPages && totalPages > 0) {
               return { totalPages };
             }
+            // PDF exported OK but page count unparseable — default to 1 instead of expensive probing
+            return { totalPages: 1 };
           }
         } catch {
           // Silently fall back to HTML & PNG probing
@@ -458,8 +460,8 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
 
               // Fast parallel PNG batch probing (probe up to 50 pages in batches of 10)
               let discoveredPages = 0;
-              const maxScan = 50;
-              const batchSize = 10;
+              const maxScan = 20;
+              const batchSize = 5;
 
               for (let start = 1; start <= maxScan; start += batchSize) {
                 const batch = Array.from({ length: batchSize }, (_, idx) => start + idx);

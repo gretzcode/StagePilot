@@ -179,7 +179,7 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         if (isMounted) {
           setIsConnected(true);
           try {
-            socket?.send(JSON.stringify({ type: "PING" }));
+            socket?.send(JSON.stringify({ type: "REQUEST_SYNC" }));
           } catch {}
         }
       };
@@ -247,7 +247,7 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && isMounted && socketRef.current?.readyState === WebSocket.OPEN) {
         try {
-          socketRef.current.send(JSON.stringify({ type: "PING" }));
+          socketRef.current.send(JSON.stringify({ type: "REQUEST_SYNC" }));
         } catch {}
       }
     };

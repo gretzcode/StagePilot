@@ -35,6 +35,11 @@ export interface GoogleDriveStreamResult {
   status: number;
 }
 
+let globalDriveToken: { token: string; expiresAt: number } | null = null;
+
+const folderIdCache = new Map<string, { id: string; cachedAt: number }>();
+const FOLDER_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
 export class GoogleDriveStorageProvider implements MaterialStorageProvider {
   readonly type: MaterialStorageProviderType = "google_drive";
   readonly capabilities: StorageCapabilities = {
@@ -45,7 +50,7 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
   };
 
   private env?: Record<string, unknown> | null;
-  private cachedToken: { token: string; expiresAt: number } | null = null;
+
 
   constructor(env?: Record<string, unknown> | null) {
     this.env = env;
@@ -241,6 +246,10 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
   }
 
   private async findOrCreateFolder(name: string, parentId?: string): Promise<string> {
+    const cacheKey = `${parentId || "root"}/${name}`;
+    const cached = folderIdCache.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < FOLDER_CACHE_TTL) return cached.id;
+
     const token = await this.getAccessToken();
     const escaped = name.replace(/'/g, "\\'");
     const parentClause = parentId ? ` and '${parentId}' in parents` : "";
@@ -249,7 +258,10 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
       headers: { Authorization: `Bearer ${token}` },
     });
     const listJson = (await list.json().catch(() => ({}))) as { files?: Array<{ id: string }> };
-    if (listJson.files?.[0]?.id) return listJson.files[0].id;
+    if (listJson.files?.[0]?.id) {
+      folderIdCache.set(cacheKey, { id: listJson.files[0].id, cachedAt: Date.now() });
+      return listJson.files[0].id;
+    }
 
     const create = await fetch(`${DRIVE_API}/files?fields=id`, {
       method: "POST",
@@ -258,6 +270,7 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     });
     const createJson = (await create.json().catch(() => ({}))) as { id?: string };
     if (!create.ok || !createJson.id) throw new Error("Gagal menyiapkan folder Google Drive.");
+    folderIdCache.set(cacheKey, { id: createJson.id, cachedAt: Date.now() });
     return createJson.id;
   }
 
@@ -271,7 +284,7 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
   }
 
   private async getAccessToken(): Promise<string> {
-    if (this.cachedToken && this.cachedToken.expiresAt > Date.now() + 60_000) return this.cachedToken.token;
+    if (globalDriveToken && globalDriveToken.expiresAt > Date.now() + 60_000) return globalDriveToken.token;
     const clientId = this.getSecret("GOOGLE_CLIENT_ID");
     const clientSecret = this.getSecret("GOOGLE_CLIENT_SECRET");
     const refreshToken = this.getSecret("GOOGLE_REFRESH_TOKEN");
@@ -289,7 +302,7 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     });
     const json = (await response.json().catch(() => ({}))) as GoogleTokenResponse;
     if (!response.ok || !json.access_token) throw new Error("Koneksi Google Drive tidak tersedia. Operator perlu menyambungkan ulang.");
-    this.cachedToken = { token: json.access_token, expiresAt: Date.now() + (json.expires_in || 3600) * 1000 };
+    globalDriveToken = { token: json.access_token, expiresAt: Date.now() + (json.expires_in || 3600) * 1000 };
     return json.access_token;
   }
 

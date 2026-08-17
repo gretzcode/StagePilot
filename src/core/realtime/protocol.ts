@@ -1,6 +1,6 @@
 import { DeviceRole, StageCommand, StageSessionState } from "../types";
 
-export type ClientMessageType = "JOIN_ROOM" | "RECONNECT" | "EXECUTE_COMMAND" | "PING";
+export type ClientMessageType = "JOIN_ROOM" | "RECONNECT" | "EXECUTE_COMMAND" | "PING" | "REQUEST_SYNC";
 
 export interface JoinRoomPayload {
   roomCode: string;

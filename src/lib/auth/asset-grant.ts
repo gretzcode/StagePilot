@@ -24,15 +24,21 @@ function getGrantSecret(env?: Record<string, unknown> | null): string {
   return secret;
 }
 
+const hmacKeyCache = new Map<string, CryptoKey>();
+
 async function getHmacKey(secret: string): Promise<CryptoKey> {
+  const cached = hmacKeyCache.get(secret);
+  if (cached) return cached;
   const enc = new TextEncoder();
-  return crypto.subtle.importKey(
+  const key = await crypto.subtle.importKey(
     "raw",
     enc.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign", "verify"]
   );
+  hmacKeyCache.set(secret, key);
+  return key;
 }
 
 function bufferToHex(buffer: ArrayBuffer): string {
