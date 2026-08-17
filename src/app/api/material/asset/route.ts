@@ -5,6 +5,7 @@ import { getR2Object } from "@/lib/storage/r2";
 import { isMaterialExpired } from "@/core/config/material";
 import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
 import { StageSessionState, Material } from "@/core/types";
+import { verifyAssetGrant } from "@/lib/auth/asset-grant";
 
 interface EdgeCacheType {
   match: (req: Request | string) => Promise<Response | undefined>;
@@ -19,22 +20,20 @@ interface CachedMaterialMeta {
 const materialMetadataCache = new Map<string, CachedMaterialMeta>();
 const METADATA_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+export function invalidateMaterialMetadataCache(materialId?: string): void {
+  if (materialId) {
+    materialMetadataCache.delete(materialId);
+  } else {
+    materialMetadataCache.clear();
+  }
+}
+
 interface CachedDeviceAccess {
   valid: boolean;
   cachedAt: number;
 }
 const deviceAccessValidationCache = new Map<string, CachedDeviceAccess>();
 const DEVICE_VALIDATION_TTL_MS = 60 * 1000; // 60 seconds
-
-// ─── Layer 3: Single-Flight In-Flight Fetch Deduplication ─────────────────────
-type DriveFileFetchResult = {
-  data: ArrayBuffer;
-  mimeType: string | null;
-  contentRange?: string | null;
-  contentLength?: string | null;
-  status: number;
-};
-const inFlightDriveFetches = new Map<string, Promise<DriveFileFetchResult>>();
 
 async function getReadOnlyRoomState(request: Request, roomCode: string): Promise<StageSessionState | null> {
   const upperCode = roomCode.toUpperCase();
@@ -189,8 +188,17 @@ export async function GET(request: Request) {
       return new Response("Unauthorized room access", { status: 403 });
     }
 
-    const access = await validateMaterialAssetAccess(request, materialId, roomCode, deviceId);
-    if (!access.ok) return access.response;
+    const grant = searchParams.get("grant") || request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+
+    if (grant) {
+      const grantResult = await verifyAssetGrant(grant, roomCode, materialId, env);
+      if (!grantResult.valid) {
+        return new Response(`Unauthorized asset grant: ${grantResult.reason || "INVALID"}`, { status: 403 });
+      }
+    } else {
+      const access = await validateMaterialAssetAccess(request, materialId, roomCode, deviceId);
+      if (!access.ok) return access.response;
+    }
 
     if (record.status === "expired" || isMaterialExpired(record.expiresAt)) {
       if (record.status !== "expired") {
@@ -206,86 +214,34 @@ export async function GET(request: Request) {
         return new Response("No Google Drive file associated with this material.", { status: 404 });
       }
 
-      // ─── Layer 3: Single-Flight Request Deduplication ───────────────────────
-      const fileRef = record.storageReference;
-      const flightKey = `${fileRef}:${rangeHeader || "full"}`;
-      let fetchPromise = inFlightDriveFetches.get(flightKey);
+      const provider = new GoogleDriveStorageProvider(env);
+      const driveStream = await provider.getFileStream(record.storageReference, rangeHeader).catch(() => null);
 
-      if (!fetchPromise) {
-        const provider = new GoogleDriveStorageProvider(env);
-        fetchPromise = provider.getFile(fileRef, rangeHeader).finally(() => {
-          inFlightDriveFetches.delete(flightKey);
-        });
-        inFlightDriveFetches.set(flightKey, fetchPromise);
-      }
-
-      const driveAsset = await fetchPromise.catch(() => null);
-      if (!driveAsset) {
+      if (!driveStream || !driveStream.body) {
         return new Response(
           "Materi Google Drive tidak tersedia. Periksa koneksi storage atau unggah ulang materi.",
           { status: 502 }
         );
       }
 
-      const rawData = driveAsset.data;
-      const totalLength = rawData.byteLength;
-      const mimeType = driveAsset.mimeType || record.mimeType || "application/pdf";
+      const responseHeaders = new Headers();
+      const mimeType = driveStream.mimeType || record.mimeType || "application/pdf";
+      responseHeaders.set("Content-Type", mimeType);
+      responseHeaders.set("Accept-Ranges", driveStream.acceptRanges || "bytes");
+      responseHeaders.set("Cache-Control", "public, max-age=3600, s-maxage=3600, immutable");
+      responseHeaders.set("Vary", "Range, Accept-Encoding");
 
-      if (rangeHeader && (driveAsset.status === 206 || rangeHeader.startsWith("bytes="))) {
-        if (driveAsset.contentRange) {
-          return new Response(rawData as unknown as BodyInit, {
-            status: 206,
-            headers: {
-              "Content-Type": mimeType,
-              "Content-Range": driveAsset.contentRange,
-              "Content-Length": String(totalLength),
-              "Accept-Ranges": "bytes",
-              "Cache-Control": "public, max-age=3600, s-maxage=3600, immutable",
-            },
-          });
-        }
-
-        const parts = rangeHeader.replace("bytes=", "").split("-");
-        const start = parseInt(parts[0], 10) || 0;
-        const end = parts[1] ? parseInt(parts[1], 10) : totalLength - 1;
-
-        if (start >= totalLength || end >= totalLength || start > end) {
-          return new Response(null, {
-            status: 416,
-            headers: {
-              "Content-Range": `bytes */${totalLength}`,
-            },
-          });
-        }
-
-        const chunk = rawData.slice(start, end + 1);
-        return new Response(chunk as unknown as BodyInit, {
-          status: 206,
-          headers: {
-            "Content-Type": mimeType,
-            "Content-Range": `bytes ${start}-${end}/${totalLength}`,
-            "Content-Length": String(chunk.byteLength),
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "public, max-age=3600, s-maxage=3600, immutable",
-          },
-        });
+      if (driveStream.contentRange) {
+        responseHeaders.set("Content-Range", driveStream.contentRange);
+      }
+      if (driveStream.contentLength) {
+        responseHeaders.set("Content-Length", driveStream.contentLength);
       }
 
-      const fullResponse = new Response(rawData as unknown as BodyInit, {
-        status: 200,
-        headers: {
-          "Content-Type": mimeType,
-          "Content-Length": String(totalLength),
-          "Accept-Ranges": "bytes",
-          "Cache-Control": "public, max-age=3600, s-maxage=3600, immutable",
-        },
+      return new Response(driveStream.body, {
+        status: driveStream.status,
+        headers: responseHeaders,
       });
-
-      if (edgeCache && !rangeHeader) {
-        edgeCache.put(request.url, fullResponse.clone()).catch(() => {});
-      }
-
-      return fullResponse;
     }
 
     if (!record.objectKey) {

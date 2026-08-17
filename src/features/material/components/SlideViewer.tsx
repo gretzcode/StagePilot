@@ -51,6 +51,7 @@ interface LayerState {
 
 function appendAssetAccessParams(url: string, deviceId?: string): string {
   if (!deviceId || !url.startsWith("/api/material/asset")) return url;
+  if (url.includes("grant=")) return url; // Phase D: Keep canonical asset URL stable across all devices
   const [path, hash = ""] = url.split("#");
   const separator = path.includes("?") ? "&" : "?";
   return `${path}${separator}deviceId=${encodeURIComponent(deviceId)}${hash ? `#${hash}` : ""}`;

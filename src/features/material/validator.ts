@@ -515,6 +515,8 @@ export async function detectSlideCountFromUrl(urlString: string): Promise<Detect
 export function appendAssetAccessParams(url: string, deviceId?: string): string {
   if (!url || !deviceId) return url;
   if (!url.startsWith("/api/material/asset")) return url;
+  // Phase D: Preserve canonical asset URL across all devices if grant capability is present
+  if (url.includes("grant=")) return url;
   try {
     const isAbsolute = url.startsWith("http://") || url.startsWith("https://");
     const parsed = new URL(url, isAbsolute ? undefined : "http://localhost");

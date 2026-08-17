@@ -25,7 +25,7 @@ function AudienceDisplayContent() {
     deviceName: "Audience Display",
   });
 
-  useMaterialQueuePreloader(state?.materials, deviceId);
+  useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {

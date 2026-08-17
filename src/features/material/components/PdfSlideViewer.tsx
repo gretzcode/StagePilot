@@ -103,12 +103,9 @@ export function PdfSlideViewer({
           setPageRendering(false);
           renderTaskRef.current = null;
 
-          // Proactively warm up adjacent pages in PDF.js worker cache
+          // Proactively warm up next page in PDF.js worker cache (Phase D: bounded pre-warming)
           if (pageNum + 1 <= pdfDoc.numPages) {
             pdfDoc.getPage(pageNum + 1).catch(() => {});
-          }
-          if (pageNum - 1 >= 1) {
-            pdfDoc.getPage(pageNum - 1).catch(() => {});
           }
         }
       })

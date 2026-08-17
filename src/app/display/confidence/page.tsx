@@ -35,7 +35,7 @@ function ConfidenceDisplayContent() {
     deviceName: "Confidence Display",
   });
 
-  useMaterialQueuePreloader(state?.materials, deviceId);
+  useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
 
   const now = useTimerTicker(state?.timer.status === "running");
 

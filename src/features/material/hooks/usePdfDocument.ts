@@ -7,6 +7,24 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 const pdfDocCache = new Map<string, PDFDocumentProxy>();
 const pdfLoadingPromises = new Map<string, Promise<PDFDocumentProxy>>();
 
+export function clearPdfDocumentCache(): void {
+  pdfDocCache.clear();
+  pdfLoadingPromises.clear();
+}
+
+export function removePdfDocumentFromCache(urlOrKey: string): void {
+  pdfDocCache.delete(urlOrKey);
+  pdfLoadingPromises.delete(urlOrKey);
+}
+
+export function getPdfDocumentCacheSize(): number {
+  return pdfDocCache.size;
+}
+
+export function getPdfLoadingPromisesSize(): number {
+  return pdfLoadingPromises.size;
+}
+
 function buildFetchTarget(url: string): string {
   return url;
 }

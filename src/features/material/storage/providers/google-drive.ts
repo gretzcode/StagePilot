@@ -13,6 +13,7 @@ import { validateUploadedFile } from "../../validator";
 import { estimatePdfPageCountFromBlob } from "../../pdf-page-count";
 import { computeDefaultExpiration, isMaterialExpired } from "@/core/config/material";
 import { MaterialRegistryService, MaterialRecord } from "@/lib/storage/registry";
+import { createAssetGrant } from "@/lib/auth/asset-grant";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -24,6 +25,15 @@ type GoogleTokenResponse = {
   expires_in?: number;
   error?: string;
 };
+
+export interface GoogleDriveStreamResult {
+  body: ReadableStream<Uint8Array> | null;
+  mimeType: string | null;
+  contentRange: string | null;
+  contentLength: string | null;
+  acceptRanges: string | null;
+  status: number;
+}
 
 export class GoogleDriveStorageProvider implements MaterialStorageProvider {
   readonly type: MaterialStorageProviderType = "google_drive";
@@ -99,7 +109,8 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
 
   async resolve(input: MaterialResolveInput): Promise<ResolvedMaterial> {
     const record = await this.getReadyRecord(input);
-    const assetUrl = `/api/material/asset?materialId=${record.id}${input.roomCode ? `&roomCode=${encodeURIComponent(input.roomCode)}` : ""}`;
+    const grant = input.roomCode ? await createAssetGrant(input.roomCode, record.id, this.env) : "";
+    const assetUrl = `/api/material/asset?materialId=${record.id}${input.roomCode ? `&roomCode=${encodeURIComponent(input.roomCode)}` : ""}${grant ? `&grant=${encodeURIComponent(grant)}` : ""}`;
 
     return {
       materialId: record.id,
@@ -126,16 +137,10 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     await registry.deleteMaterial(input.materialId);
   }
 
-  async getFile(
+  async getFileStream(
     fileId: string,
     rangeHeader?: string | null
-  ): Promise<{
-    data: ArrayBuffer;
-    mimeType: string | null;
-    contentRange?: string | null;
-    contentLength?: string | null;
-    status: number;
-  }> {
+  ): Promise<GoogleDriveStreamResult> {
     const token = await this.getAccessToken();
     const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
     if (rangeHeader) {
@@ -149,11 +154,33 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
       throw new Error("File Google Drive tidak tersedia.");
     }
     return {
-      data: await response.arrayBuffer(),
+      body: response.body,
       mimeType: response.headers.get("content-type"),
       contentRange: response.headers.get("content-range"),
       contentLength: response.headers.get("content-length"),
+      acceptRanges: response.headers.get("accept-ranges") || "bytes",
       status: response.status,
+    };
+  }
+
+  async getFile(
+    fileId: string,
+    rangeHeader?: string | null
+  ): Promise<{
+    data: ArrayBuffer;
+    mimeType: string | null;
+    contentRange?: string | null;
+    contentLength?: string | null;
+    status: number;
+  }> {
+    const streamResult = await this.getFileStream(fileId, rangeHeader);
+    const data = streamResult.body ? await new Response(streamResult.body).arrayBuffer() : new ArrayBuffer(0);
+    return {
+      data,
+      mimeType: streamResult.mimeType,
+      contentRange: streamResult.contentRange,
+      contentLength: streamResult.contentLength,
+      status: streamResult.status,
     };
   }
 

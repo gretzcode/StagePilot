@@ -60,7 +60,7 @@ function PresentationControlContent() {
     deviceName: requestedRole === "host" ? "Host Primary Controller" : "Presentation Controller",
   });
 
-  useMaterialQueuePreloader(state?.materials, deviceId);
+  useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
 
   // Keyboard Navigation & Shortcuts
   useEffect(() => {

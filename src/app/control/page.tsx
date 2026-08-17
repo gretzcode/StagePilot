@@ -33,7 +33,7 @@ function ControlRoomContent() {
     deviceName: isHost ? "Host Primary Controller" : "Brief Controller",
   });
 
-  useMaterialQueuePreloader(state?.materials, deviceId);
+  useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
 
   const handleMaterialAdd = (newMaterial: Material) => {
     setShowUploader(false);

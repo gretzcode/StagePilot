@@ -12,7 +12,8 @@ import { preloadPdfDocument } from "./usePdfDocument";
  */
 export function useMaterialQueuePreloader(
   materials: Material[] | undefined,
-  deviceId?: string
+  deviceId?: string,
+  activeMaterialId?: string | null
 ): void {
   useEffect(() => {
     if (!materials || materials.length === 0 || typeof window === "undefined") return;
@@ -25,6 +26,9 @@ export function useMaterialQueuePreloader(
 
     const cancelToken = scheduleWarmup(() => {
       materials.forEach((mat) => {
+        // Phase D: Skip the currently presenting material to prevent duplicate parallel loading with PdfSlideViewer
+        if (mat.id === activeMaterialId) return;
+
         if (mat.type === "pdf" && mat.url) {
           const targetUrl = appendAssetAccessParams(mat.url, deviceId);
           preloadPdfDocument(targetUrl).catch(() => {
@@ -39,5 +43,5 @@ export function useMaterialQueuePreloader(
         window.cancelIdleCallback(cancelToken);
       }
     };
-  }, [materials, deviceId]);
+  }, [materials, deviceId, activeMaterialId]);
 }

@@ -11,6 +11,7 @@ import { Material } from "@/core/types";
 import { CanvaService } from "@/features/integrations/canva/canva.service";
 import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
 import { registerLocalRoomMaterial } from "@/app/api/ws/route";
+import { createAssetGrant } from "@/lib/auth/asset-grant";
 
 /**
  * Dispatch MATERIAL_ADD command to the room directly via Durable Object stub
@@ -329,7 +330,8 @@ export async function POST(request: Request) {
         ownerUserId,
       });
 
-      const assetUrl = `/api/material/asset?materialId=${storedMaterial.id}&roomCode=${encodeURIComponent(upperRoomCode)}`;
+      const grant = await createAssetGrant(upperRoomCode, storedMaterial.id, env);
+      const assetUrl = `/api/material/asset?materialId=${storedMaterial.id}&roomCode=${encodeURIComponent(upperRoomCode)}&grant=${encodeURIComponent(grant)}`;
       const finalTotalPages = storedMaterial.slideCount || 1;
 
       const canonicalPdfMaterial: Material = {
@@ -389,7 +391,8 @@ export async function POST(request: Request) {
       slideCount || storedMaterial.slideCount
     );
 
-    const assetUrl = `/api/material/asset?materialId=${storedMaterial.id}&roomCode=${encodeURIComponent(upperRoomCode)}`;
+    const extGrant = await createAssetGrant(upperRoomCode, storedMaterial.id, env);
+    const assetUrl = `/api/material/asset?materialId=${storedMaterial.id}&roomCode=${encodeURIComponent(upperRoomCode)}&grant=${encodeURIComponent(extGrant)}`;
     const materialUrl = storedMaterial.materialType === "pdf" ? assetUrl : parsedMaterial.url;
     const finalTotalPages = slideCount || storedMaterial.slideCount || parsedMaterial.totalPages || 1;
 

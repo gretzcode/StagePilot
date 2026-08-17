@@ -7,6 +7,7 @@ import { RoomRegistry } from "@/lib/rooms/registry";
 import { getLocalRoomStateReadOnly, registerLocalRoomMaterial } from "@/app/api/ws/route";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { Material, StageSessionState } from "@/core/types";
+import { createAssetGrant } from "@/lib/auth/asset-grant";
 
 async function getReadOnlyRoomState(request: Request, roomCode: string): Promise<StageSessionState | null> {
   const upperCode = roomCode.toUpperCase();
@@ -200,7 +201,8 @@ export async function POST(request: Request) {
     });
 
     const upperRoomCode = roomCode.toUpperCase();
-    const assetUrl = `/api/material/asset?materialId=${storedMaterial.id}&roomCode=${encodeURIComponent(upperRoomCode)}`;
+    const grant = await createAssetGrant(upperRoomCode, storedMaterial.id, env);
+    const assetUrl = `/api/material/asset?materialId=${storedMaterial.id}&roomCode=${encodeURIComponent(upperRoomCode)}&grant=${encodeURIComponent(grant)}`;
     const totalPages = storedMaterial.slideCount || 1;
 
     const newMaterial: Material = {

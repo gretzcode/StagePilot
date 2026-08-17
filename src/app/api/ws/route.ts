@@ -8,6 +8,7 @@ import { verifyHostToken } from "@/lib/auth/jwt";
 
 import { MaterialRegistryService } from "@/lib/storage/registry";
 import { Material } from "@/core/types";
+import { createAssetGrant } from "@/lib/auth/asset-grant";
 
 interface LocalRoomInstance {
   state: StageSessionState;
@@ -31,7 +32,8 @@ export async function syncLocalRoomMaterials(roomCode: string): Promise<void> {
 
   for (const record of records) {
     if (record.status === "ready" && !instance.state.materials.some((m) => m.id === record.id)) {
-      const assetUrl = `/api/material/asset?materialId=${record.id}&roomCode=${encodeURIComponent(upperCode)}`;
+      const grant = await createAssetGrant(upperCode, record.id, process.env as Record<string, unknown>);
+      const assetUrl = `/api/material/asset?materialId=${record.id}&roomCode=${encodeURIComponent(upperCode)}&grant=${encodeURIComponent(grant)}`;
       const totalPages = record.slideCount || 1;
       instance.state.materials.push({
         id: record.id,
