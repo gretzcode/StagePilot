@@ -111,6 +111,11 @@ function PresentationControlContent() {
 
   const [localVideoTime, setLocalVideoTime] = useState(0);
 
+  // Reset video seekbar time when changing slides / videos in playlist
+  useEffect(() => {
+    setLocalVideoTime(0);
+  }, [state?.presentation.currentSlide, state?.presentation.materialId]);
+
   useEffect(() => {
     if (!state?.presentation.mediaState) return;
     const media = state.presentation.mediaState;

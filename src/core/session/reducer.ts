@@ -215,6 +215,14 @@ export function stageSessionReducer(
       nextState.presentation.currentSlideMetadata = material?.slides[nextSlideNum - 1] || { index: nextSlideNum, title: `Slide ${nextSlideNum}` };
       nextState.presentation.nextSlideMetadata = nextSlideNum < totalSlides ? (material?.slides[nextSlideNum] || { index: nextSlideNum + 1, title: `Slide ${nextSlideNum + 1}` }) : null;
       nextState.presentation.updatedAt = now;
+      if (material?.type === "video") {
+        nextState.presentation.mediaState = {
+          status: "playing",
+          currentTime: 0,
+          playbackRate: 1.0,
+          updatedAt: now,
+        };
+      }
       break;
     }
 
@@ -235,6 +243,14 @@ export function stageSessionReducer(
       nextState.presentation.currentSlideMetadata = material?.slides[prevSlideNum - 1] || { index: prevSlideNum, title: `Slide ${prevSlideNum}` };
       nextState.presentation.nextSlideMetadata = material?.slides[prevSlideNum] || (prevSlideNum < totalSlides ? { index: prevSlideNum + 1, title: `Slide ${prevSlideNum + 1}` } : null);
       nextState.presentation.updatedAt = now;
+      if (material?.type === "video") {
+        nextState.presentation.mediaState = {
+          status: "playing",
+          currentTime: 0,
+          playbackRate: 1.0,
+          updatedAt: now,
+        };
+      }
       break;
     }
 
@@ -254,6 +270,14 @@ export function stageSessionReducer(
       nextState.presentation.currentSlideMetadata = material?.slides[targetSlideNum - 1] || { index: targetSlideNum, title: `Slide ${targetSlideNum}` };
       nextState.presentation.nextSlideMetadata = material?.slides[targetSlideNum] || (targetSlideNum < totalSlides ? { index: targetSlideNum + 1, title: `Slide ${targetSlideNum + 1}` } : null);
       nextState.presentation.updatedAt = now;
+      if (material?.type === "video") {
+        nextState.presentation.mediaState = {
+          status: "playing",
+          currentTime: 0,
+          playbackRate: 1.0,
+          updatedAt: now,
+        };
+      }
       break;
     }
 
