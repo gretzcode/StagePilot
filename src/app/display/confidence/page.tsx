@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/polyfills";
 import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { SlideViewer } from "@/features/material/components/SlideViewer";

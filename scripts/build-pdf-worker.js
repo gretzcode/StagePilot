@@ -1,7 +1,24 @@
 const fs = require('fs');
 const path = require('path');
 
-const polyfill = "if (typeof Promise.withResolvers === 'undefined') {\n  Promise.withResolvers = function () {\n    let resolve, reject;\n    const promise = new Promise((res, rej) => {\n      resolve = res;\n      reject = rej;\n    });\n    return { promise, resolve, reject };\n  };\n}\n";
+const polyfill = `(function() {
+  var g = typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : typeof window !== 'undefined' ? window : this;
+  var P = g && g.Promise ? g.Promise : Promise;
+  if (P && typeof P.withResolvers !== 'function') {
+    P.withResolvers = function() {
+      var resolve, reject;
+      var promise = new P(function(res, rej) {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise: promise, resolve: resolve, reject: reject };
+    };
+  }
+  if (typeof Promise !== 'undefined' && typeof Promise.withResolvers !== 'function') {
+    Promise.withResolvers = P.withResolvers;
+  }
+})();
+`;
 
 const sourcePath = path.resolve(__dirname, '../node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs');
 const targetPath = path.resolve(__dirname, '../public/pdf.worker.min.mjs');

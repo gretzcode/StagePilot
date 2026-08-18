@@ -1,13 +1,20 @@
-if (typeof Promise.withResolvers === 'undefined') {
-  Promise.withResolvers = function () {
-    let resolve, reject;
-    const promise = new Promise((res, rej) => {
-      resolve = res;
-      reject = rej;
-    });
-    return { promise, resolve, reject };
-  };
-}
+(function() {
+  var g = typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : typeof window !== 'undefined' ? window : this;
+  var P = g && g.Promise ? g.Promise : Promise;
+  if (P && typeof P.withResolvers !== 'function') {
+    P.withResolvers = function() {
+      var resolve, reject;
+      var promise = new P(function(res, rej) {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise: promise, resolve: resolve, reject: reject };
+    };
+  }
+  if (typeof Promise !== 'undefined' && typeof Promise.withResolvers !== 'function') {
+    Promise.withResolvers = P.withResolvers;
+  }
+})();
 /**
  * @licstart The following is the entire license notice for the
  * JavaScript code in this page

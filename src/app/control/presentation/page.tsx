@@ -195,6 +195,11 @@ function PresentationControlContent() {
   const panThrottleRef = useRef<number>(0);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Ignore drag start if clicking on buttons, inputs, or control widgets
+    const target = e.target as HTMLElement | null;
+    if (target && target.closest("button, a, input, select, textarea, [role='button'], [role='group']")) {
+      return;
+    }
     if (currentZoom.scale <= 1.0 || isZoomAreaActive) return;
     isDraggingRef.current = true;
     dragStartRef.current = {
@@ -875,7 +880,11 @@ function PresentationControlContent() {
 
             {/* Floating Zoom Controls Widget */}
             {state?.presentation.isPresenting && activeMaterial && (
-              <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-30 pointer-events-auto">
+              <div
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+                className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-30 pointer-events-auto"
+              >
                 <ZoomControls
                   zoom={state?.presentation.zoom}
                   isZoomAreaActive={isZoomAreaActive}
