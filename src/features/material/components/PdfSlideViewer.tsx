@@ -53,8 +53,8 @@ export function PdfSlideViewer({
     googleFileId
   );
 
-  // Dynamic aspect fit hook conforming to scale = min(cW / contentW, cH / contentH)
-  const fit = useAspectFit(pageDimensions.width, pageDimensions.height);
+  // Fixed 16:9 Stage Container (1920x1080)
+  const fit = useAspectFit(1920, 1080);
 
   // ── Emit total page count once discovered ──────────────────────────────────
   useEffect(() => {

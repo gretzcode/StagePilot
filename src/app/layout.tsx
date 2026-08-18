@@ -25,6 +25,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var g=typeof globalThis!=="undefined"?globalThis:typeof window!=="undefined"?window:this;var P=g&&g.Promise?g.Promise:Promise;if(P&&typeof P.withResolvers!=="function"){P.withResolvers=function(){var res,rej,p=new P(function(r,j){res=r;rej=j;});return{promise:p,resolve:res,reject:rej};};}if(typeof Promise!=="undefined"&&typeof Promise.withResolvers!=="function"){Promise.withResolvers=P.withResolvers;}})();`,
+          }}
+        />
+      </head>
       <body suppressHydrationWarning className="min-h-screen bg-slate-950 text-slate-100 antialiased selection:bg-purple-600 selection:text-white">
         {children}
       </body>

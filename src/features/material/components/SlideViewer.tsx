@@ -89,7 +89,8 @@ export function SlideViewer({
     height: material?.metadata?.height || 1080,
   });
 
-  const fit = useAspectFit(contentDimensions.width, contentDimensions.height);
+  // Fixed 16:9 Stage Container (1920x1080)
+  const fit = useAspectFit(1920, 1080);
 
   const zoomScale = zoom?.scale || 1.0;
   const panX = zoom?.panX || 0;
