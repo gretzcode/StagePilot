@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState, useRef, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Material, NormalizedZoomRegion } from "@/core/types";
 import { ThumbnailList } from "@/features/material/components/ThumbnailList";
 import { SlideViewer } from "@/features/material/components/SlideViewer";
@@ -50,10 +50,27 @@ function formatVideoTime(seconds: number): string {
 }
 
 function PresentationControlContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const rawRoomCode = searchParams.get("roomCode");
   const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
   const requestedRole = (searchParams.get("role") || "control") as "host" | "control";
+  const isHost = requestedRole === "host";
+
+  // Authenticate host session if claiming Host role
+  useEffect(() => {
+    if (isHost) {
+      fetch("/api/auth/me", { credentials: "include" })
+        .then((res) => {
+          if (!res.ok) {
+            router.push(`/login?redirect=/control/presentation?roomCode=${encodeURIComponent(roomCode)}&role=host`);
+          }
+        })
+        .catch(() => {
+          router.push(`/login?redirect=/control/presentation?roomCode=${encodeURIComponent(roomCode)}&role=host`);
+        });
+    }
+  }, [isHost, roomCode, router]);
 
   const [deviceId] = useState(() => getPersistentDeviceId(requestedRole, roomCode, searchParams.get("deviceId")));
   const [showUploader, setShowUploader] = useState(false);

@@ -20,19 +20,28 @@ export async function proxy(request: NextRequest) {
 
   const token = tokenFromHeader || tokenFromCookie;
 
-  // Allow /control and /control/presentation for guest operators with roomCode
-  if (request.nextUrl.pathname.startsWith("/control") && request.nextUrl.searchParams.has("roomCode")) {
+  // Allow ONLY /control/presentation for guest operators with explicit role=control
+  const isGuestPresentationControl =
+    request.nextUrl.pathname === "/control/presentation" &&
+    request.nextUrl.searchParams.has("roomCode") &&
+    request.nextUrl.searchParams.get("role") === "control";
+
+  if (isGuestPresentationControl) {
     return NextResponse.next();
   }
 
+  const redirectTarget = request.nextUrl.pathname + request.nextUrl.search;
+
   if (!token) {
     const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("redirect", redirectTarget);
     return NextResponse.redirect(loginUrl);
   }
 
   const payload = await verifyHostToken(token);
   if (!payload || payload.role !== "host") {
     const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("redirect", redirectTarget);
     return NextResponse.redirect(loginUrl);
   }
 

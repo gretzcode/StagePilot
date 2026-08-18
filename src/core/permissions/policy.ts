@@ -20,26 +20,26 @@ export class PermissionPolicy {
     }
 
     if (!sender) {
-      // Auto-register missing sender device as an approved controller for zero-friction operation
+      const isHostDevice = Boolean(state.host?.hostDeviceId && state.host.hostDeviceId === senderDeviceId);
       sender = {
         id: senderDeviceId,
-        name: "Stage Controller",
+        name: isHostDevice ? "Host Controller" : "Guest Controller",
         userAgent: "System / Controller",
-        role: "host",
-        approvalStatus: "approved",
+        role: isHostDevice ? "host" : "control",
+        approvalStatus: isHostDevice ? "approved" : "pending",
         status: "online",
         permissions: {
-          canControlPresentation: true,
-          canControlTimer: true,
-          canControlBrief: true,
-          canBlankDisplay: true,
-          canManageDevices: true,
-          canManageRoom: true,
-          canTakeoverControl: true,
+          canControlPresentation: isHostDevice,
+          canControlTimer: isHostDevice,
+          canControlBrief: isHostDevice,
+          canBlankDisplay: isHostDevice,
+          canManageDevices: isHostDevice,
+          canManageRoom: isHostDevice,
+          canTakeoverControl: isHostDevice,
         },
         connectedAt: Date.now(),
         lastSeenAt: Date.now(),
-        isHostDevice: true,
+        isHostDevice,
       };
       state.devices[senderDeviceId] = sender;
     }

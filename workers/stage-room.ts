@@ -107,7 +107,9 @@ export class StageRoom extends DurableObject {
       return new Response("Failed to initialize room state", { status: 500 });
     }
 
-    const isHostRole = requestedRole === "host";
+    const isHostAuthenticated = url.searchParams.get("isHostAuthenticated");
+    const isHostRole = requestedRole === "host" && isHostAuthenticated !== "false";
+    const effectiveRole = isHostRole ? "host" : requestedRole === "host" ? "control" : requestedRole;
 
     if (isHostRole) {
       // Purge any stale previous host device entries so host count remains exactly 1
@@ -146,17 +148,17 @@ export class StageRoom extends DurableObject {
         id: deviceId,
         name: deviceName,
         userAgent: request.headers.get("User-Agent") || "Unknown Browser",
-        role: requestedRole,
+        role: effectiveRole,
         approvalStatus: autoApprove ? "approved" : "pending",
         status: "online",
         permissions: {
-          canControlPresentation: isHostRole || requestedRole === "control",
-          canControlTimer: isHostRole || requestedRole === "control",
-          canControlBrief: isHostRole || requestedRole === "control",
-          canBlankDisplay: isHostRole || requestedRole === "control",
-          canManageDevices: isHostRole || requestedRole === "control",
+          canControlPresentation: isHostRole || effectiveRole === "control",
+          canControlTimer: isHostRole || effectiveRole === "control",
+          canControlBrief: isHostRole || effectiveRole === "control",
+          canBlankDisplay: isHostRole || effectiveRole === "control",
+          canManageDevices: isHostRole || effectiveRole === "control",
           canManageRoom: isHostRole,
-          canTakeoverControl: isHostRole || requestedRole === "control",
+          canTakeoverControl: isHostRole || effectiveRole === "control",
         },
         connectedAt: Date.now(),
         lastSeenAt: Date.now(),

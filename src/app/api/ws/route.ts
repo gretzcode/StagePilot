@@ -130,11 +130,13 @@ export async function GET(request: Request) {
   }
 
   // 2. Authoritative Host Ownership Validation for Host Role
+  let isHostAuthenticated = false;
   if (requestedRole === "host") {
     const authenticatedHostId = await verifyHostUser(request);
     if (!authenticatedHostId || authenticatedHostId !== roomRecord.hostUserId) {
       return new Response(JSON.stringify({ error: "ROOM_ACCESS_DENIED" }), { status: 403, headers: { "Content-Type": "application/json" } });
     }
+    isHostAuthenticated = true;
   }
 
   // 3. Durable Object Upgrade for Cloudflare Workers Environment
@@ -152,6 +154,12 @@ export async function GET(request: Request) {
       const doUrl = new URL(request.url);
       doUrl.searchParams.set("hostUserId", roomRecord.hostUserId);
       doUrl.searchParams.set("title", roomRecord.name);
+      if (isHostAuthenticated) {
+        doUrl.searchParams.set("isHostAuthenticated", "true");
+      } else if (requestedRole === "host") {
+        doUrl.searchParams.set("role", "control");
+        doUrl.searchParams.set("isHostAuthenticated", "false");
+      }
       return await stub.fetch(new Request(doUrl.toString(), request));
     }
   } catch (err) {

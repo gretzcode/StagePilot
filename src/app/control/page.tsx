@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ShieldCheck, Users, CheckCircle, XCircle, Play, Trash2, Tv, Monitor, ListVideo, Plus } from "lucide-react";
@@ -25,6 +25,21 @@ function ControlRoomContent() {
 
   const [deviceId] = useState(() => getPersistentDeviceId(requestedRole, roomCode, searchParams.get("deviceId")));
   const [showUploader, setShowUploader] = useState(false);
+
+  // Authenticate host session for Host role access
+  useEffect(() => {
+    if (isHost) {
+      fetch("/api/auth/me", { credentials: "include" })
+        .then((res) => {
+          if (!res.ok) {
+            router.push(`/login?redirect=/control?roomCode=${encodeURIComponent(roomCode)}`);
+          }
+        })
+        .catch(() => {
+          router.push(`/login?redirect=/control?roomCode=${encodeURIComponent(roomCode)}`);
+        });
+    }
+  }, [isHost, roomCode, router]);
 
   const { state, roomError, roomName, approvalStatus, myDevice, dispatchCommand } = useStageRoomSession({
     roomCode,
