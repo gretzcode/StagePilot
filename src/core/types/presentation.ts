@@ -71,10 +71,18 @@ export interface PresentationSession {
   updatedAt: number;
 }
 
+export interface NormalizedZoomRegion {
+  x: number; // 0.0 to 1.0 (normalized horizontal position relative to intrinsic content)
+  y: number; // 0.0 to 1.0 (normalized vertical position relative to intrinsic content)
+  width: number; // 0.0 to 1.0 (normalized selected width)
+  height: number; // 0.0 to 1.0 (normalized selected height)
+}
+
 export interface PresentationZoomState {
-  scale: number; // 1.0 to 3.0
-  panX: number; // -100 to 100 percentage offset
-  panY: number; // -100 to 100 percentage offset
+  scale: number; // 1.0 to 5.0 (magnification factor)
+  panX: number; // percentage offset (-50% to +50%)
+  panY: number; // percentage offset (-50% to +50%)
+  region?: NormalizedZoomRegion;
   updatedAt?: number;
 }
 

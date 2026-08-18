@@ -468,14 +468,16 @@ export function stageSessionReducer(
     }
 
     case "ZOOM_SET": {
-      const scale = Math.max(1.0, Math.min(Number(command.payload.scale) || 1.0, 3.0));
-      const panX = scale === 1.0 ? 0 : Math.max(-100, Math.min(Number(command.payload.panX) || 0, 100));
-      const panY = scale === 1.0 ? 0 : Math.max(-100, Math.min(Number(command.payload.panY) || 0, 100));
+      const scale = Math.max(1.0, Math.min(Number(command.payload.scale) || 1.0, 5.0));
+      const maxPan = 50 * (1 - 1 / scale);
+      const panX = scale === 1.0 ? 0 : Math.max(-maxPan, Math.min(Number(command.payload.panX) || 0, maxPan));
+      const panY = scale === 1.0 ? 0 : Math.max(-maxPan, Math.min(Number(command.payload.panY) || 0, maxPan));
 
       nextState.presentation.zoom = {
-        scale,
-        panX,
-        panY,
+        scale: Math.round(scale * 100) / 100,
+        panX: Math.round(panX * 100) / 100,
+        panY: Math.round(panY * 100) / 100,
+        region: command.payload.region,
         updatedAt: now,
       };
       nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;

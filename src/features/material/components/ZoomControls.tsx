@@ -1,11 +1,13 @@
 "use client";
 
 import React from "react";
-import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, Scan } from "lucide-react";
 import { PresentationZoomState } from "@/core/types";
 
 interface ZoomControlsProps {
   zoom?: PresentationZoomState;
+  isZoomAreaActive?: boolean;
+  onToggleZoomArea?: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
@@ -14,6 +16,8 @@ interface ZoomControlsProps {
 
 export function ZoomControls({
   zoom = { scale: 1.0, panX: 0, panY: 0 },
+  isZoomAreaActive = false,
+  onToggleZoomArea,
   onZoomIn,
   onZoomOut,
   onZoomReset,
@@ -29,6 +33,23 @@ export function ZoomControls({
       role="group"
       aria-label="Material Zoom Controls"
     >
+      {/* Zoom Area Box-Selection Mode Toggle */}
+      {onToggleZoomArea && (
+        <button
+          type="button"
+          onClick={onToggleZoomArea}
+          className={`p-1.5 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+            isZoomAreaActive
+              ? "bg-purple-600 text-white shadow-md ring-2 ring-purple-400/80 animate-pulse"
+              : "bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white"
+          }`}
+          title={isZoomAreaActive ? "Batal Pilih Area (ESC)" : "Pilih Area Zoom (Drag Kotak)"}
+          aria-label="Zoom Area Selection"
+        >
+          <Scan className="w-3.5 h-3.5" />
+        </button>
+      )}
+
       {/* Zoom Out Button */}
       <button
         type="button"
@@ -60,7 +81,7 @@ export function ZoomControls({
       <button
         type="button"
         onClick={onZoomIn}
-        disabled={scale >= 3.0}
+        disabled={scale >= 5.0}
         className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-800/80 text-slate-300 hover:text-white transition cursor-pointer disabled:cursor-not-allowed"
         title="Zoom In (+25%)"
         aria-label="Zoom In"

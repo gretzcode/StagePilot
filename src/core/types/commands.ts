@@ -1,7 +1,7 @@
 import { DeviceRole } from "./device";
 import { BriefUrgency } from "./brief";
 import { TimerMode } from "./timer";
-import { Material } from "./presentation";
+import { Material, NormalizedZoomRegion } from "./presentation";
 
 export type StageCommandType =
   | "ROOM_CREATE"
@@ -229,6 +229,7 @@ export interface ZoomSetCommand extends BaseCommand {
     scale: number;
     panX?: number;
     panY?: number;
+    region?: NormalizedZoomRegion;
   };
 }
 

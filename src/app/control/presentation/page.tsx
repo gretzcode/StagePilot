@@ -2,10 +2,12 @@
 
 import { Suspense, useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { Material } from "@/core/types";
+import { Material, NormalizedZoomRegion } from "@/core/types";
 import { ThumbnailList } from "@/features/material/components/ThumbnailList";
 import { SlideViewer } from "@/features/material/components/SlideViewer";
 import { ZoomControls } from "@/features/material/components/ZoomControls";
+import { ZoomAreaOverlay } from "@/features/material/components/ZoomAreaOverlay";
+import { calculateZoomFromRegion, calculatePanDelta } from "@/features/material/utils/zoom-calculator";
 import { TimerControl } from "@/features/timer/components/TimerControl";
 import { BriefControl } from "@/features/brief/components/BriefControl";
 import { MaterialUploader } from "@/features/material/components/MaterialUploader";
@@ -137,26 +139,52 @@ function PresentationControlContent() {
   }, [state?.presentation.mediaState]);
 
   const currentZoom = state?.presentation.zoom || { scale: 1.0, panX: 0, panY: 0 };
+  const [isZoomAreaActive, setIsZoomAreaActive] = useState(false);
+
+  const handleToggleZoomArea = useCallback(() => {
+    setIsZoomAreaActive((prev) => !prev);
+  }, []);
+
+  const handleSelectZoomRegion = useCallback(
+    (region: NormalizedZoomRegion) => {
+      const zoomResult = calculateZoomFromRegion(region, 5.0);
+      dispatchCommand("ZOOM_SET", {
+        scale: zoomResult.scale,
+        panX: zoomResult.panX,
+        panY: zoomResult.panY,
+        region: zoomResult.region,
+      });
+      setIsZoomAreaActive(false);
+    },
+    [dispatchCommand]
+  );
 
   const handleZoomIn = useCallback(() => {
-    const nextScale = Math.min(3.0, Math.round((currentZoom.scale + 0.25) * 100) / 100);
-    dispatchCommand("ZOOM_SET", { scale: nextScale, panX: currentZoom.panX, panY: currentZoom.panY });
+    const nextScale = Math.min(5.0, Math.round((currentZoom.scale + 0.25) * 100) / 100);
+    const maxPan = 50 * (1 - 1 / nextScale);
+    dispatchCommand("ZOOM_SET", {
+      scale: nextScale,
+      panX: Math.max(-maxPan, Math.min(currentZoom.panX, maxPan)),
+      panY: Math.max(-maxPan, Math.min(currentZoom.panY, maxPan)),
+    });
   }, [currentZoom, dispatchCommand]);
 
   const handleZoomOut = useCallback(() => {
     const nextScale = Math.max(1.0, Math.round((currentZoom.scale - 0.25) * 100) / 100);
+    const maxPan = nextScale === 1.0 ? 0 : 50 * (1 - 1 / nextScale);
     dispatchCommand("ZOOM_SET", {
       scale: nextScale,
-      panX: nextScale === 1.0 ? 0 : currentZoom.panX,
-      panY: nextScale === 1.0 ? 0 : currentZoom.panY,
+      panX: nextScale === 1.0 ? 0 : Math.max(-maxPan, Math.min(currentZoom.panX, maxPan)),
+      panY: nextScale === 1.0 ? 0 : Math.max(-maxPan, Math.min(currentZoom.panY, maxPan)),
     });
   }, [currentZoom, dispatchCommand]);
 
   const handleZoomReset = useCallback(() => {
+    setIsZoomAreaActive(false);
     dispatchCommand("ZOOM_RESET");
   }, [dispatchCommand]);
 
-  // Pan / Drag handling when zoomed in (scale > 1.0)
+  // Pan / Drag handling when zoomed in (scale > 1.0) and not in Zoom Area mode
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef<{ x: number; y: number; initialPanX: number; initialPanY: number }>({
     x: 0,
@@ -167,7 +195,7 @@ function PresentationControlContent() {
   const panThrottleRef = useRef<number>(0);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (currentZoom.scale <= 1.0) return;
+    if (currentZoom.scale <= 1.0 || isZoomAreaActive) return;
     isDraggingRef.current = true;
     dragStartRef.current = {
       x: e.clientX,
@@ -175,25 +203,31 @@ function PresentationControlContent() {
       initialPanX: currentZoom.panX || 0,
       initialPanY: currentZoom.panY || 0,
     };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current || currentZoom.scale <= 1.0) return;
+    if (!isDraggingRef.current || currentZoom.scale <= 1.0 || isZoomAreaActive) return;
     const deltaX = e.clientX - dragStartRef.current.x;
     const deltaY = e.clientY - dragStartRef.current.y;
 
     const rect = e.currentTarget.getBoundingClientRect();
-    const percentX = (deltaX / (rect.width * currentZoom.scale)) * 100;
-    const percentY = (deltaY / (rect.height * currentZoom.scale)) * 100;
-
-    const nextPanX = Math.max(-50, Math.min(50, Math.round(dragStartRef.current.initialPanX + percentX)));
-    const nextPanY = Math.max(-50, Math.min(50, Math.round(dragStartRef.current.initialPanY + percentY)));
+    const panResult = calculatePanDelta(
+      deltaX,
+      deltaY,
+      rect.width,
+      rect.height,
+      currentZoom.scale,
+      dragStartRef.current.initialPanX,
+      dragStartRef.current.initialPanY
+    );
 
     const now = Date.now();
     if (now - panThrottleRef.current > 40) {
       panThrottleRef.current = now;
-      dispatchCommand("ZOOM_SET", { scale: currentZoom.scale, panX: nextPanX, panY: nextPanY });
+      dispatchCommand("ZOOM_SET", { scale: currentZoom.scale, panX: panResult.panX, panY: panResult.panY });
     }
   };
 
@@ -830,11 +864,22 @@ function PresentationControlContent() {
               onNumPagesDiscovered={handlePdfNumPagesDiscovered}
             />
 
+            {/* Interactive Zoom Area Selection Overlay */}
+            {isZoomAreaActive && state?.presentation.isPresenting && activeMaterial && (
+              <ZoomAreaOverlay
+                isActive={isZoomAreaActive}
+                onSelectRegion={handleSelectZoomRegion}
+                onCancel={() => setIsZoomAreaActive(false)}
+              />
+            )}
+
             {/* Floating Zoom Controls Widget */}
             {state?.presentation.isPresenting && activeMaterial && (
               <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-30 pointer-events-auto">
                 <ZoomControls
                   zoom={state?.presentation.zoom}
+                  isZoomAreaActive={isZoomAreaActive}
+                  onToggleZoomArea={handleToggleZoomArea}
                   onZoomIn={handleZoomIn}
                   onZoomOut={handleZoomOut}
                   onZoomReset={handleZoomReset}
