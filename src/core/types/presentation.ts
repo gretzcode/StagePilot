@@ -71,6 +71,13 @@ export interface PresentationSession {
   updatedAt: number;
 }
 
+export interface PresentationZoomState {
+  scale: number; // 1.0 to 3.0
+  panX: number; // -100 to 100 percentage offset
+  panY: number; // -100 to 100 percentage offset
+  updatedAt?: number;
+}
+
 export interface PresentationState {
   isPresenting: boolean;
   materialId: string | null;
@@ -87,6 +94,7 @@ export interface PresentationState {
   blanked: boolean;
   blackoutMode: boolean;
   mediaState?: MediaPlaybackState;
+  zoom?: PresentationZoomState;
   startedAt: number | null;
   updatedAt: number;
 }

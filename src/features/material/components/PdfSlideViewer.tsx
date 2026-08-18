@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { usePdfDocument } from "../hooks/usePdfDocument";
 import { useAspectFit } from "../hooks/useAspectFit";
+import { PresentationZoomState } from "@/core/types";
 
 interface PdfSlideViewerProps {
   url: string;
@@ -11,6 +12,7 @@ interface PdfSlideViewerProps {
   currentPage?: number;
   role?: "control" | "audience" | "confidence";
   title?: string;
+  zoom?: PresentationZoomState;
   /** Called once when the real page count is known from the loaded PDF */
   onNumPagesDiscovered?: (numPages: number) => void;
 }
@@ -28,6 +30,7 @@ export function PdfSlideViewer({
   currentPage,
   role,
   title: _title,
+  zoom,
   onNumPagesDiscovered,
 }: PdfSlideViewerProps) {
   const activeSlide = currentSlide ?? currentPage ?? 1;
@@ -186,11 +189,23 @@ export function PdfSlideViewer({
         style={fit.style}
         className="relative flex items-center justify-center overflow-hidden shrink-0 shadow-2xl transition-[width,height] duration-75"
       >
-        <canvas
-          ref={canvasRef}
-          style={{ width: "100%", height: "100%", objectFit: "contain" }}
-          className="max-w-full max-h-full block shadow-2xl transition-opacity duration-150"
-        />
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            transform: `scale(${zoom?.scale || 1.0}) translate(${zoom?.panX || 0}%, ${zoom?.panY || 0}%)`,
+            transformOrigin: "center center",
+            transition: "transform 0.2s cubic-bezier(0.2, 0, 0, 1)",
+            willChange: "transform",
+          }}
+          className="w-full h-full relative flex items-center justify-center"
+        >
+          <canvas
+            ref={canvasRef}
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            className="max-w-full max-h-full block shadow-2xl transition-opacity duration-150"
+          />
+        </div>
       </div>
     </div>
   );

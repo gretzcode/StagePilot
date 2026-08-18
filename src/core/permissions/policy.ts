@@ -124,6 +124,8 @@ export class PermissionPolicy {
       "MEDIA_STOP",
       "MEDIA_DURATION_UPDATE",
       "CONTROL_TAKEOVER",
+      "ZOOM_SET",
+      "ZOOM_RESET",
     ];
 
     if (allowedForControl.includes(command.type)) {

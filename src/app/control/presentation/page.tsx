@@ -1,10 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Material } from "@/core/types";
 import { ThumbnailList } from "@/features/material/components/ThumbnailList";
 import { SlideViewer } from "@/features/material/components/SlideViewer";
+import { ZoomControls } from "@/features/material/components/ZoomControls";
 import { TimerControl } from "@/features/timer/components/TimerControl";
 import { BriefControl } from "@/features/brief/components/BriefControl";
 import { MaterialUploader } from "@/features/material/components/MaterialUploader";
@@ -134,6 +135,76 @@ function PresentationControlContent() {
 
     return () => clearInterval(interval);
   }, [state?.presentation.mediaState]);
+
+  const currentZoom = state?.presentation.zoom || { scale: 1.0, panX: 0, panY: 0 };
+
+  const handleZoomIn = useCallback(() => {
+    const nextScale = Math.min(3.0, Math.round((currentZoom.scale + 0.25) * 100) / 100);
+    dispatchCommand("ZOOM_SET", { scale: nextScale, panX: currentZoom.panX, panY: currentZoom.panY });
+  }, [currentZoom, dispatchCommand]);
+
+  const handleZoomOut = useCallback(() => {
+    const nextScale = Math.max(1.0, Math.round((currentZoom.scale - 0.25) * 100) / 100);
+    dispatchCommand("ZOOM_SET", {
+      scale: nextScale,
+      panX: nextScale === 1.0 ? 0 : currentZoom.panX,
+      panY: nextScale === 1.0 ? 0 : currentZoom.panY,
+    });
+  }, [currentZoom, dispatchCommand]);
+
+  const handleZoomReset = useCallback(() => {
+    dispatchCommand("ZOOM_RESET");
+  }, [dispatchCommand]);
+
+  // Pan / Drag handling when zoomed in (scale > 1.0)
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef<{ x: number; y: number; initialPanX: number; initialPanY: number }>({
+    x: 0,
+    y: 0,
+    initialPanX: 0,
+    initialPanY: 0,
+  });
+  const panThrottleRef = useRef<number>(0);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (currentZoom.scale <= 1.0) return;
+    isDraggingRef.current = true;
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      initialPanX: currentZoom.panX || 0,
+      initialPanY: currentZoom.panY || 0,
+    };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current || currentZoom.scale <= 1.0) return;
+    const deltaX = e.clientX - dragStartRef.current.x;
+    const deltaY = e.clientY - dragStartRef.current.y;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const percentX = (deltaX / (rect.width * currentZoom.scale)) * 100;
+    const percentY = (deltaY / (rect.height * currentZoom.scale)) * 100;
+
+    const nextPanX = Math.max(-50, Math.min(50, Math.round(dragStartRef.current.initialPanX + percentX)));
+    const nextPanY = Math.max(-50, Math.min(50, Math.round(dragStartRef.current.initialPanY + percentY)));
+
+    const now = Date.now();
+    if (now - panThrottleRef.current > 40) {
+      panThrottleRef.current = now;
+      dispatchCommand("ZOOM_SET", { scale: currentZoom.scale, panX: nextPanX, panY: nextPanY });
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+  };
 
   const scannedMaterialsRef = useRef<Set<string>>(new Set());
   const [leftTab, setLeftTab] = useState<"playlist" | "slides">("playlist");
@@ -723,7 +794,15 @@ function PresentationControlContent() {
 
         {/* Center Column: Live Slide Output Viewer (Expands dynamically to col-span-9 when sidebar is hidden) */}
         <div className={`${isSidebarOpen ? "col-span-12 lg:col-span-6" : "col-span-12 lg:col-span-9"} bg-black flex flex-col justify-between p-2 sm:p-4 md:p-6 relative overflow-hidden transition-all duration-200 min-h-[350px] sm:min-h-[450px]`}>
-          <div className="flex-1 flex items-center justify-center relative min-h-[220px] sm:min-h-[250px] overflow-hidden">
+          <div
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            className={`flex-1 flex items-center justify-center relative min-h-[220px] sm:min-h-[250px] overflow-hidden ${
+              currentZoom.scale > 1.0 ? "cursor-grab active:cursor-grabbing" : ""
+            }`}
+          >
             <SlideViewer
               material={activeMaterial}
               slide={state?.presentation.currentSlideMetadata || null}
@@ -732,6 +811,7 @@ function PresentationControlContent() {
               role="control"
               deviceId={deviceId}
               mediaState={state?.presentation.mediaState}
+              zoom={state?.presentation.zoom}
               onMediaPlay={(time) => dispatchCommand("MEDIA_PLAY", { currentTime: time ?? localVideoTime })}
               onMediaPause={(time) => dispatchCommand("MEDIA_PAUSE", { currentTime: time ?? localVideoTime })}
               onMediaSeek={(target) => {
@@ -749,6 +829,18 @@ function PresentationControlContent() {
               }}
               onNumPagesDiscovered={handlePdfNumPagesDiscovered}
             />
+
+            {/* Floating Zoom Controls Widget */}
+            {state?.presentation.isPresenting && activeMaterial && (
+              <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-30 pointer-events-auto">
+                <ZoomControls
+                  zoom={state?.presentation.zoom}
+                  onZoomIn={handleZoomIn}
+                  onZoomOut={handleZoomOut}
+                  onZoomReset={handleZoomReset}
+                />
+              </div>
+            )}
           </div>
 
           {/* Bottom Bar: Synchronized Video Controls OR Slide Controls */}
@@ -871,9 +963,6 @@ function PresentationControlContent() {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <span className="hidden sm:inline-block text-[10px] font-mono text-purple-400 bg-purple-950/60 border border-purple-800/50 px-2.5 py-1 rounded-full">
-                    LIVE VIDEO
-                  </span>
                   <button
                     onClick={handleStopAndExit}
                     className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"

@@ -110,6 +110,7 @@ function ConfidenceDisplayContent() {
               role="confidence"
               deviceId={deviceId}
               mediaState={state?.presentation.mediaState}
+              zoom={state?.presentation.zoom}
             />
           </div>
 

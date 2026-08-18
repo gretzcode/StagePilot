@@ -86,6 +86,7 @@ function AudienceDisplayContent() {
           role="audience"
           deviceId={deviceId}
           mediaState={state?.presentation.mediaState}
+          zoom={state?.presentation.zoom}
         />
       ) : (
         /* Waiting for presentation UI */

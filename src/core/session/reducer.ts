@@ -175,6 +175,7 @@ export function stageSessionReducer(
               updatedAt: now,
             }
           : undefined,
+        zoom: { scale: 1.0, panX: 0, panY: 0, updatedAt: now },
         startedAt: now,
         updatedAt: now,
       };
@@ -191,6 +192,7 @@ export function stageSessionReducer(
       nextState.presentation.currentSlideMetadata = null;
       nextState.presentation.nextSlideMetadata = null;
       nextState.presentation.blanked = false;
+      nextState.presentation.zoom = { scale: 1.0, panX: 0, panY: 0, updatedAt: now };
       nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
       nextState.presentation.updatedAt = now;
       break;
@@ -199,7 +201,7 @@ export function stageSessionReducer(
     case "SLIDE_NEXT": {
       if (!nextState.presentation.isPresenting) break;
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
-      const totalSlides = Math.max(material?.totalPages || 1, material?.slides?.length || 1, nextState.presentation.totalSlides || 1);
+      const totalSlides = Math.max(nextState.presentation.totalSlides || 1, material?.totalPages || 1, material?.slides?.length || 1);
       ensureMaterialSlides(material, totalSlides);
 
       if (nextState.presentation.currentSlide >= totalSlides) {
@@ -214,6 +216,7 @@ export function stageSessionReducer(
       nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
       nextState.presentation.currentSlideMetadata = material?.slides[nextSlideNum - 1] || { index: nextSlideNum, title: `Slide ${nextSlideNum}` };
       nextState.presentation.nextSlideMetadata = nextSlideNum < totalSlides ? (material?.slides[nextSlideNum] || { index: nextSlideNum + 1, title: `Slide ${nextSlideNum + 1}` }) : null;
+      nextState.presentation.zoom = { scale: 1.0, panX: 0, panY: 0, updatedAt: now };
       nextState.presentation.updatedAt = now;
       if (material?.type === "video") {
         nextState.presentation.mediaState = {
@@ -242,6 +245,7 @@ export function stageSessionReducer(
       nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
       nextState.presentation.currentSlideMetadata = material?.slides[prevSlideNum - 1] || { index: prevSlideNum, title: `Slide ${prevSlideNum}` };
       nextState.presentation.nextSlideMetadata = material?.slides[prevSlideNum] || (prevSlideNum < totalSlides ? { index: prevSlideNum + 1, title: `Slide ${prevSlideNum + 1}` } : null);
+      nextState.presentation.zoom = { scale: 1.0, panX: 0, panY: 0, updatedAt: now };
       nextState.presentation.updatedAt = now;
       if (material?.type === "video") {
         nextState.presentation.mediaState = {
@@ -269,6 +273,7 @@ export function stageSessionReducer(
       nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
       nextState.presentation.currentSlideMetadata = material?.slides[targetSlideNum - 1] || { index: targetSlideNum, title: `Slide ${targetSlideNum}` };
       nextState.presentation.nextSlideMetadata = material?.slides[targetSlideNum] || (targetSlideNum < totalSlides ? { index: targetSlideNum + 1, title: `Slide ${targetSlideNum + 1}` } : null);
+      nextState.presentation.zoom = { scale: 1.0, panX: 0, panY: 0, updatedAt: now };
       nextState.presentation.updatedAt = now;
       if (material?.type === "video") {
         nextState.presentation.mediaState = {
@@ -459,6 +464,34 @@ export function stageSessionReducer(
 
     case "CONTROL_TAKEOVER": {
       nextState.activeControllerDeviceId = command.senderDeviceId;
+      break;
+    }
+
+    case "ZOOM_SET": {
+      const scale = Math.max(1.0, Math.min(Number(command.payload.scale) || 1.0, 3.0));
+      const panX = scale === 1.0 ? 0 : Math.max(-100, Math.min(Number(command.payload.panX) || 0, 100));
+      const panY = scale === 1.0 ? 0 : Math.max(-100, Math.min(Number(command.payload.panY) || 0, 100));
+
+      nextState.presentation.zoom = {
+        scale,
+        panX,
+        panY,
+        updatedAt: now,
+      };
+      nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+      nextState.presentation.updatedAt = now;
+      break;
+    }
+
+    case "ZOOM_RESET": {
+      nextState.presentation.zoom = {
+        scale: 1.0,
+        panX: 0,
+        panY: 0,
+        updatedAt: now,
+      };
+      nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+      nextState.presentation.updatedAt = now;
       break;
     }
   }

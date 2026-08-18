@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import { MediaPlaybackState } from "@/core/types";
+import { MediaPlaybackState, PresentationZoomState } from "@/core/types";
 import {
   IVideoPresentationAdapter,
   YouTubeVideoAdapter,
@@ -15,6 +15,7 @@ interface SyncVideoPlayerProps {
   url: string;
   role?: "control" | "audience" | "confidence";
   mediaState?: MediaPlaybackState;
+  zoom?: PresentationZoomState;
   onMediaPlay?: (currentTime?: number) => void;
   onMediaPause?: (currentTime?: number) => void;
   onMediaSeek?: (targetTime: number) => void;
@@ -26,6 +27,7 @@ export function SyncVideoPlayer({
   url,
   role = "audience",
   mediaState,
+  zoom,
   onMediaPlay,
   onMediaPause,
   onDurationDiscovered,
@@ -276,30 +278,42 @@ export function SyncVideoPlayer({
         style={fit.style}
         className="relative flex items-center justify-center overflow-hidden shrink-0 shadow-2xl transition-[width,height] duration-75"
       >
-        {/* Video Output Target */}
-        {isEmbedVideo ? (
-          <div className="w-full h-full relative flex items-center justify-center">
-            <iframe
-              key={embedUrl}
-              ref={iframeRef}
-              src={embedUrl}
-              onLoad={handleIframeLoad}
-              className="w-full h-full border-0 pointer-events-none select-none"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            transform: `scale(${zoom?.scale || 1.0}) translate(${zoom?.panX || 0}%, ${zoom?.panY || 0}%)`,
+            transformOrigin: "center center",
+            transition: "transform 0.2s cubic-bezier(0.2, 0, 0, 1)",
+            willChange: "transform",
+          }}
+          className="w-full h-full relative flex items-center justify-center"
+        >
+          {/* Video Output Target */}
+          {isEmbedVideo ? (
+            <div className="w-full h-full relative flex items-center justify-center">
+              <iframe
+                key={embedUrl}
+                ref={iframeRef}
+                src={embedUrl}
+                onLoad={handleIframeLoad}
+                className="w-full h-full border-0 pointer-events-none select-none"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            </div>
+          ) : (
+            <video
+              key={url}
+              ref={videoRef}
+              src={url}
+              className="w-full h-full object-contain pointer-events-none select-none"
+              playsInline
+              muted
+              onLoadedMetadata={handleVideoLoadedMetadata}
             />
-          </div>
-        ) : (
-          <video
-            key={url}
-            ref={videoRef}
-            src={url}
-            className="w-full h-full object-contain pointer-events-none select-none"
-            playsInline
-            muted
-            onLoadedMetadata={handleVideoLoadedMetadata}
-          />
-        )}
+          )}
+        </div>
 
         {/* Control Room Overlay: Click to Play/Pause & Status Feedback */}
         {role === "control" && (

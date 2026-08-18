@@ -30,7 +30,9 @@ export type StageCommandType =
   | "MEDIA_SEEK"
   | "MEDIA_STOP"
   | "MEDIA_DURATION_UPDATE"
-  | "CONTROL_TAKEOVER";
+  | "CONTROL_TAKEOVER"
+  | "ZOOM_SET"
+  | "ZOOM_RESET";
 
 export interface BaseCommand {
   type: StageCommandType;
@@ -221,6 +223,20 @@ export interface ControlTakeoverCommand extends BaseCommand {
   };
 }
 
+export interface ZoomSetCommand extends BaseCommand {
+  type: "ZOOM_SET";
+  payload: {
+    scale: number;
+    panX?: number;
+    panY?: number;
+  };
+}
+
+export interface ZoomResetCommand extends BaseCommand {
+  type: "ZOOM_RESET";
+  payload?: Record<string, never>;
+}
+
 export type StageCommand =
   | RoomCreateCommand
   | DeviceRequestJoinCommand
@@ -248,4 +264,6 @@ export type StageCommand =
   | MediaSeekCommand
   | MediaStopCommand
   | MediaDurationUpdateCommand
-  | ControlTakeoverCommand;
+  | ControlTakeoverCommand
+  | ZoomSetCommand
+  | ZoomResetCommand;

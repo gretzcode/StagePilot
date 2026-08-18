@@ -61,6 +61,7 @@ export function createInitialSessionState(
       nextSlideMetadata: null,
       blanked: false,
       blackoutMode: false,
+      zoom: { scale: 1.0, panX: 0, panY: 0 },
       startedAt: null,
       updatedAt: now,
     },

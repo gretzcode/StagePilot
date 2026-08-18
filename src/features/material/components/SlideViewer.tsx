@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Material, MediaPlaybackState, SlideMetadata } from "@/core/types";
+import { Material, MediaPlaybackState, PresentationZoomState, SlideMetadata } from "@/core/types";
 import { PdfSlideViewer } from "./PdfSlideViewer";
 import { SyncVideoPlayer } from "./SyncVideoPlayer";
 import { useAspectFit } from "../hooks/useAspectFit";
@@ -13,6 +13,7 @@ interface SlideViewerProps {
   currentPage?: number;
   blanked?: boolean;
   role?: "control" | "audience" | "confidence";
+  zoom?: PresentationZoomState;
   /** Called when the real PDF page count is discovered from PDF.js */
   onNumPagesDiscovered?: (numPages: number) => void;
   deviceId?: string;
@@ -66,6 +67,7 @@ export function SlideViewer({
   currentPage,
   blanked,
   role,
+  zoom,
   onNumPagesDiscovered,
   deviceId,
   mediaState,
@@ -88,6 +90,19 @@ export function SlideViewer({
   });
 
   const fit = useAspectFit(contentDimensions.width, contentDimensions.height);
+
+  const zoomScale = zoom?.scale || 1.0;
+  const panX = zoom?.panX || 0;
+  const panY = zoom?.panY || 0;
+
+  const zoomStyle: React.CSSProperties = {
+    width: "100%",
+    height: "100%",
+    transform: `scale(${zoomScale}) translate(${panX}%, ${panY}%)`,
+    transformOrigin: "center center",
+    transition: "transform 0.2s cubic-bezier(0.2, 0, 0, 1)",
+    willChange: "transform",
+  };
 
   const updateDimensionsFromImg = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const { naturalWidth, naturalHeight } = e.currentTarget;
@@ -247,6 +262,7 @@ export function SlideViewer({
         currentSlide={activeSlide}
         role={role}
         title={material.name}
+        zoom={zoom}
         onNumPagesDiscovered={onNumPagesDiscovered}
       />
     );
@@ -259,6 +275,7 @@ export function SlideViewer({
         url={videoUrl}
         role={role}
         mediaState={mediaState}
+        zoom={zoom}
         onMediaPlay={onMediaPlay}
         onMediaPause={onMediaPause}
         onMediaSeek={onMediaSeek}
@@ -283,24 +300,26 @@ export function SlideViewer({
               role !== "control" ? "pointer-events-none" : ""
             }`}
           >
-            {(["a", "b"] as const).map((layer) => (
-              <img
-                key={layer}
-                src={layers[layer] ?? undefined}
-                alt={layer === layers.front ? material.name : undefined}
-                className="absolute inset-0 w-full h-full object-contain"
-                style={{
-                  opacity: layers.front === layer ? 1 : 0,
-                  transition: "opacity 220ms ease-in-out",
-                  pointerEvents: layers.front === layer ? "auto" : "none",
-                }}
-                onLoad={(e) => {
-                  updateDimensionsFromImg(e);
-                  handleLayerLoad(layer);
-                }}
-                onError={() => setUseFallbackIframe(true)}
-              />
-            ))}
+            <div style={zoomStyle} className="w-full h-full relative flex items-center justify-center">
+              {(["a", "b"] as const).map((layer) => (
+                <img
+                  key={layer}
+                  src={layers[layer] ?? undefined}
+                  alt={layer === layers.front ? material.name : undefined}
+                  className="absolute inset-0 w-full h-full object-contain"
+                  style={{
+                    opacity: layers.front === layer ? 1 : 0,
+                    transition: "opacity 220ms ease-in-out",
+                    pointerEvents: layers.front === layer ? "auto" : "none",
+                  }}
+                  onLoad={(e) => {
+                    updateDimensionsFromImg(e);
+                    handleLayerLoad(layer);
+                  }}
+                  onError={() => setUseFallbackIframe(true)}
+                />
+              ))}
+            </div>
           </div>
         </div>
       );
@@ -320,14 +339,16 @@ export function SlideViewer({
               role !== "control" ? "pointer-events-none" : ""
             }`}
           >
-            <iframe
-              ref={iframeRef}
-              key={`gslide-iframe-${googlePresentationId}`}
-              src={embedUrl}
-              title={material.name}
-              className="w-full h-full border-0 bg-slate-950 z-10"
-              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-            />
+            <div style={zoomStyle} className="w-full h-full relative flex items-center justify-center">
+              <iframe
+                ref={iframeRef}
+                key={`gslide-iframe-${googlePresentationId}`}
+                src={embedUrl}
+                title={material.name}
+                className="w-full h-full border-0 bg-slate-950 z-10"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+              />
+            </div>
           </div>
         </div>
       );
@@ -349,13 +370,15 @@ export function SlideViewer({
               style={fit.style}
               className="relative flex items-center justify-center overflow-hidden shrink-0 shadow-2xl transition-[width,height] duration-75"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={slideImageUrl}
-                alt={activeSlideData?.title || `${material.name} — Slide ${activeSlide}`}
-                className="w-full h-full object-contain block shadow-2xl transition-opacity duration-150"
-                onLoad={updateDimensionsFromImg}
-              />
+              <div style={zoomStyle} className="w-full h-full relative flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={slideImageUrl}
+                  alt={activeSlideData?.title || `${material.name} — Slide ${activeSlide}`}
+                  className="w-full h-full object-contain block shadow-2xl transition-opacity duration-150"
+                  onLoad={updateDimensionsFromImg}
+                />
+              </div>
             </div>
           </div>
         );
@@ -392,16 +415,18 @@ export function SlideViewer({
             role !== "control" ? "pointer-events-none select-none" : ""
           }`}
         >
-          <iframe
-            ref={iframeRef}
-            src={persistentIframeSrc}
-            title={material.name}
-            className="w-full h-full border-0 bg-slate-950 z-10"
-            sandbox={sandboxAttrs}
-            allowFullScreen
-            allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerPolicy="strict-origin-when-cross-origin"
-          />
+          <div style={zoomStyle} className="w-full h-full relative flex items-center justify-center">
+            <iframe
+              ref={iframeRef}
+              src={persistentIframeSrc}
+              title={material.name}
+              className="w-full h-full border-0 bg-slate-950 z-10"
+              sandbox={sandboxAttrs}
+              allowFullScreen
+              allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+            />
+          </div>
         </div>
       </div>
     );
@@ -417,13 +442,15 @@ export function SlideViewer({
           style={fit.style}
           className="relative flex items-center justify-center overflow-hidden shrink-0 shadow-2xl transition-[width,height] duration-75"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={slide?.contentUrl || material.url || rawUrl}
-            alt={material.name}
-            className="w-full h-full object-contain block shadow-2xl transition-opacity duration-150"
-            onLoad={updateDimensionsFromImg}
-          />
+          <div style={zoomStyle} className="w-full h-full relative flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={slide?.contentUrl || material.url || rawUrl}
+              alt={material.name}
+              className="w-full h-full object-contain block shadow-2xl transition-opacity duration-150"
+              onLoad={updateDimensionsFromImg}
+            />
+          </div>
         </div>
       </div>
     );
