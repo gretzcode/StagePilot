@@ -82,8 +82,8 @@ export function useAspectFit(
   }
 
   const style: React.CSSProperties = {
-    width: renderedWidth > 0 && cW > 0 ? `${renderedWidth}px` : "100%",
-    height: renderedHeight > 0 && cH > 0 ? `${renderedHeight}px` : "100%",
+    width: renderedWidth > 0 && cW > 0 ? `${renderedWidth}px` : "auto",
+    height: renderedHeight > 0 && cH > 0 ? `${renderedHeight}px` : "auto",
     maxWidth: "100%",
     maxHeight: "100%",
     aspectRatio: `${validContentW} / ${validContentH}`,

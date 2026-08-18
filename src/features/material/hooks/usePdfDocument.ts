@@ -37,7 +37,7 @@ async function loadPdfDocument(fetchTarget: string): Promise<PDFDocumentProxy> {
   installPolyfills();
   const pdfjsLib = await import("pdfjs-dist");
   if (typeof window !== "undefined" && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
   }
   return pdfjsLib.getDocument(fetchTarget).promise;
 }
@@ -47,7 +47,7 @@ async function loadPdfDocument(fetchTarget: string): Promise<PDFDocumentProxy> {
  * so that when the user starts the presentation (Go Live), it opens with 0ms delay.
  */
 export function preloadPdfDocument(url: string): Promise<PDFDocumentProxy | null> {
-  if (!url || typeof window === "undefined") return Promise.resolve(null);
+  if (!url) return Promise.resolve(null);
   const cacheKey = url;
   if (pdfDocCache.has(cacheKey)) {
     return Promise.resolve(pdfDocCache.get(cacheKey)!);

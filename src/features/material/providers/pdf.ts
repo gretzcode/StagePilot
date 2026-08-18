@@ -20,7 +20,7 @@ export class PdfMaterialProvider implements MaterialProvider {
         installPolyfills();
         const pdfjsLib = await import("pdfjs-dist");
         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
         }
         const doc = await pdfjsLib.getDocument(url).promise;
         estimatedPages = doc.numPages;
