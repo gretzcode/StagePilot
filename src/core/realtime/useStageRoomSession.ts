@@ -5,6 +5,7 @@ import { StageSessionState, StageCommand, DeviceApprovalStatus } from "@/core/ty
 import { ServerMessage } from "@/core/realtime/protocol";
 
 import { stageSessionReducer } from "@/core/session/reducer";
+import { updateServerTimeOffset } from "@/core/utils/clock-sync";
 
 export interface UseStageRoomSessionOptions {
   roomCode: string;
@@ -56,6 +57,7 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
     // 2. Fetch authoritative state via API
     const fetchState = async () => {
       try {
+        const reqSentAt = Date.now();
         const url = `/api/ws?roomCode=${encodeURIComponent(normalizedRoomCode)}&deviceId=${encodeURIComponent(
           deviceId
         )}&role=${role}&deviceName=${encodeURIComponent(deviceName || "Device")}`;
@@ -76,7 +78,10 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
           return;
         }
 
-        const data = (await res.json()) as { type?: string; state?: StageSessionState };
+        const data = (await res.json()) as { type?: string; state?: StageSessionState; timestamp?: number };
+        if (data.timestamp) {
+          updateServerTimeOffset(data.timestamp, reqSentAt);
+        }
         const fetchedState = data.state;
         if (data.type === "SYNC_STATE" && fetchedState) {
           // Prevent old state from overwriting newer local state via version & revision check
@@ -138,6 +143,9 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
       broadcastChannel.onmessage = (event) => {
         if (!isMounted) return;
         try {
+          if (event.data?.timestamp) {
+            updateServerTimeOffset(event.data.timestamp);
+          }
           const broadcastedState = event.data?.state as StageSessionState | undefined;
           if (event.data?.type === "SYNC_STATE" && broadcastedState) {
             // Prevent old state from overwriting newer local state via version & revision check
@@ -197,6 +205,9 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         if (!isMounted) return;
         try {
           const msg: ServerMessage = JSON.parse(event.data);
+          if (msg.timestamp) {
+            updateServerTimeOffset(msg.timestamp);
+          }
           if (msg.type === "SYNC_STATE") {
             const socketState = msg.state;
             if (socketState) {
@@ -217,7 +228,7 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
 
               // Relay state to local BroadcastChannel for 0ms cross-window sync
               try {
-                broadcastChannel?.postMessage({ type: "SYNC_STATE", state: socketState });
+                broadcastChannel?.postMessage({ type: "SYNC_STATE", state: socketState, timestamp: msg.timestamp });
               } catch {}
             }
           } else if (msg.type === "ERROR") {

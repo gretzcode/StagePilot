@@ -85,22 +85,38 @@ export function TimerControl({ timer, onStart, onPause, onReset, onSetDuration }
           <span>Reset</span>
         </button>
 
-        <div className="flex items-center space-x-1">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (customMinutes > 0) {
+              onSetDuration(customMinutes * 60);
+            }
+          }}
+          className="flex items-center space-x-1"
+        >
           <input
             type="number"
             min="1"
             max="180"
             value={customMinutes}
             onChange={(e) => setCustomMinutes(Number(e.target.value))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (customMinutes > 0) {
+                  onSetDuration(customMinutes * 60);
+                }
+              }
+            }}
             className="w-full px-2 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-center text-white focus:outline-none focus:border-purple-500"
           />
           <button
-            onClick={() => onSetDuration(customMinutes * 60)}
-            className="px-2 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/50 text-purple-300 font-bold text-[10px] transition"
+            type="submit"
+            className="px-2 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/50 text-purple-300 font-bold text-[10px] transition cursor-pointer"
           >
             SET
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );

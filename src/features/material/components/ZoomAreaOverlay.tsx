@@ -15,6 +15,49 @@ interface DragPoint {
   y: number;
 }
 
+function get16x9Box(start: DragPoint, current: DragPoint, containerW: number, containerH: number) {
+  const ASPECT = 16 / 9;
+  const rawDx = current.x - start.x;
+  const rawDy = current.y - start.y;
+  const dirX = rawDx >= 0 ? 1 : -1;
+  const dirY = rawDy >= 0 ? 1 : -1;
+
+  let width = Math.abs(rawDx);
+  let height = width / ASPECT;
+
+  if (Math.abs(rawDy) > height) {
+    height = Math.abs(rawDy);
+    width = height * ASPECT;
+  }
+
+  // Bound within container
+  const maxW = dirX === 1 ? containerW - start.x : start.x;
+  const maxH = dirY === 1 ? containerH - start.y : start.y;
+
+  if (width > maxW) {
+    width = maxW;
+    height = width / ASPECT;
+  }
+  if (height > maxH) {
+    height = maxH;
+    width = height * ASPECT;
+  }
+
+  const left = dirX === 1 ? start.x : start.x - width;
+  const top = dirY === 1 ? start.y : start.y - height;
+
+  const normW = containerW > 0 ? width / containerW : 1;
+  const scale = normW > 0 ? Math.max(1, Math.min(5, Math.round((1 / normW) * 10) / 10)) : 1;
+
+  return {
+    left: Math.max(0, left),
+    top: Math.max(0, top),
+    width: Math.max(0, width),
+    height: Math.max(0, height),
+    scale,
+  };
+}
+
 export function ZoomAreaOverlay({
   isActive,
   onSelectRegion,
@@ -79,21 +122,18 @@ export function ZoomAreaOverlay({
     } catch {}
 
     const rect = containerRef.current.getBoundingClientRect();
-    const minX = Math.min(startPoint.x, currentPoint.x);
-    const minY = Math.min(startPoint.y, currentPoint.y);
-    const boxW = Math.abs(currentPoint.x - startPoint.x);
-    const boxH = Math.abs(currentPoint.y - startPoint.y);
+    const box = get16x9Box(startPoint, currentPoint, rect.width, rect.height);
 
     setIsDragging(false);
     setStartPoint(null);
     setCurrentPoint(null);
 
-    // Filter out accidental clicks (minimum 12px box)
-    if (boxW >= 12 && boxH >= 12 && rect.width > 0 && rect.height > 0) {
-      const normX = minX / rect.width;
-      const normY = minY / rect.height;
-      const normWidth = boxW / rect.width;
-      const normHeight = boxH / rect.height;
+    // Filter out accidental clicks (minimum 16x9px box)
+    if (box.width >= 16 && box.height >= 9 && rect.width > 0 && rect.height > 0) {
+      const normX = box.left / rect.width;
+      const normY = box.top / rect.height;
+      const normWidth = box.width / rect.width;
+      const normHeight = box.height / rect.height;
 
       onSelectRegion({
         x: normX,
@@ -106,31 +146,22 @@ export function ZoomAreaOverlay({
 
   if (!isActive) return null;
 
-  // Calculate current selection rectangle dimensions
+  // Calculate current selection rectangle dimensions with 16:9 constraint
   let rectStyle: React.CSSProperties | null = null;
   let approximateScale = 1;
 
-  if (isDragging && startPoint && currentPoint) {
-    const left = Math.min(startPoint.x, currentPoint.x);
-    const top = Math.min(startPoint.y, currentPoint.y);
-    const width = Math.abs(currentPoint.x - startPoint.x);
-    const height = Math.abs(currentPoint.y - startPoint.y);
+  if (isDragging && startPoint && currentPoint && containerRef.current) {
+    const cRect = containerRef.current.getBoundingClientRect();
+    const box = get16x9Box(startPoint, currentPoint, cRect.width, cRect.height);
 
     rectStyle = {
-      left: `${left}px`,
-      top: `${top}px`,
-      width: `${width}px`,
-      height: `${height}px`,
+      left: `${box.left}px`,
+      top: `${box.top}px`,
+      width: `${box.width}px`,
+      height: `${box.height}px`,
     };
 
-    if (containerRef.current) {
-      const cRect = containerRef.current.getBoundingClientRect();
-      if (cRect.width > 0 && cRect.height > 0 && width > 0 && height > 0) {
-        const normW = width / cRect.width;
-        const normH = height / cRect.height;
-        approximateScale = Math.max(1, Math.min(5, Math.round(Math.min(1 / normW, 1 / normH) * 10) / 10));
-      }
-    }
+    approximateScale = box.scale;
   }
 
   return (

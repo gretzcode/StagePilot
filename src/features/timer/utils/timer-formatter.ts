@@ -1,4 +1,5 @@
 import { TimerStatus } from "@/core/types";
+import { getSyncedNow } from "@/core/utils/clock-sync";
 
 export interface FormattedTimerResult {
   formattedTime: string;
@@ -18,13 +19,14 @@ export function formatStageTimer(
   duration: number,
   remaining: number,
   startedAt: number | null,
-  now = Date.now()
+  now?: number
 ): FormattedTimerResult {
+  const currentNow = typeof now === "number" ? now : getSyncedNow();
   let isOvertime = false;
   let diffSeconds = remaining;
 
   if (status === "running" && startedAt) {
-    const elapsedSeconds = Math.floor((now - startedAt) / 1000);
+    const elapsedSeconds = Math.max(0, Math.floor((currentNow - startedAt) / 1000));
     if (elapsedSeconds > duration) {
       isOvertime = true;
       diffSeconds = elapsedSeconds - duration;
