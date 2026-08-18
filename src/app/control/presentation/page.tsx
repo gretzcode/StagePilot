@@ -855,8 +855,8 @@ function PresentationControlContent() {
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
-            className={`flex-1 flex items-center justify-center relative min-h-[220px] sm:min-h-[250px] overflow-hidden ${
-              currentZoom.scale > 1.0 ? "cursor-grab active:cursor-grabbing" : ""
+            className={`flex-1 flex items-center justify-center relative min-h-[220px] sm:min-h-[250px] overflow-hidden select-none ${
+              currentZoom.scale > 1.0 ? "cursor-grab active:cursor-grabbing touch-none" : ""
             }`}
           >
             <SlideViewer

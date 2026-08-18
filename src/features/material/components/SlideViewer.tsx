@@ -307,11 +307,14 @@ export function SlideViewer({
                   key={layer}
                   src={layers[layer] ?? undefined}
                   alt={layer === layers.front ? material.name : undefined}
-                  className="absolute inset-0 w-full h-full object-contain"
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
+                  className="absolute inset-0 w-full h-full object-contain select-none"
                   style={{
                     opacity: layers.front === layer ? 1 : 0,
                     transition: "opacity 220ms ease-in-out",
-                    pointerEvents: layers.front === layer ? "auto" : "none",
+                    pointerEvents: "none",
+                    userSelect: "none",
                   }}
                   onLoad={(e) => {
                     updateDimensionsFromImg(e);
@@ -376,7 +379,9 @@ export function SlideViewer({
                 <img
                   src={slideImageUrl}
                   alt={activeSlideData?.title || `${material.name} — Slide ${activeSlide}`}
-                  className="w-full h-full object-contain block shadow-2xl transition-opacity duration-150"
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
+                  className="w-full h-full object-contain block shadow-2xl transition-opacity duration-150 select-none pointer-events-none"
                   onLoad={updateDimensionsFromImg}
                 />
               </div>
@@ -448,7 +453,9 @@ export function SlideViewer({
             <img
               src={slide?.contentUrl || material.url || rawUrl}
               alt={material.name}
-              className="w-full h-full object-contain block shadow-2xl transition-opacity duration-150"
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+              className="w-full h-full object-contain block shadow-2xl transition-opacity duration-150 select-none pointer-events-none"
               onLoad={updateDimensionsFromImg}
             />
           </div>

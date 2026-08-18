@@ -203,7 +203,7 @@ export function PdfSlideViewer({
           <canvas
             ref={canvasRef}
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
-            className="max-w-full max-h-full block shadow-2xl transition-opacity duration-150"
+            className="max-w-full max-h-full block shadow-2xl transition-opacity duration-150 pointer-events-none select-none"
           />
         </div>
       </div>
