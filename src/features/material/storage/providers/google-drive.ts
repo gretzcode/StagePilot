@@ -283,6 +283,21 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     if (!response.ok && response.status !== 404) throw new Error("Gagal menghapus file Google Drive.");
   }
 
+  async deleteRoomFolder(roomCode: string): Promise<void> {
+    try {
+      const rootId = await this.findOrCreateFolder("StagePilot");
+      const roomsId = await this.findOrCreateFolder("Rooms", rootId);
+      const folderKey = `${roomsId}/${roomCode.toUpperCase()}`;
+      const folderId = folderIdCache.get(folderKey)?.id || (await this.findOrCreateFolder(roomCode.toUpperCase(), roomsId));
+      if (folderId) {
+        await this.deleteDriveFile(folderId);
+        folderIdCache.delete(folderKey);
+      }
+    } catch {
+      // Non-fatal cleanup failure
+    }
+  }
+
   private async getAccessToken(): Promise<string> {
     if (globalDriveToken && globalDriveToken.expiresAt > Date.now() + 60_000) return globalDriveToken.token;
     const clientId = this.getSecret("GOOGLE_CLIENT_ID");

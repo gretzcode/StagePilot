@@ -1,9 +1,10 @@
 // StagePilot Centralized Material Storage & Expiration Policy
 
 export const MATERIAL_CONFIG = {
-  // Default TTL: 24 Hours
-  DEFAULT_TTL_HOURS: 24,
-  DEFAULT_TTL_MS: 24 * 60 * 60 * 1000,
+  // Permanent Material Storage Policy: Materials stay active until room is explicitly deleted
+  PERMANENT_STORAGE: true,
+  DEFAULT_TTL_HOURS: 0,
+  DEFAULT_TTL_MS: 0,
 
   // File size limits
   PDF_MAX_SIZE_BYTES: 50 * 1024 * 1024,      // 50 MB
@@ -29,10 +30,11 @@ export const MATERIAL_CONFIG = {
 };
 
 export function isMaterialExpired(expiresAt: number | null | undefined): boolean {
-  if (!expiresAt) return false;
+  if (!expiresAt || expiresAt <= 0) return false;
   return Date.now() > expiresAt;
 }
 
 export function computeDefaultExpiration(uploadTimestamp = Date.now()): number {
-  return uploadTimestamp + MATERIAL_CONFIG.DEFAULT_TTL_MS;
+  if (MATERIAL_CONFIG.PERMANENT_STORAGE) return 0; // 0 = permanent / never expires
+  return uploadTimestamp + (MATERIAL_CONFIG.DEFAULT_TTL_MS || 86400000);
 }

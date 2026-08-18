@@ -1,6 +1,7 @@
 import { generateRoomCode } from "@/lib/utils";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { StorageRegistryResolver } from "@/lib/storage/registry";
+import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
 
 export interface StageRoomRecord {
   roomId: string;
@@ -202,8 +203,12 @@ export class RoomRegistry {
       const registry = storageResolver.getRegistry();
       const targetCode = foundRoom ? foundRoom.roomCode : normalized;
       await registry.deleteMaterialsByRoomCode(targetCode);
+
+      // Clean up Google Drive folder for this room
+      const driveProvider = new GoogleDriveStorageProvider(cfCtx?.env as Record<string, unknown>);
+      await driveProvider.deleteRoomFolder(targetCode).catch(() => {});
     } catch {
-      // Ignore D1 error
+      // Ignore D1/storage error
     }
 
     return true;

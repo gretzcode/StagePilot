@@ -12,7 +12,7 @@ export interface AssetCapability {
   expiresAt: number;
 }
 
-const DEFAULT_GRANT_TTL_MS = 60 * 60 * 1000; // 1 hour (3600 seconds)
+const DEFAULT_GRANT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (2,592,000 seconds)
 const FALLBACK_SECRET = "stagepilot-asset-grant-secret-key-32chars";
 
 function getGrantSecret(env?: Record<string, unknown> | null): string {
