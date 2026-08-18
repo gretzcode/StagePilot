@@ -15,6 +15,7 @@ interface PdfSlideViewerProps {
   zoom?: PresentationZoomState;
   /** Called once when the real page count is known from the loaded PDF */
   onNumPagesDiscovered?: (numPages: number) => void;
+  children?: React.ReactNode;
 }
 
 /**
@@ -32,6 +33,7 @@ export function PdfSlideViewer({
   title: _title,
   zoom,
   onNumPagesDiscovered,
+  children,
 }: PdfSlideViewerProps) {
   const activeSlide = currentSlide ?? currentPage ?? 1;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -206,6 +208,7 @@ export function PdfSlideViewer({
             className="max-w-full max-h-full block shadow-2xl transition-opacity duration-150 pointer-events-none select-none"
           />
         </div>
+        {children}
       </div>
     </div>
   );

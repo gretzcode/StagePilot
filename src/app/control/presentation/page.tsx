@@ -884,16 +884,16 @@ function PresentationControlContent() {
                 }
               }}
               onNumPagesDiscovered={handlePdfNumPagesDiscovered}
-            />
-
-            {/* Interactive Zoom Area Selection Overlay */}
-            {isZoomAreaActive && state?.presentation.isPresenting && activeMaterial && (
-              <ZoomAreaOverlay
-                isActive={isZoomAreaActive}
-                onSelectRegion={handleSelectZoomRegion}
-                onCancel={() => setIsZoomAreaActive(false)}
-              />
-            )}
+            >
+              {/* Interactive Zoom Area Selection Overlay directly inside 16:9 Stage */}
+              {isZoomAreaActive && state?.presentation.isPresenting && activeMaterial && (
+                <ZoomAreaOverlay
+                  isActive={isZoomAreaActive}
+                  onSelectRegion={handleSelectZoomRegion}
+                  onCancel={() => setIsZoomAreaActive(false)}
+                />
+              )}
+            </SlideViewer>
 
             {/* Floating Zoom Controls Widget */}
             {state?.presentation.isPresenting && activeMaterial && (

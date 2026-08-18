@@ -24,6 +24,7 @@ interface SlideViewerProps {
   onMediaStop?: () => void;
   onDurationDiscovered?: (duration: number) => void;
   onMediaDurationDiscovered?: (duration: number) => void;
+  children?: React.ReactNode;
 }
 
 // Global Memory-Mapped RAM Cache for Slide Images (0ms Sync Retrieval)
@@ -77,6 +78,7 @@ export function SlideViewer({
   onMediaStop,
   onDurationDiscovered,
   onMediaDurationDiscovered,
+  children,
 }: SlideViewerProps) {
   const handleDurationDiscovered = onDurationDiscovered || onMediaDurationDiscovered;
   const activeSlide = currentSlide ?? currentPage ?? 1;
@@ -265,7 +267,9 @@ export function SlideViewer({
         title={material.name}
         zoom={zoom}
         onNumPagesDiscovered={onNumPagesDiscovered}
-      />
+      >
+        {children}
+      </PdfSlideViewer>
     );
   }
 
@@ -324,6 +328,7 @@ export function SlideViewer({
                 />
               ))}
             </div>
+            {children}
           </div>
         </div>
       );
@@ -353,6 +358,7 @@ export function SlideViewer({
                 sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
               />
             </div>
+            {children}
           </div>
         </div>
       );
@@ -385,6 +391,7 @@ export function SlideViewer({
                   onLoad={updateDimensionsFromImg}
                 />
               </div>
+              {children}
             </div>
           </div>
         );
@@ -433,6 +440,7 @@ export function SlideViewer({
               referrerPolicy="strict-origin-when-cross-origin"
             />
           </div>
+          {children}
         </div>
       </div>
     );
@@ -459,6 +467,7 @@ export function SlideViewer({
               onLoad={updateDimensionsFromImg}
             />
           </div>
+          {children}
         </div>
       </div>
     );
