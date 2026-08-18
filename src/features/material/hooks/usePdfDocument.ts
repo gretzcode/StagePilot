@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { installPolyfills } from "@/lib/polyfills";
+
+// Ensure polyfills (including Promise.withResolvers) are installed immediately
+installPolyfills();
 
 // ─── Module-level caches (survive re-renders and component unmounts) ───────────
 const pdfDocCache = new Map<string, PDFDocumentProxy>();
@@ -30,6 +34,7 @@ function buildFetchTarget(url: string): string {
 }
 
 async function loadPdfDocument(fetchTarget: string): Promise<PDFDocumentProxy> {
+  installPolyfills();
   const pdfjsLib = await import("pdfjs-dist");
   if (typeof window !== "undefined" && !pdfjsLib.GlobalWorkerOptions.workerSrc) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;

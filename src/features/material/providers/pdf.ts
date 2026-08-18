@@ -1,5 +1,6 @@
 import { Material, MaterialType, SlideMetadata } from "@/core/types";
 import { MaterialProvider } from "../contract";
+import { installPolyfills } from "@/lib/polyfills";
 
 export class PdfMaterialProvider implements MaterialProvider {
   readonly type: MaterialType = "pdf";
@@ -16,6 +17,7 @@ export class PdfMaterialProvider implements MaterialProvider {
 
     if (typeof source !== "string" && typeof window !== "undefined") {
       try {
+        installPolyfills();
         const pdfjsLib = await import("pdfjs-dist");
         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
           pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
