@@ -2,8 +2,8 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { DeviceRole, StageSessionState } from "@/core/types";
-import { Radio, Tv, Monitor, ArrowRight, AlertCircle, RefreshCw, CheckCircle2, Search } from "lucide-react";
+import { ParticipantRole, StageSessionState } from "@/core/types";
+import { Radio, Mic, ArrowRight, AlertCircle, RefreshCw, CheckCircle2, Search } from "lucide-react";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
 
@@ -14,9 +14,9 @@ interface ActiveRoomSummary {
   status: string;
 }
 
-function getAutoDetectedDefaultDeviceName(role: DeviceRole): string {
+function getAutoDetectedDefaultDeviceName(role: ParticipantRole): string {
   if (typeof window === "undefined") {
-    return role === "control" ? "Operator Controller" : role === "audience" ? "Audience Display" : "Confidence Monitor";
+    return role === "speaker" ? "Speaker Device" : "Operator Controller";
   }
 
   const ua = navigator.userAgent || "";
@@ -53,12 +53,7 @@ function getAutoDetectedDefaultDeviceName(role: DeviceRole): string {
   }
 
   const browserPart = browser ? ` (${browser})` : "";
-  const roleLabel =
-    role === "control"
-      ? "Operator"
-      : role === "audience"
-      ? "Audience Display"
-      : "Confidence Monitor";
+  const roleLabel = role === "speaker" ? "Speaker" : "Operator";
 
   return `${os} ${roleLabel}${browserPart}`.trim();
 }
@@ -67,14 +62,15 @@ function JoinPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialRoomCode = searchParams.get("roomCode")?.trim().toUpperCase() || "";
-  const initialRole = (searchParams.get("role") as DeviceRole) || "control";
+  const rawRole = searchParams.get("role")?.toLowerCase();
+  const initialRole: ParticipantRole = rawRole === "speaker" ? "speaker" : "operator";
 
   const [activeRooms, setActiveRooms] = useState<ActiveRoomSummary[]>([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [roomCode, setRoomCode] = useState(initialRoomCode);
   const [searchQuery, setSearchQuery] = useState("");
   const [deviceName, setDeviceName] = useState("");
-  const [role, setRole] = useState<DeviceRole>(initialRole);
+  const [role, setRole] = useState<ParticipantRole>(initialRole);
   const [status, setStatus] = useState<"form" | "waiting" | "rejected">("form");
   const [error, setError] = useState<string | null>(null);
   const [generatedDeviceId, setGeneratedDeviceId] = useState("");
@@ -132,12 +128,10 @@ function JoinPageContent() {
                   // Ignore storage errors
                 }
 
-                if (role === "audience") {
-                  router.push(`/display/audience?roomCode=${encodeURIComponent(roomCode)}`);
-                } else if (role === "confidence") {
-                  router.push(`/display/confidence?roomCode=${encodeURIComponent(roomCode)}`);
+                if (role === "speaker") {
+                  router.push(`/control/presentation?roomCode=${encodeURIComponent(roomCode)}&role=speaker`);
                 } else {
-                  router.push(`/control?roomCode=${encodeURIComponent(roomCode)}&role=control`);
+                  router.push(`/control?roomCode=${encodeURIComponent(roomCode)}&role=operator`);
                 }
               } else if (myDev.approvalStatus === "rejected" || myDev.approvalStatus === "revoked") {
                 setStatus("rejected");
@@ -347,63 +341,45 @@ function JoinPageContent() {
             </div>
           </div>
 
-          {/* Requested Device Role */}
+          {/* Requested Participant Role */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              2. Peran Perangkat (Role)
+              2. Peran Partisipan (Role)
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
-                onClick={() => setRole("control")}
-                className={`p-3 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
-                  role === "control"
+                onClick={() => setRole("operator")}
+                className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center transition cursor-pointer text-center space-y-1.5 ${
+                  role === "operator"
                     ? "bg-purple-600/20 border-purple-500 text-purple-300 ring-2 ring-purple-500/30"
                     : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                 }`}
               >
-                <div className="p-2 rounded-xl bg-purple-950/80 text-purple-400 sm:mb-1.5 flex-shrink-0">
-                  <Radio className="w-4 h-4" />
+                <div className="p-2.5 rounded-xl bg-purple-950/80 text-purple-400">
+                  <Radio className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-xs font-bold block">Control Room</span>
-                  <span className="text-[10px] text-slate-400 block sm:hidden">Operator / Kru</span>
+                  <span className="text-xs font-bold block">Operator</span>
+                  <span className="text-[10px] text-slate-400 block">Control Room / Kru</span>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={() => setRole("audience")}
-                className={`p-3 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
-                  role === "audience"
+                onClick={() => setRole("speaker")}
+                className={`p-3.5 rounded-2xl border flex flex-col items-center justify-center transition cursor-pointer text-center space-y-1.5 ${
+                  role === "speaker"
                     ? "bg-indigo-600/20 border-indigo-500 text-indigo-300 ring-2 ring-indigo-500/30"
                     : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                 }`}
               >
-                <div className="p-2 rounded-xl bg-indigo-950/80 text-indigo-400 sm:mb-1.5 flex-shrink-0">
-                  <Tv className="w-4 h-4" />
+                <div className="p-2.5 rounded-xl bg-indigo-950/80 text-indigo-400">
+                  <Mic className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-xs font-bold block">Audience</span>
-                  <span className="text-[10px] text-slate-400 block sm:hidden">Proyektor / LED</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setRole("confidence")}
-                className={`p-3 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
-                  role === "confidence"
-                    ? "bg-blue-600/20 border-blue-500 text-blue-300 ring-2 ring-blue-500/30"
-                    : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
-                }`}
-              >
-                <div className="p-2 rounded-xl bg-blue-950/80 text-blue-400 sm:mb-1.5 flex-shrink-0">
-                  <Monitor className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-bold block">Confidence</span>
-                  <span className="text-[10px] text-slate-400 block sm:hidden">Monitor Panggung</span>
+                  <span className="text-xs font-bold block">Speaker</span>
+                  <span className="text-[10px] text-slate-400 block">Presenter / Keynote</span>
                 </div>
               </button>
             </div>
@@ -413,7 +389,7 @@ function JoinPageContent() {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                3. Nama Perangkat / Operator
+                3. Nama Perangkat / Partisipan
               </label>
               <span className="text-[11px] text-slate-500">Opsional</span>
             </div>

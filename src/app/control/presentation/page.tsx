@@ -55,7 +55,8 @@ function PresentationControlContent() {
   const searchParams = useSearchParams();
   const rawRoomCode = searchParams.get("roomCode");
   const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
-  const requestedRole = (searchParams.get("role") || "control") as "host" | "control";
+  const rawRole = searchParams.get("role")?.toLowerCase();
+  const requestedRole = (rawRole || "host") as "host" | "operator" | "control" | "speaker";
   const isHost = requestedRole === "host";
 
   // Authenticate host session if claiming Host role
@@ -80,7 +81,11 @@ function PresentationControlContent() {
     roomCode,
     role: requestedRole,
     deviceId,
-    deviceName: requestedRole === "host" ? "Host Primary Controller" : "Presentation Controller",
+    deviceName: requestedRole === "host"
+      ? "Host Primary Controller"
+      : requestedRole === "speaker"
+      ? "Speaker Presenter"
+      : "Operator Controller",
   });
 
   useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
@@ -540,13 +545,13 @@ function PresentationControlContent() {
     return <FriendlyErrorState errorType={roomError} roomCode={roomCode} />;
   }
 
-  // 2. Pending Approval State for Guest Controller (P0-1)
+  // 2. Pending Approval State for Guest Participant (P0-1)
   if (approvalStatus === "pending") {
     return (
       <PendingApprovalState
-        deviceName="Presentation Controller"
+        deviceName={requestedRole === "speaker" ? "Speaker Presenter" : "Operator Controller"}
         roomCode={roomCode}
-        role="control"
+        role={requestedRole === "speaker" ? "speaker" : "operator"}
       />
     );
   }

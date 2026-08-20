@@ -112,7 +112,9 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const roomCode = (url.searchParams.get("roomCode") || "").toUpperCase();
   const deviceId = url.searchParams.get("deviceId") || `dev-${Date.now()}`;
-  const requestedRole = (url.searchParams.get("role") || "control") as "host" | "control" | "audience" | "confidence";
+  const rawRole = (url.searchParams.get("role") || "operator").toLowerCase();
+  const displayMode = url.searchParams.get("displayMode");
+  const requestedRole = (displayMode || rawRole);
   const deviceName = url.searchParams.get("deviceName") || "Device";
 
   if (!roomCode || roomCode.length < 4) {
@@ -157,7 +159,7 @@ export async function GET(request: Request) {
       if (isHostAuthenticated) {
         doUrl.searchParams.set("isHostAuthenticated", "true");
       } else if (requestedRole === "host") {
-        doUrl.searchParams.set("role", "control");
+        doUrl.searchParams.set("role", "operator");
         doUrl.searchParams.set("isHostAuthenticated", "false");
       }
       return await stub.fetch(new Request(doUrl.toString(), request));
@@ -169,7 +171,25 @@ export async function GET(request: Request) {
   // 4. Local Dev / HTTP Fallback Handler
   const localRoom = getOrCreateLocalRoom(roomCode, roomRecord.name, roomRecord.hostUserId);
   await syncLocalRoomMaterials(roomCode);
-  const isHostRole = requestedRole === "host";
+  const isHostRole = requestedRole === "host" && isHostAuthenticated;
+  const effectiveRole = isHostRole
+    ? "host"
+    : requestedRole === "host"
+    ? "operator"
+    : requestedRole;
+
+  const isOperator = effectiveRole === "operator" || effectiveRole === "control";
+  const isSpeaker = effectiveRole === "speaker";
+
+  const rolePermissions = {
+    canControlPresentation: isHostRole || isOperator || isSpeaker,
+    canControlTimer: isHostRole || isOperator,
+    canControlBrief: isHostRole || isOperator,
+    canBlankDisplay: isHostRole || isOperator,
+    canManageDevices: isHostRole,
+    canManageRoom: isHostRole,
+    canTakeoverControl: isHostRole || isOperator,
+  };
 
   if (isHostRole) {
     // Purge any stale previous host device entries so host count never increments on refresh/reconnect
@@ -186,18 +206,10 @@ export async function GET(request: Request) {
       id: deviceId,
       name: deviceName,
       userAgent: request.headers.get("user-agent") || "Unknown Browser",
-      role: requestedRole,
+      role: effectiveRole as any,
       approvalStatus: autoApprove ? "approved" : "pending",
       status: "online",
-      permissions: {
-        canControlPresentation: isHostRole || requestedRole === "control",
-        canControlTimer: isHostRole || requestedRole === "control",
-        canControlBrief: isHostRole || requestedRole === "control",
-        canBlankDisplay: isHostRole || requestedRole === "control",
-        canManageDevices: isHostRole || requestedRole === "control",
-        canManageRoom: isHostRole,
-        canTakeoverControl: isHostRole || requestedRole === "control",
-      },
+      permissions: rolePermissions,
       connectedAt: Date.now(),
       lastSeenAt: Date.now(),
       isHostDevice: isHostRole,

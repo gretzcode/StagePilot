@@ -97,7 +97,9 @@ export class StageRoom extends DurableObject {
     }
 
     const deviceId = url.searchParams.get("deviceId") || `dev-${Date.now()}`;
-    const requestedRole = (url.searchParams.get("role") || "control") as "host" | "control" | "audience" | "confidence";
+    const rawRole = (url.searchParams.get("role") || "operator").toLowerCase();
+    const displayMode = url.searchParams.get("displayMode");
+    const requestedRole = (displayMode || rawRole);
     const deviceName = url.searchParams.get("deviceName") || "Device";
 
     // Ensure session state is loaded or created
@@ -109,7 +111,14 @@ export class StageRoom extends DurableObject {
 
     const isHostAuthenticated = url.searchParams.get("isHostAuthenticated");
     const isHostRole = requestedRole === "host" && isHostAuthenticated !== "false";
-    const effectiveRole = isHostRole ? "host" : requestedRole === "host" ? "control" : requestedRole;
+    const effectiveRole = isHostRole
+      ? "host"
+      : requestedRole === "host"
+      ? "operator"
+      : requestedRole;
+
+    const isOperator = effectiveRole === "operator" || effectiveRole === "control";
+    const isSpeaker = effectiveRole === "speaker";
 
     if (isHostRole) {
       // Purge any stale previous host device entries so host count remains exactly 1
@@ -119,6 +128,16 @@ export class StageRoom extends DurableObject {
         }
       }
     }
+
+    const rolePermissions = {
+      canControlPresentation: isHostRole || isOperator || isSpeaker,
+      canControlTimer: isHostRole || isOperator,
+      canControlBrief: isHostRole || isOperator,
+      canBlankDisplay: isHostRole || isOperator,
+      canManageDevices: isHostRole,
+      canManageRoom: isHostRole,
+      canTakeoverControl: isHostRole || isOperator,
+    };
 
     // Register or update device connection status in state
     const existingDevice = this.state.devices[deviceId];
@@ -133,33 +152,17 @@ export class StageRoom extends DurableObject {
         this.state.host.hostDeviceId = deviceId;
         this.state.activeControllerDeviceId = deviceId;
       }
-      existingDevice.permissions = {
-        canControlPresentation: isHostRole || existingDevice.role === "control",
-        canControlTimer: isHostRole || existingDevice.role === "control",
-        canControlBrief: isHostRole || existingDevice.role === "control",
-        canBlankDisplay: isHostRole || existingDevice.role === "control",
-        canManageDevices: isHostRole || existingDevice.role === "control",
-        canManageRoom: isHostRole,
-        canTakeoverControl: isHostRole || existingDevice.role === "control",
-      };
+      existingDevice.permissions = rolePermissions;
     } else {
       const autoApprove = isHostRole;
       this.state.devices[deviceId] = {
         id: deviceId,
         name: deviceName,
         userAgent: request.headers.get("User-Agent") || "Unknown Browser",
-        role: effectiveRole,
+        role: effectiveRole as any,
         approvalStatus: autoApprove ? "approved" : "pending",
         status: "online",
-        permissions: {
-          canControlPresentation: isHostRole || effectiveRole === "control",
-          canControlTimer: isHostRole || effectiveRole === "control",
-          canControlBrief: isHostRole || effectiveRole === "control",
-          canBlankDisplay: isHostRole || effectiveRole === "control",
-          canManageDevices: isHostRole || effectiveRole === "control",
-          canManageRoom: isHostRole,
-          canTakeoverControl: isHostRole || effectiveRole === "control",
-        },
+        permissions: rolePermissions,
         connectedAt: Date.now(),
         lastSeenAt: Date.now(),
         isHostDevice: isHostRole,

@@ -43,6 +43,9 @@ export function stageSessionReducer(
       const isRoomHostUser = nextState.host.hostUserId === deviceId;
       const autoApprove = isHostRole && isRoomHostUser;
 
+      const isOperator = requestedRole === "operator" || requestedRole === "control";
+      const isSpeaker = requestedRole === "speaker";
+
       nextState.devices[deviceId] = {
         id: deviceId,
         name: deviceName,
@@ -51,13 +54,13 @@ export function stageSessionReducer(
         approvalStatus: autoApprove ? "approved" : "pending",
         status: "online",
         permissions: {
-          canControlPresentation: requestedRole === "host" || requestedRole === "control",
-          canControlTimer: requestedRole === "host" || requestedRole === "control",
-          canControlBrief: requestedRole === "host" || requestedRole === "control",
-          canBlankDisplay: requestedRole === "host" || requestedRole === "control",
-          canManageDevices: requestedRole === "host",
-          canManageRoom: requestedRole === "host",
-          canTakeoverControl: requestedRole === "host" || requestedRole === "control",
+          canControlPresentation: isHostRole || isOperator || isSpeaker,
+          canControlTimer: isHostRole || isOperator,
+          canControlBrief: isHostRole || isOperator,
+          canBlankDisplay: isHostRole || isOperator,
+          canManageDevices: isHostRole,
+          canManageRoom: isHostRole,
+          canTakeoverControl: isHostRole || isOperator,
         },
         connectedAt: now,
         lastSeenAt: now,

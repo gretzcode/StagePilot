@@ -20,7 +20,8 @@ function ControlRoomContent() {
   const searchParams = useSearchParams();
   const rawRoomCode = searchParams.get("roomCode");
   const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
-  const requestedRole = (searchParams.get("role") || "host") as "host" | "control";
+  const rawRole = searchParams.get("role")?.toLowerCase();
+  const requestedRole = (rawRole || "host") as "host" | "operator" | "control" | "speaker";
   const isHost = requestedRole === "host";
 
   const [deviceId] = useState(() => getPersistentDeviceId(requestedRole, roomCode, searchParams.get("deviceId")));
@@ -45,7 +46,11 @@ function ControlRoomContent() {
     roomCode,
     role: requestedRole,
     deviceId,
-    deviceName: isHost ? "Host Primary Controller" : "Brief Controller",
+    deviceName: isHost
+      ? "Host Primary Controller"
+      : requestedRole === "speaker"
+      ? "Speaker Controller"
+      : "Operator Controller",
   });
 
   const canManageDevices = isHost;
@@ -83,13 +88,13 @@ function ControlRoomContent() {
     return <FriendlyErrorState errorType={roomError} roomCode={roomCode} />;
   }
 
-  // 2. Pending Host Approval State for Non-Host Control Role
+  // 2. Pending Host Approval State for Non-Host Participant Role
   if (!isHost && approvalStatus === "pending") {
     return (
       <PendingApprovalState
-        deviceName="Brief Controller"
+        deviceName={myDevice?.name || (requestedRole === "speaker" ? "Speaker Device" : "Operator Device")}
         roomCode={roomCode}
-        role="control"
+        role={requestedRole === "speaker" ? "speaker" : "operator"}
       />
     );
   }

@@ -46,11 +46,11 @@ export class PermissionPolicy {
 
     const role = sender.role || "host";
 
-    // Audience and Confidence displays can NEVER send control commands
+    // Displays (Audience & Confidence) are output renderers only and can NEVER send operational commands
     if (role === "audience" || role === "confidence") {
       return {
         allowed: false,
-        reason: `Role '${role}' is display-only and cannot send operational commands`,
+        reason: `Display output mode '${role}' is read-only and cannot send operational commands`,
       };
     }
 
@@ -59,35 +59,40 @@ export class PermissionPolicy {
       return { allowed: true };
     }
 
-    // CONTROL role permissions check (Strictly cannot manage/approve devices)
-    if (role === "control") {
-      return this.checkControlPermissions(state, sender, command);
+    // OPERATOR role (and legacy 'control' alias) permissions check
+    if (role === "operator" || role === "control") {
+      return this.checkOperatorPermissions(state, sender, command);
+    }
+
+    // SPEAKER role permissions check
+    if (role === "speaker") {
+      return this.checkSpeakerPermissions(state, sender, command);
     }
 
     return { allowed: false, reason: "Unknown role permission boundary" };
   }
 
-  private static checkControlPermissions(
+  private static checkOperatorPermissions(
     _state: StageSessionState,
     _sender: DeviceState,
     command: StageCommand
   ): PermissionCheckResult {
-    const restrictedForControl = [
+    const restrictedForOperator = [
       "DEVICE_APPROVE",
       "DEVICE_REJECT",
       "DEVICE_REMOVE",
       "ROOM_CREATE",
     ];
 
-    if (restrictedForControl.includes(command.type)) {
+    if (restrictedForOperator.includes(command.type)) {
       return {
         allowed: false,
-        reason: `Control device cannot execute administrative command '${command.type}'`,
+        reason: `Operator device cannot execute administrative command '${command.type}'`,
       };
     }
 
-    // CONTROL is allowed to execute presentation, timer, brief, display blanking & takeover commands
-    const allowedForControl = [
+    // Operator is allowed to execute presentation, timer, brief, display blanking & media commands
+    const allowedForOperator = [
       "MATERIAL_ADD",
       "MATERIAL_UPDATE",
       "MATERIAL_REMOVE",
@@ -114,16 +119,63 @@ export class PermissionPolicy {
       "ZOOM_RESET",
     ];
 
-    if (allowedForControl.includes(command.type)) {
+    if (allowedForOperator.includes(command.type)) {
       return { allowed: true };
     }
 
     return {
       allowed: false,
-      reason: `Command '${command.type}' is unauthorized for Control role`,
+      reason: `Command '${command.type}' is unauthorized for Operator role`,
     };
   }
 
+  private static checkSpeakerPermissions(
+    _state: StageSessionState,
+    _sender: DeviceState,
+    command: StageCommand
+  ): PermissionCheckResult {
+    const restrictedForSpeaker = [
+      "DEVICE_APPROVE",
+      "DEVICE_REJECT",
+      "DEVICE_REMOVE",
+      "ROOM_CREATE",
+      "CONTROL_TAKEOVER",
+      "TIMER_SET",
+      "TIMER_START",
+      "TIMER_PAUSE",
+      "TIMER_RESET",
+      "BRIEF_UPDATE",
+      "BRIEF_CLEAR",
+      "DISPLAY_BLANK",
+      "DISPLAY_SHOW",
+      "MATERIAL_REMOVE",
+    ];
+
+    if (restrictedForSpeaker.includes(command.type)) {
+      return {
+        allowed: false,
+        reason: `Speaker device cannot execute administrative or stage control command '${command.type}'`,
+      };
+    }
+
+    // Speaker is allowed slide navigation during presentation
+    const allowedForSpeaker = [
+      "SLIDE_NEXT",
+      "SLIDE_PREVIOUS",
+      "SLIDE_GOTO",
+      "PRESENTATION_START",
+      "PRESENTATION_EXIT",
+    ];
+
+    if (allowedForSpeaker.includes(command.type)) {
+      return { allowed: true };
+    }
+
+    return {
+      allowed: false,
+      reason: `Command '${command.type}' is unauthorized for Speaker role`,
+    };
+  }
 
   static assertCanExecute(
     state: StageSessionState,

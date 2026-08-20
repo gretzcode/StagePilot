@@ -1,11 +1,12 @@
-import { DeviceState } from "./device";
+import { DeviceState, DisplayMode } from "./device";
 import { Material, PresentationState } from "./presentation";
 import { TimerState } from "./timer";
 import { BriefState } from "./brief";
 
 export interface DisplayState {
   id: string;
-  role: "audience" | "confidence";
+  mode: DisplayMode;
+  role?: DisplayMode;
   isBlanked: boolean;
   theme: "dark" | "light";
   customMessage?: string;

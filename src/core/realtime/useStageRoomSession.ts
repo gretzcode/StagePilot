@@ -9,7 +9,8 @@ import { updateServerTimeOffset } from "@/core/utils/clock-sync";
 
 export interface UseStageRoomSessionOptions {
   roomCode: string;
-  role: "host" | "control" | "audience" | "confidence";
+  role: "host" | "operator" | "speaker" | "control" | "audience" | "confidence";
+  displayMode?: "audience" | "confidence";
   deviceId: string;
   deviceName?: string;
 }

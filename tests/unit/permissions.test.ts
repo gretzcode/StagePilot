@@ -104,6 +104,138 @@ describe("PermissionPolicy", () => {
     expect(res.reason).toContain("cannot execute administrative command");
   });
 
+  it("should allow Operator role to execute slide and stage commands but reject device approvals", () => {
+    const state = buildState();
+    const operatorDevId = "dev-operator-1";
+    state.devices[operatorDevId] = {
+      id: operatorDevId,
+      name: "Floor Operator iPad",
+      userAgent: "Safari",
+      role: "operator",
+      approvalStatus: "approved",
+      status: "online",
+      permissions: {
+        canControlPresentation: true,
+        canControlTimer: true,
+        canControlBrief: true,
+        canBlankDisplay: true,
+        canManageDevices: false,
+        canManageRoom: false,
+        canTakeoverControl: true,
+      },
+      connectedAt: Date.now(),
+      lastSeenAt: Date.now(),
+      isHostDevice: false,
+    };
+
+    const slideCmd: StageCommand = {
+      type: "SLIDE_NEXT",
+      commandId: "c2-op",
+      senderDeviceId: operatorDevId,
+      timestamp: Date.now(),
+      payload: {},
+    };
+    expect(PermissionPolicy.canExecuteCommand(state, operatorDevId, slideCmd).allowed).toBe(true);
+
+    const timerCmd: StageCommand = {
+      type: "TIMER_START",
+      commandId: "c2-timer",
+      senderDeviceId: operatorDevId,
+      timestamp: Date.now(),
+      payload: {},
+    };
+    expect(PermissionPolicy.canExecuteCommand(state, operatorDevId, timerCmd).allowed).toBe(true);
+
+    const approveCmd: StageCommand = {
+      type: "DEVICE_APPROVE",
+      commandId: "c3-op",
+      senderDeviceId: operatorDevId,
+      timestamp: Date.now(),
+      payload: { targetDeviceId: "some-device" },
+    };
+    const res = PermissionPolicy.canExecuteCommand(state, operatorDevId, approveCmd);
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toContain("cannot execute administrative command");
+  });
+
+  it("should allow Speaker role to navigate slides but reject timer, brief, and administrative commands", () => {
+    const state = buildState();
+    const speakerDevId = "dev-speaker-1";
+    state.devices[speakerDevId] = {
+      id: speakerDevId,
+      name: "Keynote Speaker Clicker",
+      userAgent: "Chrome",
+      role: "speaker",
+      approvalStatus: "approved",
+      status: "online",
+      permissions: {
+        canControlPresentation: true,
+        canControlTimer: false,
+        canControlBrief: false,
+        canBlankDisplay: false,
+        canManageDevices: false,
+        canManageRoom: false,
+        canTakeoverControl: false,
+      },
+      connectedAt: Date.now(),
+      lastSeenAt: Date.now(),
+      isHostDevice: false,
+    };
+
+    // Speaker is allowed slide navigation
+    const slideCmd: StageCommand = {
+      type: "SLIDE_NEXT",
+      commandId: "c-spk-1",
+      senderDeviceId: speakerDevId,
+      timestamp: Date.now(),
+      payload: {},
+    };
+    expect(PermissionPolicy.canExecuteCommand(state, speakerDevId, slideCmd).allowed).toBe(true);
+
+    const slideGotoCmd: StageCommand = {
+      type: "SLIDE_GOTO",
+      commandId: "c-spk-2",
+      senderDeviceId: speakerDevId,
+      timestamp: Date.now(),
+      payload: { pageNumber: 3 },
+    };
+    expect(PermissionPolicy.canExecuteCommand(state, speakerDevId, slideGotoCmd).allowed).toBe(true);
+
+    // Speaker is rejected from timer control
+    const timerCmd: StageCommand = {
+      type: "TIMER_START",
+      commandId: "c-spk-timer",
+      senderDeviceId: speakerDevId,
+      timestamp: Date.now(),
+      payload: {},
+    };
+    const timerRes = PermissionPolicy.canExecuteCommand(state, speakerDevId, timerCmd);
+    expect(timerRes.allowed).toBe(false);
+    expect(timerRes.reason).toContain("cannot execute administrative or stage control command");
+
+    // Speaker is rejected from brief control
+    const briefCmd: StageCommand = {
+      type: "BRIEF_UPDATE",
+      commandId: "c-spk-brief",
+      senderDeviceId: speakerDevId,
+      timestamp: Date.now(),
+      payload: { text: "Hello", urgency: "info" },
+    };
+    const briefRes = PermissionPolicy.canExecuteCommand(state, speakerDevId, briefCmd);
+    expect(briefRes.allowed).toBe(false);
+
+    // Speaker is rejected from device approvals
+    const approveCmd: StageCommand = {
+      type: "DEVICE_APPROVE",
+      commandId: "c-spk-approve",
+      senderDeviceId: speakerDevId,
+      timestamp: Date.now(),
+      payload: { targetDeviceId: "some-device" },
+    };
+    const approveRes = PermissionPolicy.canExecuteCommand(state, speakerDevId, approveCmd);
+    expect(approveRes.allowed).toBe(false);
+  });
+
   it("should reject any operational command sent by Audience or Confidence Display", () => {
     const state = buildState();
     const cmd: StageCommand = {
@@ -116,6 +248,6 @@ describe("PermissionPolicy", () => {
 
     const res = PermissionPolicy.canExecuteCommand(state, audienceDevId, cmd);
     expect(res.allowed).toBe(false);
-    expect(res.reason).toContain("display-only");
+    expect(res.reason).toContain("Display output mode");
   });
 });

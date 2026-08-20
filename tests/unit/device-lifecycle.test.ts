@@ -5,83 +5,51 @@ import { stageSessionReducer } from "../../src/core/session/reducer";
 import { StageCommand } from "../../src/core/types";
 
 describe("Unified Device Lifecycle & Approval Security Unit Tests", () => {
-  it("should initialize guest devices with approvalStatus = pending for ALL roles (control, audience, confidence)", async () => {
+  it("should initialize guest devices with approvalStatus = pending for participant roles (operator, speaker)", async () => {
     const hostId = `host-unit-${Date.now()}`;
     const room = await RoomRegistry.createRoom(hostId, "Approval Test Room");
 
-    const state = createInitialSessionState(room.roomId, room.roomCode, room.name, hostId, "host-dev-1");
+    let state = createInitialSessionState(room.roomId, room.roomCode, room.name, hostId, "host-dev-1");
 
-    // Add devices for each role
-    const controlDevId = "dev-control-1";
-    const audienceDevId = "dev-audience-1";
-    const confidenceDevId = "dev-confidence-1";
+    const operatorDevId = "dev-operator-1";
+    const speakerDevId = "dev-speaker-1";
 
-    state.devices[controlDevId] = {
-      id: controlDevId,
-      name: "Control iPad",
-      userAgent: "Test Browser",
-      role: "control",
-      approvalStatus: "pending",
-      status: "online",
-      permissions: {
-        canControlPresentation: true,
-        canControlTimer: true,
-        canControlBrief: true,
-        canBlankDisplay: true,
-        canManageDevices: false,
-        canManageRoom: false,
-        canTakeoverControl: true,
+    // Operator requests join
+    state = stageSessionReducer(state, {
+      commandId: "cmd-join-op",
+      type: "DEVICE_REQUEST_JOIN",
+      senderDeviceId: operatorDevId,
+      payload: {
+        deviceName: "Operator Tablet",
+        requestedRole: "operator",
+        userAgent: "Safari",
       },
-      connectedAt: Date.now(),
-      lastSeenAt: Date.now(),
-      isHostDevice: false,
-    };
+      timestamp: Date.now(),
+    } as StageCommand);
 
-    state.devices[audienceDevId] = {
-      id: audienceDevId,
-      name: "Audience Monitor",
-      userAgent: "Test Browser",
-      role: "audience",
-      approvalStatus: "pending",
-      status: "online",
-      permissions: {
-        canControlPresentation: false,
-        canControlTimer: false,
-        canControlBrief: false,
-        canBlankDisplay: false,
-        canManageDevices: false,
-        canManageRoom: false,
-        canTakeoverControl: false,
+    // Speaker requests join
+    state = stageSessionReducer(state, {
+      commandId: "cmd-join-spk",
+      type: "DEVICE_REQUEST_JOIN",
+      senderDeviceId: speakerDevId,
+      payload: {
+        deviceName: "Speaker MacBook",
+        requestedRole: "speaker",
+        userAgent: "Chrome",
       },
-      connectedAt: Date.now(),
-      lastSeenAt: Date.now(),
-      isHostDevice: false,
-    };
+      timestamp: Date.now(),
+    } as StageCommand);
 
-    state.devices[confidenceDevId] = {
-      id: confidenceDevId,
-      name: "Confidence HUD",
-      userAgent: "Test Browser",
-      role: "confidence",
-      approvalStatus: "pending",
-      status: "online",
-      permissions: {
-        canControlPresentation: false,
-        canControlTimer: false,
-        canControlBrief: false,
-        canBlankDisplay: false,
-        canManageDevices: false,
-        canManageRoom: false,
-        canTakeoverControl: false,
-      },
-      connectedAt: Date.now(),
-      lastSeenAt: Date.now(),
-      isHostDevice: false,
-    };
+    expect(state.devices[operatorDevId].approvalStatus).toBe("pending");
+    expect(state.devices[operatorDevId].role).toBe("operator");
+    expect(state.devices[operatorDevId].permissions.canControlTimer).toBe(true);
+    expect(state.devices[operatorDevId].permissions.canManageDevices).toBe(false);
 
-    expect(state.devices[controlDevId].approvalStatus).toBe("pending");
-    expect(state.devices[audienceDevId].approvalStatus).toBe("pending");
-    expect(state.devices[confidenceDevId].approvalStatus).toBe("pending");
+    expect(state.devices[speakerDevId].approvalStatus).toBe("pending");
+    expect(state.devices[speakerDevId].role).toBe("speaker");
+    expect(state.devices[speakerDevId].permissions.canControlPresentation).toBe(true);
+    expect(state.devices[speakerDevId].permissions.canControlTimer).toBe(false);
+    expect(state.devices[speakerDevId].permissions.canManageDevices).toBe(false);
   });
 
   it("should update approvalStatus = approved when Host dispatches DEVICE_APPROVE", async () => {

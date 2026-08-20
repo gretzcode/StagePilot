@@ -1,6 +1,8 @@
 import { z } from "zod";
 
-export const DeviceRoleSchema = z.enum(["host", "control", "audience", "confidence"]);
+export const ParticipantRoleSchema = z.enum(["host", "operator", "speaker", "control"]);
+export const DisplayModeSchema = z.enum(["audience", "confidence"]);
+export const DeviceRoleSchema = z.enum(["host", "operator", "speaker", "control", "audience", "confidence"]);
 export const BriefUrgencySchema = z.enum(["info", "warning", "urgent"]);
 export const TimerModeSchema = z.enum(["countdown", "countup", "timeofday"]);
 
