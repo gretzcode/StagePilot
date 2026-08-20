@@ -146,18 +146,32 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     fileId: string,
     rangeHeader?: string | null
   ): Promise<GoogleDriveStreamResult> {
-    const token = await this.getAccessToken();
+    let token = await this.getAccessToken();
     const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
     if (rangeHeader) {
       headers["Range"] = rangeHeader;
     }
 
-    const response = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
+    let response = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
       headers,
     });
-    if (!response.ok && response.status !== 206) {
-      throw new Error("File Google Drive tidak tersedia.");
+
+    // If Google returns 401 (token expired/invalidated on Google's side), invalidate cached token and retry once
+    if (response.status === 401) {
+      globalDriveToken = null;
+      token = await this.getAccessToken();
+      headers["Authorization"] = `Bearer ${token}`;
+      response = await fetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`, {
+        headers,
+      });
     }
+
+    if (!response.ok && response.status !== 206) {
+      const errorBody = await response.text().catch(() => "");
+      console.error(`[GoogleDriveStorageProvider] getFileStream failed (HTTP ${response.status}) for file ${fileId}:`, errorBody);
+      throw new Error(`File Google Drive tidak dapat diambil (HTTP ${response.status})${errorBody ? `: ${errorBody.slice(0, 150)}` : ""}`);
+    }
+
     return {
       body: response.body,
       mimeType: response.headers.get("content-type"),
@@ -303,7 +317,9 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     const clientId = this.getSecret("GOOGLE_CLIENT_ID");
     const clientSecret = this.getSecret("GOOGLE_CLIENT_SECRET");
     const refreshToken = this.getSecret("GOOGLE_REFRESH_TOKEN");
-    if (!clientId || !clientSecret || !refreshToken) throw new Error("Google Drive belum dikonfigurasi.");
+    if (!clientId || !clientSecret || !refreshToken) {
+      throw new Error("Google Drive belum dikonfigurasi (GOOGLE_REFRESH_TOKEN atau credentials belum diset).");
+    }
 
     const response = await fetch(TOKEN_API, {
       method: "POST",
@@ -316,7 +332,11 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
       }),
     });
     const json = (await response.json().catch(() => ({}))) as GoogleTokenResponse;
-    if (!response.ok || !json.access_token) throw new Error("Koneksi Google Drive tidak tersedia. Operator perlu menyambungkan ulang.");
+    if (!response.ok || !json.access_token) {
+      globalDriveToken = null;
+      const errorDetail = json.error ? ` (${json.error})` : "";
+      throw new Error(`Koneksi Google Drive tidak tersedia${errorDetail}. Refresh token mungkin kedaluwarsa atau perlu disambungkan ulang via Dashboard.`);
+    }
     globalDriveToken = { token: json.access_token, expiresAt: Date.now() + (json.expires_in || 3600) * 1000 };
     return json.access_token;
   }

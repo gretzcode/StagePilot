@@ -248,34 +248,43 @@ export async function GET(request: Request) {
         return new Response("No Google Drive file associated with this material.", { status: 404 });
       }
 
-      const provider = new GoogleDriveStorageProvider(env);
-      const driveStream = await provider.getFileStream(record.storageReference, rangeHeader).catch(() => null);
+      try {
+        const provider = new GoogleDriveStorageProvider(env);
+        const driveStream = await provider.getFileStream(record.storageReference, rangeHeader);
 
-      if (!driveStream || !driveStream.body) {
+        if (!driveStream || !driveStream.body) {
+          return new Response(
+            "Materi Google Drive tidak tersedia. Periksa koneksi storage atau unggah ulang materi.",
+            { status: 502 }
+          );
+        }
+
+        const responseHeaders = new Headers();
+        const mimeType = driveStream.mimeType || record.mimeType || "application/pdf";
+        responseHeaders.set("Content-Type", mimeType);
+        responseHeaders.set("Accept-Ranges", driveStream.acceptRanges || "bytes");
+        responseHeaders.set("Cache-Control", "public, max-age=3600, s-maxage=3600, immutable");
+        responseHeaders.set("Vary", "Range, Accept-Encoding");
+
+        if (driveStream.contentRange) {
+          responseHeaders.set("Content-Range", driveStream.contentRange);
+        }
+        if (driveStream.contentLength) {
+          responseHeaders.set("Content-Length", driveStream.contentLength);
+        }
+
+        return new Response(driveStream.body, {
+          status: driveStream.status,
+          headers: responseHeaders,
+        });
+      } catch (driveErr: unknown) {
+        const errMsg = driveErr instanceof Error ? driveErr.message : "Google Drive stream failed";
+        console.error(`[api/material/asset] Failed to stream file ${record.storageReference} from Google Drive:`, errMsg);
         return new Response(
-          "Materi Google Drive tidak tersedia. Periksa koneksi storage atau unggah ulang materi.",
+          `Materi Google Drive tidak dapat dimuat: ${errMsg}`,
           { status: 502 }
         );
       }
-
-      const responseHeaders = new Headers();
-      const mimeType = driveStream.mimeType || record.mimeType || "application/pdf";
-      responseHeaders.set("Content-Type", mimeType);
-      responseHeaders.set("Accept-Ranges", driveStream.acceptRanges || "bytes");
-      responseHeaders.set("Cache-Control", "public, max-age=3600, s-maxage=3600, immutable");
-      responseHeaders.set("Vary", "Range, Accept-Encoding");
-
-      if (driveStream.contentRange) {
-        responseHeaders.set("Content-Range", driveStream.contentRange);
-      }
-      if (driveStream.contentLength) {
-        responseHeaders.set("Content-Length", driveStream.contentLength);
-      }
-
-      return new Response(driveStream.body, {
-        status: driveStream.status,
-        headers: responseHeaders,
-      });
     }
 
     // Non-Google-Drive materials: storage not available (R2 not configured)
