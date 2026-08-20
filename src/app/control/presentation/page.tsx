@@ -12,6 +12,7 @@ import { TimerControl } from "@/features/timer/components/TimerControl";
 import { BriefControl } from "@/features/brief/components/BriefControl";
 import { MaterialUploader } from "@/features/material/components/MaterialUploader";
 import {
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Square,
@@ -422,12 +423,16 @@ function PresentationControlContent() {
     }
   }, [state?.presentation.isPresenting, state?.presentation.materialId]);
 
-  const handleStopAndExit = () => {
-    dispatchCommand("PRESENTATION_EXIT");
+  const handleExitToControl = () => {
+    router.push(`/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`);
+  };
 
-    setTimeout(() => {
-      window.location.href = `/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`;
-    }, 100);
+  const handleStopPresentation = () => {
+    if (activeMaterial?.type === "video") {
+      setLocalVideoTime(0);
+      dispatchCommand("MEDIA_STOP");
+    }
+    dispatchCommand("PRESENTATION_EXIT");
   };
 
   const handleAddMaterial = (newMaterial: Material) => {
@@ -597,13 +602,14 @@ function PresentationControlContent() {
             <span className="hidden sm:inline">{state?.presentation.blanked ? "DISPLAY BLANKED" : "BLANK DISPLAY (B)"}</span>
           </button>
 
-          {/* Exit Presentation Button */}
+          {/* Exit to Control Room Button (Returns to control room without stopping live presentation) */}
           <button
-            onClick={handleStopAndExit}
-            className="p-2 rounded-xl bg-slate-800/90 border border-slate-700 hover:bg-slate-700 text-slate-300 transition cursor-pointer"
-            title="Exit Presentation"
+            onClick={handleExitToControl}
+            className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1.5 cursor-pointer"
+            title="Exit to Control Room (Presentation continues running)"
           >
-            <LogOut className="w-4 h-4" />
+            <ArrowLeft className="w-4 h-4" />
+            <span className="hidden sm:inline text-xs font-semibold">Control Room</span>
           </button>
         </div>
       </header>
@@ -784,27 +790,33 @@ function PresentationControlContent() {
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </>
-                              ) : mat.type === "video" && mat.totalPages > 1 ? (
-                                <button
-                                  onClick={() => setLeftTab("slides")}
-                                  className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition flex items-center justify-center space-x-1.5 cursor-pointer"
-                                >
-                                  <Video className="w-3.5 h-3.5 text-purple-400" />
-                                  <span>VIEW VIDEOS LIST ({mat.totalPages})</span>
-                                </button>
-                              ) : mat.type === "video" ? (
-                                <div className="w-full py-1.5 rounded-lg bg-purple-950/60 border border-purple-800/40 text-purple-300 font-mono text-[10px] flex items-center justify-center space-x-1.5">
-                                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                                  <span>PLAYING NOW</span>
-                                </div>
                               ) : (
-                                <button
-                                  onClick={() => setLeftTab("slides")}
-                                  className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition flex items-center justify-center space-x-1.5 cursor-pointer"
-                                >
-                                  <Layers className="w-3.5 h-3.5 text-purple-400" />
-                                  <span>VIEW SLIDES DECK</span>
-                                </button>
+                                <div className="flex items-center gap-1.5 w-full">
+                                  <button
+                                    onClick={() => setLeftTab("slides")}
+                                    className="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition flex items-center justify-center space-x-1.5 cursor-pointer"
+                                  >
+                                    {mat.type === "video" ? (
+                                      <>
+                                        <Video className="w-3.5 h-3.5 text-purple-400" />
+                                        <span>{mat.totalPages > 1 ? `VIDEOS (${mat.totalPages})` : "PLAYING"}</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Layers className="w-3.5 h-3.5 text-purple-400" />
+                                        <span>SLIDES DECK</span>
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={handleStopPresentation}
+                                    className="py-1.5 px-2.5 rounded-lg bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 font-bold text-xs transition flex items-center justify-center space-x-1 cursor-pointer"
+                                    title="Stop Live Presentation across all screens"
+                                  >
+                                    <Square className="w-3 h-3" />
+                                    <span>STOP</span>
+                                  </button>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1035,8 +1047,9 @@ function PresentationControlContent() {
 
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={handleStopAndExit}
+                    onClick={handleStopPresentation}
                     className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
+                    title="Stop Video Presentation"
                   >
                     <Square className="w-3.5 h-3.5" />
                     <span>Stop Video</span>
@@ -1077,8 +1090,9 @@ function PresentationControlContent() {
               </span>
 
               <button
-                onClick={handleStopAndExit}
+                onClick={handleStopPresentation}
                 className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
+                title="Stop Presentation across all screens"
               >
                 <Square className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Stop Presentation</span>

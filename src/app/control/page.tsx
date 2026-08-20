@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ShieldCheck, Users, CheckCircle, XCircle, Play, Trash2, Tv, Monitor, ListVideo, Plus } from "lucide-react";
+import { ShieldCheck, Users, CheckCircle, XCircle, Play, Square, Trash2, Tv, Monitor, ListVideo, Plus } from "lucide-react";
 import { useStageRoomSession } from "@/core/realtime/useStageRoomSession";
 import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
@@ -360,7 +360,9 @@ function ControlRoomContent() {
                         <button
                           type="button"
                           onClick={() => {
-                            dispatchCommand("PRESENTATION_START", { materialId: mat.id, startPage: 1 });
+                            if (!isLive) {
+                              dispatchCommand("PRESENTATION_START", { materialId: mat.id, startPage: 1 });
+                            }
                             router.push(`/control/presentation?roomCode=${encodeURIComponent(roomCode)}${isHost ? "&role=host" : "&role=control"}`);
                           }}
                           className="flex-1 py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 active:bg-purple-700 active:scale-95 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 glow-purple shadow-md cursor-pointer touch-manipulation"
@@ -368,7 +370,19 @@ function ControlRoomContent() {
                           <Play className="w-3.5 h-3.5 fill-current pointer-events-none" />
                           <span className="pointer-events-none">{isLive ? "VIEW LIVE PRESENTATION" : "GO LIVE / PRESENT"}</span>
                         </button>
-                        {!isLive && (
+                        {isLive ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              dispatchCommand("PRESENTATION_EXIT");
+                            }}
+                            className="min-h-[40px] px-3 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 active:bg-rose-950 text-rose-300 text-xs font-bold transition cursor-pointer flex-shrink-0 touch-manipulation flex items-center justify-center space-x-1 shadow-md select-none"
+                            title="Stop Presentation across all screens"
+                          >
+                            <Square className="w-3.5 h-3.5" />
+                            <span>STOP</span>
+                          </button>
+                        ) : (
                           <button
                             type="button"
                             onClick={() => {
