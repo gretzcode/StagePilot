@@ -224,6 +224,40 @@ export class StageRoom extends DurableObject {
         return;
       }
 
+      if (clientMsg.type === "WEBRTC_SIGNAL") {
+        const signalPayload = clientMsg.payload as {
+          targetDeviceId: string;
+          senderDeviceId?: string;
+          sourceId: string;
+          signal: unknown;
+        };
+        signalPayload.senderDeviceId = senderDeviceId;
+
+        const serverMsg: ServerMessage = {
+          type: "WEBRTC_SIGNAL",
+          payload: signalPayload as any,
+          timestamp: Date.now(),
+        };
+        const msgStr = JSON.stringify(serverMsg);
+
+        const targetSockets = this.ctx.getWebSockets();
+        for (const targetWs of targetSockets) {
+          const targetTags = this.ctx.getTags(targetWs);
+          const targetId = targetTags?.[0];
+          if (
+            targetId === signalPayload.targetDeviceId ||
+            signalPayload.targetDeviceId === "broadcast"
+          ) {
+            if (targetWs !== ws) {
+              try {
+                targetWs.send(msgStr);
+              } catch {}
+            }
+          }
+        }
+        return;
+      }
+
       if (clientMsg.type === "EXECUTE_COMMAND") {
         await this.ensureStateLoaded("ROOM", "Stage Room", "host-user");
         const command = clientMsg.payload as StageCommand;

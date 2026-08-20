@@ -2,15 +2,21 @@
 
 import { useCallback } from "react";
 import { Monitor, MonitorOff, AlertCircle, Loader2 } from "lucide-react";
+import { WebRtcSignalPayload } from "@/core/realtime/protocol";
 import { useScreenShare, ScreenShareState } from "../hooks/useScreenShare";
 import { useScreenShareCapability, ScreenShareCapability } from "../hooks/useScreenShareCapability";
+import { useScreenSharePublisher } from "../hooks/useScreenSharePublisher";
 import { ScreenSharePreview } from "./ScreenSharePreview";
 
 interface ScreenSharePanelProps {
+  /** Speaker's device ID */
+  deviceId?: string;
   /** Dispatch a room command */
   onScreenShareStart: () => void;
   /** Dispatch a room command */
   onScreenShareStop: () => void;
+  /** WebRTC signaling callback */
+  sendSignal?: (payload: WebRtcSignalPayload) => void;
 }
 
 /**
@@ -20,15 +26,18 @@ interface ScreenSharePanelProps {
  * - Capability detection (supported / unsupported)
  * - Start sharing button (user gesture required)
  * - Local preview of the shared screen
+ * - WebRTC publishing to connected displays
  * - Stop sharing button
  * - Error handling (cancel, denied, unsupported)
  *
  * This panel does NOT make the screen share LIVE.
- * The Source Manager (future feature) will handle TAKE LIVE.
+ * The Source Manager handles TAKE LIVE.
  */
 export function ScreenSharePanel({
+  deviceId = "speaker-device",
   onScreenShareStart,
   onScreenShareStop,
+  sendSignal,
 }: ScreenSharePanelProps) {
   const capability = useScreenShareCapability();
 
@@ -43,6 +52,13 @@ export function ScreenSharePanel({
   const { status, stream, error, startSharing, stopSharing } = useScreenShare({
     onStarted: handleStarted,
     onStopped: handleStopped,
+  });
+
+  // Automatically publish stream to subscribers via WebRTC
+  useScreenSharePublisher({
+    stream,
+    deviceId,
+    sendSignal: sendSignal || (() => {}),
   });
 
   const handleStartClick = useCallback(() => {

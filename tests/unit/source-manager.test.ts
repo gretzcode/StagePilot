@@ -5,7 +5,7 @@ import { stageSessionReducer } from "@/core/session/reducer";
 import { StageCommand } from "@/core/types";
 import { getAvailableSources } from "@/features/source-manager/utils/available-sources";
 
-describe("Source Manager & Take Live", () => {
+describe("Source Manager & Take Live (Corrected Semantics)", () => {
   const roomId = "ROOM_SRC_01";
   const hostUserId = "host-user-src";
   const hostDeviceId = "dev-host-src";
@@ -105,7 +105,7 @@ describe("Source Manager & Take Live", () => {
       isHostDevice: false,
     };
 
-    // Add Host Material
+    // Add Host Material (Persistent asset)
     state.materials.push({
       id: "mat-host-01",
       name: "Main Keynote",
@@ -120,7 +120,7 @@ describe("Source Manager & Take Live", () => {
       status: "ready",
     });
 
-    // Add Speaker A Material
+    // Add Speaker A Material (Persistent asset)
     state.materials.push({
       id: "mat-speaker-a",
       name: "Armand Keynote",
@@ -135,7 +135,7 @@ describe("Source Manager & Take Live", () => {
       status: "ready",
     });
 
-    // Add Speaker A Screen Share
+    // Add Speaker A Screen Share (Dynamic realtime source)
     state.screenShareSources[speakerADevId] = {
       deviceId: speakerADevId,
       speakerName: "Speaker Armand",
@@ -148,30 +148,49 @@ describe("Source Manager & Take Live", () => {
     return state;
   };
 
-  describe("1. Source Discovery", () => {
-    it("should discover Host materials, Speaker materials, and Speaker screen shares as sources", () => {
+  describe("1. Available Sources Semantics (Materials != Sources)", () => {
+    it("should NOT return persistent materials in getAvailableSources() merely because they exist", () => {
       const state = setupRoomState();
       const sources = getAvailableSources(state);
 
-      expect(sources.length).toBe(3);
+      // Should ONLY contain active screen share, NOT the 2 materials
+      expect(sources.length).toBe(1);
+      expect(sources[0].id).toBe(speakerADevId);
+      expect(sources[0].type).toBe("screen_share");
 
-      const hostMatSource = sources.find((s) => s.id === "mat-host-01");
-      expect(hostMatSource).toBeDefined();
-      expect(hostMatSource?.type).toBe("material");
-      expect(hostMatSource?.ownerRole).toBe("host");
-      expect(hostMatSource?.isLive).toBe(false);
+      expect(sources.find((s) => s.id === "mat-host-01")).toBeUndefined();
+      expect(sources.find((s) => s.id === "mat-speaker-a")).toBeUndefined();
+    });
 
-      const speakerMatSource = sources.find((s) => s.id === "mat-speaker-a");
-      expect(speakerMatSource).toBeDefined();
-      expect(speakerMatSource?.type).toBe("material");
-      expect(speakerMatSource?.ownerRole).toBe("speaker");
-      expect(speakerMatSource?.ownerName).toBe("Speaker Armand");
+    it("should return multiple active Speaker screen shares when multiple speakers share", () => {
+      const state = setupRoomState();
 
-      const speakerScreenSource = sources.find((s) => s.id === speakerADevId && s.type === "screen_share");
-      expect(speakerScreenSource).toBeDefined();
-      expect(speakerScreenSource?.type).toBe("screen_share");
-      expect(speakerScreenSource?.ownerRole).toBe("speaker");
-      expect(speakerScreenSource?.ownerName).toBe("Speaker Armand");
+      // Speaker B also starts sharing screen
+      state.screenShareSources[speakerBDevId] = {
+        deviceId: speakerBDevId,
+        speakerName: "Speaker Harman",
+        status: "active",
+        startedAt: Date.now() - 1000,
+        stoppedAt: null,
+        updatedAt: Date.now() - 1000,
+      };
+
+      const sources = getAvailableSources(state);
+      expect(sources.length).toBe(2);
+
+      const armandSource = sources.find((s) => s.id === speakerADevId);
+      const harmanSource = sources.find((s) => s.id === speakerBDevId);
+
+      expect(armandSource?.ownerName).toBe("Speaker Armand");
+      expect(harmanSource?.ownerName).toBe("Speaker Harman");
+    });
+
+    it("should return empty list when no speakers are sharing screen", () => {
+      const state = setupRoomState();
+      state.screenShareSources = {};
+
+      const sources = getAvailableSources(state);
+      expect(sources.length).toBe(0);
     });
 
     it("should exclude stopped screen shares from available sources", () => {
@@ -179,15 +198,7 @@ describe("Source Manager & Take Live", () => {
       state.screenShareSources[speakerADevId].status = "stopped";
 
       const sources = getAvailableSources(state);
-      expect(sources.find((s) => s.type === "screen_share")).toBeUndefined();
-    });
-
-    it("should exclude deleted materials from available sources", () => {
-      const state = setupRoomState();
-      state.materials[0].status = "deleted";
-
-      const sources = getAvailableSources(state);
-      expect(sources.find((s) => s.id === "mat-host-01")).toBeUndefined();
+      expect(sources.length).toBe(0);
     });
   });
 
@@ -247,7 +258,7 @@ describe("Source Manager & Take Live", () => {
   });
 
   describe("3. Reducer - Take Live Execution", () => {
-    it("should transition Material source to LIVE authoritatively", () => {
+    it("should transition Material source to LIVE authoritatively via presentation system", () => {
       let state = setupRoomState();
       const cmd: StageCommand = {
         type: "SOURCE_TAKE_LIVE",
@@ -266,12 +277,6 @@ describe("Source Manager & Take Live", () => {
       expect(state.presentation.isPresenting).toBe(true);
       expect(state.presentation.materialId).toBe("mat-speaker-a");
       expect(state.presentation.status).toBe("live");
-
-      // Verify getAvailableSources reflects LIVE
-      const sources = getAvailableSources(state);
-      const spkMat = sources.find((s) => s.id === "mat-speaker-a");
-      expect(spkMat?.isLive).toBe(true);
-      expect(spkMat?.status).toBe("live");
     });
 
     it("should transition Screen Share source to LIVE authoritatively", () => {

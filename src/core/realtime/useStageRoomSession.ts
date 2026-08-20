@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { StageSessionState, StageCommand, DeviceApprovalStatus } from "@/core/types";
-import { ServerMessage } from "@/core/realtime/protocol";
+import { ServerMessage, ClientMessage, WebRtcSignalPayload } from "@/core/realtime/protocol";
 
 import { stageSessionReducer } from "@/core/session/reducer";
 import { updateServerTimeOffset } from "@/core/utils/clock-sync";
@@ -20,6 +20,7 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
   const [isConnected, setIsConnected] = useState(false);
   const [roomError, setRoomError] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
   const normalizedRoomCode = (roomCode || "").trim().toUpperCase();
 
@@ -139,6 +140,7 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
       typeof window !== "undefined" && "BroadcastChannel" in window
         ? new BroadcastChannel(`stagepilot_sync_${normalizedRoomCode}`)
         : null;
+    broadcastChannelRef.current = broadcastChannel;
 
     if (broadcastChannel) {
       broadcastChannel.onmessage = (event) => {
@@ -146,6 +148,12 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         try {
           if (event.data?.timestamp) {
             updateServerTimeOffset(event.data.timestamp);
+          }
+          if (event.data?.type === "WEBRTC_SIGNAL" && event.data.payload) {
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("stagepilot_webrtc_signal", { detail: event.data.payload }));
+            }
+            return;
           }
           const broadcastedState = event.data?.state as StageSessionState | undefined;
           if (event.data?.type === "SYNC_STATE" && broadcastedState) {
@@ -208,6 +216,12 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
           const msg: ServerMessage = JSON.parse(event.data);
           if (msg.timestamp) {
             updateServerTimeOffset(msg.timestamp);
+          }
+          if (msg.type === "WEBRTC_SIGNAL" && msg.payload) {
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("stagepilot_webrtc_signal", { detail: msg.payload }));
+            }
+            return;
           }
           if (msg.type === "SYNC_STATE") {
             const socketState = msg.state;
@@ -356,6 +370,23 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
 
   const roomName = state?.session?.title || undefined;
 
+  const sendWebRtcSignal = useCallback((payload: WebRtcSignalPayload) => {
+    const clientMsg: ClientMessage = {
+      type: "WEBRTC_SIGNAL",
+      messageId: `sig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      payload,
+    };
+    const msgStr = JSON.stringify(clientMsg);
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      try {
+        socketRef.current.send(msgStr);
+      } catch {}
+    }
+    try {
+      broadcastChannelRef.current?.postMessage({ type: "WEBRTC_SIGNAL", payload });
+    } catch {}
+  }, []);
+
   return {
     state,
     isConnected,
@@ -364,5 +395,6 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
     approvalStatus,
     roomName,
     dispatchCommand,
+    sendWebRtcSignal,
   };
 }

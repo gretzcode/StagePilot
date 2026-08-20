@@ -1,6 +1,19 @@
 import { DeviceRole, StageCommand, StageSessionState } from "../types";
 
-export type ClientMessageType = "JOIN_ROOM" | "RECONNECT" | "EXECUTE_COMMAND" | "PING" | "REQUEST_SYNC";
+export type ClientMessageType = "JOIN_ROOM" | "RECONNECT" | "EXECUTE_COMMAND" | "PING" | "REQUEST_SYNC" | "WEBRTC_SIGNAL";
+
+export interface WebRtcSignalData {
+  type: "request_stream" | "offer" | "answer" | "candidate";
+  sdp?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+}
+
+export interface WebRtcSignalPayload {
+  targetDeviceId: string;
+  senderDeviceId: string;
+  sourceId: string;
+  signal: WebRtcSignalData;
+}
 
 export interface JoinRoomPayload {
   roomCode: string;
@@ -19,7 +32,7 @@ export interface ReconnectPayload {
 export interface ClientMessage {
   type: ClientMessageType;
   messageId: string;
-  payload: JoinRoomPayload | ReconnectPayload | StageCommand | { timestamp: number };
+  payload: JoinRoomPayload | ReconnectPayload | StageCommand | WebRtcSignalPayload | { timestamp: number };
 }
 
 export type ServerMessageType =
@@ -28,7 +41,8 @@ export type ServerMessageType =
   | "DEVICE_JOIN_REQUESTED"
   | "DEVICE_STATUS_CHANGED"
   | "ERROR"
-  | "PONG";
+  | "PONG"
+  | "WEBRTC_SIGNAL";
 
 export interface SyncStateServerMessage {
   type: "SYNC_STATE";
@@ -73,10 +87,18 @@ export interface PongServerMessage {
   timestamp: number;
 }
 
+export interface WebRtcSignalServerMessage {
+  type: "WEBRTC_SIGNAL";
+  payload: WebRtcSignalPayload;
+  timestamp: number;
+}
+
 export type ServerMessage =
   | SyncStateServerMessage
   | CommandAckServerMessage
   | DeviceJoinRequestedServerMessage
   | DeviceStatusChangedServerMessage
   | ErrorServerMessage
-  | PongServerMessage;
+  | PongServerMessage
+  | WebRtcSignalServerMessage;
+

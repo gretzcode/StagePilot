@@ -81,12 +81,12 @@ export function SourceManagerPanel({
           <div>
             <h3 className="text-sm font-bold text-white flex items-center space-x-2">
               <span>Source Manager</span>
-              <span className="px-2 py-0.5 rounded-md bg-purple-950 border border-purple-800/80 text-purple-300 text-[10px] font-mono font-bold">
-                {sources.length} Sources
+              <span className="px-2 py-0.5 rounded-md bg-cyan-950 border border-cyan-800/80 text-cyan-300 text-[10px] font-mono font-bold">
+                {sources.length} Active Screens
               </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Pilih sumber presentasi yang tersedia dan aktifkan sebagai tayangan LIVE panggung.
+              Pilih sumber realtime (berbagi layar pembicara) dan aktifkan sebagai tayangan LIVE panggung.
             </p>
           </div>
         </div>
@@ -153,7 +153,7 @@ export function SourceManagerPanel({
 
         {sources.length === 0 ? (
           <div className="p-6 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/40 text-slate-500 text-xs">
-            Belum ada sumber yang tersedia. Tambahkan materi atau minta pembicara membagikan layar.
+            Belum ada layar pembicara yang aktif. Pembicara dapat membagikan layar dari halaman presentasi mereka.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

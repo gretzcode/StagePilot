@@ -14,6 +14,7 @@ import { useTimerTicker } from "@/features/timer/hooks/useTimerTicker";
 import { useAutoHideCursor } from "@/core/hooks/useAutoHideCursor";
 import { formatStageTimer } from "@/features/timer/utils/timer-formatter";
 import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
+import { useScreenShareSubscriber, ScreenShareLiveViewer } from "@/features/screen-share";
 
 function getBriefFontSize(length: number): string {
   if (length <= 35) return "text-5xl sm:text-6xl md:text-7xl lg:text-8xl";
@@ -28,7 +29,7 @@ function ConfidenceDisplayContent() {
   const [deviceId] = useState(() => getPersistentDeviceId("confidence", roomCode, searchParams.get("deviceId")));
   useAutoHideCursor(2500);
 
-  const { state, roomError, approvalStatus } = useStageRoomSession({
+  const { state, roomError, approvalStatus, sendWebRtcSignal } = useStageRoomSession({
     roomCode,
     role: "confidence",
     deviceId,
@@ -81,6 +82,13 @@ function ConfidenceDisplayContent() {
   const isPresenting = Boolean(state?.presentation.isPresenting && (isLiveMaterial || isLiveScreenShare));
   const activeScreenShare = isLiveScreenShare && liveSource ? state?.screenShareSources?.[liveSource.id] : null;
 
+  // WebRTC Screen Share Subscriber: automatically connects when screen share is LIVE
+  const { stream: screenShareStream, status: screenShareStatus } = useScreenShareSubscriber({
+    sourceId: isLiveScreenShare && liveSource ? liveSource.id : null,
+    deviceId,
+    sendSignal: sendWebRtcSignal,
+  });
+
   // Compute timestamp-based timer countdown & negative overtime increment
   const { formattedTime, isOvertime, isWarning, isCritical, isFinished } = formatStageTimer(
     state?.timer.status || "idle",
@@ -101,17 +109,11 @@ function ConfidenceDisplayContent() {
           {/* Current Slide / Screen Display Canvas (Expanded to 75% screen area on landscape) */}
           <div className="col-span-1 md:col-span-8 lg:col-span-9 bg-black rounded-3xl border border-slate-800/80 overflow-hidden relative shadow-2xl flex items-center justify-center min-h-[260px] md:min-h-0">
             {isLiveScreenShare ? (
-              <div className="w-full h-full flex flex-col items-center justify-center text-center p-8 bg-slate-950 relative">
-                <div className="w-16 h-16 rounded-2xl bg-cyan-950/90 border border-cyan-700/60 flex items-center justify-center text-cyan-400 shadow-2xl mb-3 animate-pulse">
-                  <Monitor className="w-8 h-8" />
-                </div>
-                <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-950 border border-cyan-700 text-cyan-300 text-xs font-mono font-bold uppercase tracking-wider mb-2">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                  <span>LIVE SCREEN SHARE</span>
-                </div>
-                <h2 className="text-xl font-bold text-white tracking-tight">{activeScreenShare?.speakerName || "Speaker"}&apos;s Screen</h2>
-                <p className="text-xs text-slate-400 max-w-md mt-1">Tayangan langsung layar pembicara aktif pada monitor stage.</p>
-              </div>
+              <ScreenShareLiveViewer
+                stream={screenShareStream}
+                status={screenShareStatus}
+                speakerName={activeScreenShare?.speakerName}
+              />
             ) : (
               <SlideViewer
                 material={activeMaterial}

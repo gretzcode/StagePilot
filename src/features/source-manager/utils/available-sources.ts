@@ -14,32 +14,7 @@ export function getAvailableSources(state: StageSessionState | null): AvailableS
   const sources: AvailableSource[] = [];
   const liveSource = state.liveSource;
 
-  // 1. Materials (Host, Speaker, Operator)
-  if (Array.isArray(state.materials)) {
-    for (const mat of state.materials) {
-      if (mat.status === "deleted") continue;
-
-      const isLive = Boolean(
-        liveSource?.type === "material" && liveSource.id === mat.id
-      );
-
-      sources.push({
-        id: mat.id,
-        type: "material",
-        title: mat.name,
-        ownerDeviceId: mat.ownerDeviceId,
-        ownerName: mat.ownerName || (mat.ownerRole === "host" ? "Host" : undefined),
-        ownerRole: mat.ownerRole || (mat.ownerDeviceId ? "speaker" : "host"),
-        status: isLive ? "live" : mat.status === "ready" ? "available" : "unavailable",
-        isLive,
-        totalPages: mat.totalPages || mat.slides?.length || 1,
-        mediaType: mat.type || mat.mediaType,
-        createdAt: mat.uploadedAt,
-      });
-    }
-  }
-
-  // 2. Screen Share Sources (Ephemeral active streams)
+  // Active Screen Share Sources (Ephemeral active realtime streams from Speakers)
   if (state.screenShareSources) {
     for (const [deviceId, screenSource] of Object.entries(state.screenShareSources)) {
       if (screenSource.status !== "active") continue;

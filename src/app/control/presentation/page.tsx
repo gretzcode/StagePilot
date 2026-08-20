@@ -79,7 +79,7 @@ function PresentationControlContent() {
   const [deviceId] = useState(() => getPersistentDeviceId(requestedRole, roomCode, searchParams.get("deviceId")));
   const [showUploader, setShowUploader] = useState(false);
 
-  const { state, roomError, roomName, approvalStatus, dispatchCommand } = useStageRoomSession({
+  const { state, roomError, roomName, approvalStatus, dispatchCommand, sendWebRtcSignal } = useStageRoomSession({
     roomCode,
     role: requestedRole,
     deviceId,
@@ -722,8 +722,10 @@ function PresentationControlContent() {
                   {isSpeaker && (
                     <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-inner">
                       <ScreenSharePanel
+                        deviceId={deviceId}
                         onScreenShareStart={handleScreenShareStart}
                         onScreenShareStop={handleScreenShareStop}
+                        sendSignal={sendWebRtcSignal}
                       />
                     </div>
                   )}

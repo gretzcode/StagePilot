@@ -11,6 +11,7 @@ import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { useAutoHideCursor } from "@/core/hooks/useAutoHideCursor";
 import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
+import { useScreenShareSubscriber, ScreenShareLiveViewer } from "@/features/screen-share";
 
 function AudienceDisplayContent() {
   const searchParams = useSearchParams();
@@ -19,7 +20,7 @@ function AudienceDisplayContent() {
   const [deviceId] = useState(() => getPersistentDeviceId("audience", roomCode, searchParams.get("deviceId")));
   useAutoHideCursor(2500);
 
-  const { state, roomError, approvalStatus, roomName } = useStageRoomSession({
+  const { state, roomError, approvalStatus, roomName, sendWebRtcSignal } = useStageRoomSession({
     roomCode,
     role: "audience",
     deviceId,
@@ -71,6 +72,13 @@ function AudienceDisplayContent() {
   const isPresenting = Boolean(state?.presentation.isPresenting && (isLiveMaterial || isLiveScreenShare));
   const activeScreenShare = isLiveScreenShare && liveSource ? state?.screenShareSources?.[liveSource.id] : null;
 
+  // WebRTC Screen Share Subscriber: automatically connects when screen share is LIVE
+  const { stream: screenShareStream, status: screenShareStatus } = useScreenShareSubscriber({
+    sourceId: isLiveScreenShare && liveSource ? liveSource.id : null,
+    deviceId,
+    sendSignal: sendWebRtcSignal,
+  });
+
   return (
     <div
       onClick={toggleFullscreen}
@@ -79,17 +87,11 @@ function AudienceDisplayContent() {
     >
       {isPresenting ? (
         isLiveScreenShare ? (
-          <div className="w-full h-full flex flex-col items-center justify-center text-center p-8 bg-slate-950 relative">
-            <div className="w-20 h-20 rounded-3xl bg-cyan-950/90 border border-cyan-700/60 flex items-center justify-center text-cyan-400 shadow-2xl mb-4 animate-pulse">
-              <Monitor className="w-10 h-10" />
-            </div>
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-950 border border-cyan-700 text-cyan-300 text-xs font-mono font-bold uppercase tracking-wider mb-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-              <span>LIVE SCREEN SHARE</span>
-            </div>
-            <h2 className="text-2xl font-bold text-white tracking-tight">{activeScreenShare?.speakerName || "Speaker"}&apos;s Screen</h2>
-            <p className="text-xs text-slate-400 max-w-md mt-1">Tayangan langsung layar pembicara sedang aktif pada panggung utama.</p>
-          </div>
+          <ScreenShareLiveViewer
+            stream={screenShareStream}
+            status={screenShareStatus}
+            speakerName={activeScreenShare?.speakerName}
+          />
         ) : (
           <SlideViewer
             material={activeMaterial}
