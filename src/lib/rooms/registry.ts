@@ -98,6 +98,45 @@ export class RoomRegistry {
     return Array.from(roomMap.values()).sort((a, b) => b.createdAt - a.createdAt);
   }
 
+  static async getActiveRooms(): Promise<StageRoomRecord[]> {
+    const roomMap = new Map<string, StageRoomRecord>();
+
+    // 1. Load from D1 database
+    try {
+      const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
+      const db = (cfCtx?.env as Record<string, unknown>)?.DB as D1Database | undefined;
+      if (db) {
+        const stmt = db.prepare("SELECT * FROM rooms WHERE status = 'ACTIVE' ORDER BY created_at DESC LIMIT 50");
+        const { results } = await stmt.all<Record<string, unknown>>();
+        if (results && results.length > 0) {
+          results.forEach((row) => {
+            const r: StageRoomRecord = {
+              roomId: String(row.id),
+              roomCode: String(row.room_code),
+              hostUserId: String(row.host_user_id),
+              name: String(row.name),
+              status: String(row.status) as "ACTIVE" | "CLOSED" | "PAUSED",
+              createdAt: Number(row.created_at),
+              updatedAt: Number(row.updated_at),
+            };
+            roomMap.set(r.roomId, r);
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[RoomRegistry D1 getActiveRooms Warning]", err);
+    }
+
+    // 2. Merge with in-memory global map
+    for (const record of Array.from(globalRoomsMap.values())) {
+      if (record.status === "ACTIVE") {
+        roomMap.set(record.roomId, record);
+      }
+    }
+
+    return Array.from(roomMap.values()).sort((a, b) => b.createdAt - a.createdAt);
+  }
+
   static async createRoom(hostUserId: string, name = "Main Stage — Production Session"): Promise<StageRoomRecord> {
     let roomCode = "";
     let attempts = 0;

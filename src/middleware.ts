@@ -20,13 +20,13 @@ export async function proxy(request: NextRequest) {
 
   const token = tokenFromHeader || tokenFromCookie;
 
-  // Allow ONLY /control/presentation for guest operators with explicit role=control
-  const isGuestPresentationControl =
-    request.nextUrl.pathname === "/control/presentation" &&
+  // Allow guest operators with explicit role=control and roomCode to access /control and /control/presentation
+  const isGuestControl =
+    (request.nextUrl.pathname === "/control" || request.nextUrl.pathname === "/control/presentation") &&
     request.nextUrl.searchParams.has("roomCode") &&
     request.nextUrl.searchParams.get("role") === "control";
 
-  if (isGuestPresentationControl) {
+  if (isGuestControl) {
     return NextResponse.next();
   }
 

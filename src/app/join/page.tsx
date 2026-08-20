@@ -1,20 +1,62 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DeviceRole, StageSessionState } from "@/core/types";
-import { Radio, Tv, Monitor, ArrowRight, AlertCircle } from "lucide-react";
+import { Radio, Tv, Monitor, ArrowRight, AlertCircle, RefreshCw, CheckCircle2, Search, KeyRound } from "lucide-react";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
 
-export default function JoinPage() {
+interface ActiveRoomSummary {
+  roomCode: string;
+  title: string;
+  createdAt: number;
+  status: string;
+}
+
+function JoinPageContent() {
   const router = useRouter();
-  const [roomCode, setRoomCode] = useState("");
+  const searchParams = useSearchParams();
+  const initialRoomCode = searchParams.get("roomCode")?.trim().toUpperCase() || "";
+  const initialRole = (searchParams.get("role") as DeviceRole) || "control";
+
+  const [activeRooms, setActiveRooms] = useState<ActiveRoomSummary[]>([]);
+  const [loadingRooms, setLoadingRooms] = useState(true);
+  const [roomCode, setRoomCode] = useState(initialRoomCode);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [useManualCode, setUseManualCode] = useState(Boolean(initialRoomCode && activeRooms.every((r) => r.roomCode !== initialRoomCode)));
   const [deviceName, setDeviceName] = useState("");
-  const [role, setRole] = useState<DeviceRole>("control");
+  const [role, setRole] = useState<DeviceRole>(initialRole);
   const [status, setStatus] = useState<"form" | "waiting" | "rejected">("form");
   const [error, setError] = useState<string | null>(null);
   const [generatedDeviceId, setGeneratedDeviceId] = useState("");
+
+  const fetchActiveRooms = async () => {
+    try {
+      setLoadingRooms(true);
+      const res = await fetch("/api/room/active");
+      if (res.ok) {
+        const data = (await res.json()) as { success?: boolean; rooms?: ActiveRoomSummary[] };
+        if (data.success && Array.isArray(data.rooms)) {
+          setActiveRooms(data.rooms);
+          // If only 1 room is available and roomCode is not set yet, auto-select it
+          if (data.rooms.length === 1 && !roomCode && !initialRoomCode) {
+            setRoomCode(data.rooms[0].roomCode);
+          }
+        }
+      }
+    } catch {
+      // Non-fatal
+    } finally {
+      setLoadingRooms(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchActiveRooms();
+    const interval = setInterval(fetchActiveRooms, 8000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -70,7 +112,14 @@ export default function JoinPage() {
     e.preventDefault();
     setError(null);
     const normalizedCode = roomCode.trim().toUpperCase();
-    if (!normalizedCode || !deviceName.trim()) return;
+    if (!normalizedCode) {
+      setError("Silakan pilih room atau masukkan kode room terlebih dahulu.");
+      return;
+    }
+    if (!deviceName.trim()) {
+      setError("Silakan isi nama perangkat / operator.");
+      return;
+    }
 
     try {
       // 1. Validate room code with backend
@@ -84,7 +133,7 @@ export default function JoinPage() {
         if (data.reason === "ROOM_NOT_FOUND" || data.error === "ROOM_NOT_FOUND") {
           throw new Error("ROOM_NOT_FOUND");
         }
-        throw new Error(data.reason || "Kode room tidak valid");
+        throw new Error(data.reason || "Room tidak ditemukan atau sudah ditutup.");
       }
 
       const devId = `dev-${role}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -108,7 +157,7 @@ export default function JoinPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Gagal terhubung ke room";
       if (msg === "ROOM_NOT_FOUND") {
-        setError("Room tidak ditemukan. Periksa kembali kode room.");
+        setError("Room tidak ditemukan. Periksa kembali pilihan room Anda.");
       } else {
         setError(msg);
       }
@@ -137,16 +186,24 @@ export default function JoinPage() {
     );
   }
 
+  const filteredRooms = activeRooms.filter(
+    (r) =>
+      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      r.roomCode.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const selectedRoomObj = activeRooms.find((r) => r.roomCode === roomCode);
+
   return (
     <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-3 sm:p-6 md:p-8">
-      <div className="w-full max-w-md sm:max-w-lg glass-panel p-6 sm:p-8 md:p-10 rounded-3xl border border-slate-800 shadow-2xl relative z-10">
+      <div className="w-full max-w-lg glass-panel p-6 sm:p-8 md:p-10 rounded-3xl border border-slate-800 shadow-2xl relative z-10">
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-12 h-12 rounded-2xl bg-purple-600 flex items-center justify-center text-white font-bold text-2xl mb-3 shadow-lg glow-purple">
             SP
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Join Stage Room</h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            Guest Pairing &amp; Role Authorization
+            Pilih room aktif &amp; sambungkan perangkat Anda
           </p>
         </div>
 
@@ -157,89 +214,181 @@ export default function JoinPage() {
           </div>
         )}
 
-        <form onSubmit={handleJoin} className="space-y-4">
+        <form onSubmit={handleJoin} className="space-y-5">
+          {/* Room Selection Section */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-              Room Code
-            </label>
-            <input
-              type="text"
-              maxLength={6}
-              value={roomCode}
-              onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-              placeholder="e.g. A7K9P2"
-              required
-              autoFocus
-              className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-center font-mono text-2xl sm:text-3xl font-bold tracking-widest text-purple-400 focus:outline-none focus:border-purple-500 transition"
-            />
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                1. Pilih Stage Room
+              </label>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={fetchActiveRooms}
+                  disabled={loadingRooms}
+                  className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center space-x-1 cursor-pointer"
+                  title="Segarkan daftar room"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loadingRooms ? "animate-spin" : ""}`} />
+                  <span>Refresh</span>
+                </button>
+                <span className="text-slate-600">•</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseManualCode(!useManualCode);
+                    if (!useManualCode) setRoomCode("");
+                  }}
+                  className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center space-x-1 cursor-pointer"
+                >
+                  <KeyRound className="w-3 h-3" />
+                  <span>{useManualCode ? "Pilih dari List" : "Input Kode Manual"}</span>
+                </button>
+              </div>
+            </div>
+
+            {useManualCode ? (
+              <div>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={roomCode}
+                  onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                  placeholder="Ketik 6 digit kode room (misal: A7K9P2)"
+                  required
+                  autoFocus
+                  className="w-full px-4 py-3 rounded-2xl bg-slate-900 border border-slate-800 text-center font-mono text-xl sm:text-2xl font-bold tracking-widest text-purple-400 focus:outline-none focus:border-purple-500 transition"
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {activeRooms.length >= 3 && (
+                  <div className="relative mb-2">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Cari nama room atau kode..."
+                      className="w-full pl-8.5 pr-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                    />
+                  </div>
+                )}
+
+                {loadingRooms && activeRooms.length === 0 ? (
+                  <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 text-center text-slate-400 text-xs flex flex-col items-center justify-center space-y-2">
+                    <RefreshCw className="w-4 h-4 animate-spin text-purple-400" />
+                    <span>Mencari room aktif...</span>
+                  </div>
+                ) : filteredRooms.length > 0 ? (
+                  <div className="max-h-56 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {filteredRooms.map((room) => {
+                      const isSelected = roomCode === room.roomCode;
+                      return (
+                        <div
+                          key={room.roomCode}
+                          onClick={() => setRoomCode(room.roomCode)}
+                          className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                            isSelected
+                              ? "bg-purple-600/15 border-purple-500 ring-2 ring-purple-500/30 text-white shadow-md"
+                              : "bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1 pr-3">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <span className="font-mono text-xs font-black px-2 py-0.5 rounded-md bg-purple-950/90 border border-purple-800/60 text-purple-300">
+                                {room.roomCode}
+                              </span>
+                              <span className="text-[10px] text-emerald-400 font-semibold flex items-center space-x-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                <span>Active</span>
+                              </span>
+                            </div>
+                            <h3 className="font-bold text-xs sm:text-sm truncate text-white">
+                              {room.title}
+                            </h3>
+                          </div>
+
+                          <div className="flex-shrink-0">
+                            {isSelected ? (
+                              <CheckCircle2 className="w-5 h-5 text-purple-400 fill-purple-500/20" />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full border border-slate-700" />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-6 rounded-2xl bg-slate-900/40 border border-dashed border-slate-800 text-center text-slate-400 text-xs">
+                    <p className="mb-2">Tidak ada stage room aktif saat ini.</p>
+                    <button
+                      type="button"
+                      onClick={() => setUseManualCode(true)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-purple-300 font-semibold text-xs transition"
+                    >
+                      Masukkan Kode Manual
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
+          {/* Requested Device Role */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-              Device / Operator Name
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+              2. Peran Perangkat (Role)
             </label>
-            <input
-              type="text"
-              value={deviceName}
-              onChange={(e) => setDeviceName(e.target.value)}
-              placeholder="e.g. Backstage iPad / Stage Left"
-              required
-              className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-purple-500 transition"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-              Requested Device Role
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
               <button
                 type="button"
                 onClick={() => setRole("control")}
-                className={`p-3.5 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
+                className={`p-3 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
                   role === "control"
                     ? "bg-purple-600/20 border-purple-500 text-purple-300 ring-2 ring-purple-500/30"
                     : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                 }`}
               >
                 <div className="p-2 rounded-xl bg-purple-950/80 text-purple-400 sm:mb-1.5 flex-shrink-0">
-                  <Radio className="w-5 h-5" />
+                  <Radio className="w-4 h-4" />
                 </div>
                 <div>
                   <span className="text-xs font-bold block">Control Room</span>
-                  <span className="text-[10px] text-slate-400 block sm:hidden">Operator HP / Tablet</span>
+                  <span className="text-[10px] text-slate-400 block sm:hidden">Operator / Kru</span>
                 </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setRole("audience")}
-                className={`p-3.5 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
+                className={`p-3 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
                   role === "audience"
                     ? "bg-indigo-600/20 border-indigo-500 text-indigo-300 ring-2 ring-indigo-500/30"
                     : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                 }`}
               >
                 <div className="p-2 rounded-xl bg-indigo-950/80 text-indigo-400 sm:mb-1.5 flex-shrink-0">
-                  <Tv className="w-5 h-5" />
+                  <Tv className="w-4 h-4" />
                 </div>
                 <div>
                   <span className="text-xs font-bold block">Audience</span>
-                  <span className="text-[10px] text-slate-400 block sm:hidden">Layar Proyektor / LED</span>
+                  <span className="text-[10px] text-slate-400 block sm:hidden">Proyektor / LED</span>
                 </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setRole("confidence")}
-                className={`p-3.5 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
+                className={`p-3 rounded-2xl border flex sm:flex-col items-center justify-start sm:justify-center transition cursor-pointer text-left sm:text-center space-x-3 sm:space-x-0 ${
                   role === "confidence"
                     ? "bg-blue-600/20 border-blue-500 text-blue-300 ring-2 ring-blue-500/30"
                     : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
                 }`}
               >
                 <div className="p-2 rounded-xl bg-blue-950/80 text-blue-400 sm:mb-1.5 flex-shrink-0">
-                  <Monitor className="w-5 h-5" />
+                  <Monitor className="w-4 h-4" />
                 </div>
                 <div>
                   <span className="text-xs font-bold block">Confidence</span>
@@ -249,11 +398,37 @@ export default function JoinPage() {
             </div>
           </div>
 
+          {/* Device Identifier */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              3. Nama Perangkat / Operator
+            </label>
+            <input
+              type="text"
+              value={deviceName}
+              onChange={(e) => setDeviceName(e.target.value)}
+              placeholder={
+                role === "audience"
+                  ? "misal: Proyektor Utama / Videotron"
+                  : role === "confidence"
+                  ? "misal: Monitor Panggung Depan"
+                  : "misal: iPad Operator / Laptop Kru"
+              }
+              required
+              className="w-full px-4 py-3 rounded-2xl bg-slate-900 border border-slate-800 text-white text-sm focus:outline-none focus:border-purple-500 transition"
+            />
+          </div>
+
           <button
             type="submit"
-            className="w-full py-3.5 px-4 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm transition flex items-center justify-center space-x-2 glow-purple mt-6 cursor-pointer shadow-lg"
+            disabled={!roomCode}
+            className="w-full py-3.5 px-4 rounded-2xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-sm transition flex items-center justify-center space-x-2 glow-purple mt-4 cursor-pointer shadow-lg"
           >
-            <span>Submit Join Request</span>
+            <span>
+              {roomCode
+                ? `Sambungkan ke Room ${selectedRoomObj ? `(${selectedRoomObj.title})` : roomCode}`
+                : "Pilih Room Terlebih Dahulu"}
+            </span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
@@ -261,3 +436,18 @@ export default function JoinPage() {
     </div>
   );
 }
+
+export default function JoinPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+        </div>
+      }
+    >
+      <JoinPageContent />
+    </Suspense>
+  );
+}
+

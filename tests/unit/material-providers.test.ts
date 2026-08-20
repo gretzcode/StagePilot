@@ -80,4 +80,15 @@ describe("Phase 2 Material Providers Engine", () => {
     await expect(configuredResolver.isUploadAvailable()).resolves.toBe(true);
     await expect(configuredResolver.getUploadProvider()).resolves.toMatchObject({ type: "google_drive" });
   });
+
+  it("Video Provider supports video material type and correctly parses video URLs", async () => {
+    const videoMat = await defaultPresentationAdapter.loadMaterial(
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "Rick Astley - Never Gonna Give You Up",
+      "video"
+    );
+    expect(videoMat.type).toBe("video");
+    expect(videoMat.name).toBe("Rick Astley - Never Gonna Give You Up");
+    expect(videoMat.slides[0].title).toBe("Rick Astley - Never Gonna Give You Up");
+  });
 });

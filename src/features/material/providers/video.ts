@@ -90,26 +90,36 @@ function extractPlaylistVideosFromData(
 
   const record = obj as Record<string, unknown>;
 
-  if (record.playlistVideoRenderer && typeof record.playlistVideoRenderer === "object") {
-    const r = record.playlistVideoRenderer as Record<string, unknown>;
-    const videoId = r.videoId;
-    if (videoId && typeof videoId === "string" && !seen.has(videoId)) {
+  const renderer =
+    (record.playlistVideoRenderer as Record<string, unknown> | undefined) ||
+    (record.playlistPanelVideoRenderer as Record<string, unknown> | undefined) ||
+    (record.gridVideoRenderer as Record<string, unknown> | undefined) ||
+    (record.videoRenderer as Record<string, unknown> | undefined) ||
+    (record.compactVideoRenderer as Record<string, unknown> | undefined);
+
+  if (renderer && typeof renderer === "object") {
+    const videoId = typeof renderer.videoId === "string" ? renderer.videoId : null;
+    if (videoId && !seen.has(videoId)) {
       seen.add(videoId);
 
       let title = "";
-      const titleObj = r.title as Record<string, unknown> | undefined;
+      const titleObj = renderer.title as Record<string, unknown> | undefined;
+      const headlineObj = renderer.headline as Record<string, unknown> | undefined;
+
       if (titleObj?.runs && Array.isArray(titleObj.runs)) {
         title = titleObj.runs.map((x: Record<string, unknown>) => (x.text as string) || "").join("").trim();
       } else if (typeof titleObj?.simpleText === "string") {
         title = titleObj.simpleText.trim();
-      }
-
-      if (!title) {
-        title = `Video ${results.length + 1}`;
+      } else if (headlineObj?.runs && Array.isArray(headlineObj.runs)) {
+        title = headlineObj.runs.map((x: Record<string, unknown>) => (x.text as string) || "").join("").trim();
+      } else if (typeof headlineObj?.simpleText === "string") {
+        title = headlineObj.simpleText.trim();
+      } else if (typeof renderer.title === "string") {
+        title = renderer.title.trim();
       }
 
       let thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-      const thumbObj = r.thumbnail as Record<string, unknown> | undefined;
+      const thumbObj = renderer.thumbnail as Record<string, unknown> | undefined;
       if (thumbObj?.thumbnails && Array.isArray(thumbObj.thumbnails) && thumbObj.thumbnails.length > 0) {
         const last = thumbObj.thumbnails[thumbObj.thumbnails.length - 1] as Record<string, unknown>;
         if (typeof last?.url === "string") {
@@ -119,7 +129,7 @@ function extractPlaylistVideosFromData(
 
       results.push({
         videoId,
-        title: decodeXmlEntities(title),
+        title: title ? decodeXmlEntities(title) : `Video ${results.length + 1}`,
         thumbnailUrl,
         url: `https://www.youtube.com/watch?v=${videoId}`,
       });
@@ -132,12 +142,83 @@ function extractPlaylistVideosFromData(
   }
 }
 
+async function fetchOEmbedTitle(videoId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}&format=json`);
+    if (res.ok) {
+      const data = (await res.json().catch(() => null)) as { title?: string } | null;
+      if (data?.title) return decodeXmlEntities(data.title).trim();
+    }
+  } catch {
+    // Non-fatal
+  }
+  return null;
+}
+
 export async function fetchYouTubePlaylist(listId: string): Promise<{ title: string | null; items: PlaylistItem[] }> {
   const items: PlaylistItem[] = [];
   let playlistTitle: string | null = null;
   const seenIds = new Set<string>();
 
-  // 1. Primary: YouTube Playlist HTML Scraping (Full list of up to 100+ videos from ytInitialData)
+  // 1. YouTube Atom RSS Feed (Fastest, zero bot-blocking, full official video titles for up to 15 entries)
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(listId)}`;
+    const res = await fetch(feedUrl, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Accept: "application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8",
+      },
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const xml = await res.text();
+
+      const feedTitleMatch = xml.match(/<title>([^<]+)<\/title>/);
+      if (feedTitleMatch && feedTitleMatch[1]) {
+        playlistTitle = decodeXmlEntities(feedTitleMatch[1]).trim();
+      }
+
+      const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
+      let match: RegExpExecArray | null;
+
+      while ((match = entryRegex.exec(xml)) !== null) {
+        const entryXml = match[1];
+        const videoIdMatch = entryXml.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+        const titleMatch = entryXml.match(/<title>([^<]+)<\/title>/);
+        const thumbMatch = entryXml.match(/<media:thumbnail\s+[^>]*url="([^"]+)"/);
+
+        if (videoIdMatch && videoIdMatch[1]) {
+          const videoId = videoIdMatch[1].trim();
+          if (!seenIds.has(videoId)) {
+            seenIds.add(videoId);
+            const title =
+              titleMatch && titleMatch[1]
+                ? decodeXmlEntities(titleMatch[1]).trim()
+                : "";
+            const thumbnailUrl =
+              thumbMatch && thumbMatch[1]
+                ? thumbMatch[1]
+                : `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+            items.push({
+              videoId,
+              title: title || `Video ${items.length + 1}`,
+              thumbnailUrl,
+              url: `https://www.youtube.com/watch?v=${videoId}`,
+            });
+          }
+        }
+      }
+    }
+  } catch {
+    // Non-fatal, proceed to HTML scrape
+  }
+
+  // 2. YouTube Playlist HTML Scraping (Fetches additional videos beyond 15 from ytInitialData)
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
@@ -156,13 +237,14 @@ export async function fetchYouTubePlaylist(listId: string): Promise<{ title: str
     if (res.ok) {
       const html = await res.text();
 
-      // Extract playlist title from <title> or og:title
-      const ogTitleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i);
-      const titleTagMatch = html.match(/<title>([^<]+)<\/title>/i);
-      if (ogTitleMatch && ogTitleMatch[1]) {
-        playlistTitle = decodeXmlEntities(ogTitleMatch[1]).trim();
-      } else if (titleTagMatch && titleTagMatch[1]) {
-        playlistTitle = decodeXmlEntities(titleTagMatch[1].replace(/- YouTube$/i, "")).trim();
+      if (!playlistTitle) {
+        const ogTitleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i);
+        const titleTagMatch = html.match(/<title>([^<]+)<\/title>/i);
+        if (ogTitleMatch && ogTitleMatch[1]) {
+          playlistTitle = decodeXmlEntities(ogTitleMatch[1]).trim();
+        } else if (titleTagMatch && titleTagMatch[1]) {
+          playlistTitle = decodeXmlEntities(titleTagMatch[1].replace(/- YouTube$/i, "")).trim();
+        }
       }
 
       // Extract ytInitialData JSON
@@ -172,93 +254,49 @@ export async function fetchYouTubePlaylist(listId: string): Promise<{ title: str
           const initialData = JSON.parse(ytInitialDataMatch[1]);
           extractPlaylistVideosFromData(initialData, items, seenIds);
         } catch {
-          // Fall through to regex extraction
+          // Fall through
         }
       }
 
-      // Regex fallback if ytInitialData parsing extracted nothing
-      if (items.length === 0) {
-        const videoIdMatches = Array.from(html.matchAll(/"videoId":"([A-Za-z0-9_-]{11})"/g)).map((m) => m[1]);
-        const uniqueIds = Array.from(new Set(videoIdMatches));
+      // Regex fallback for any remaining video IDs in HTML
+      const videoIdMatches = Array.from(html.matchAll(/"videoId":"([A-Za-z0-9_-]{11})"/g)).map((m) => m[1]);
+      const uniqueIds = Array.from(new Set(videoIdMatches));
 
-        for (const vId of uniqueIds) {
-          if (!seenIds.has(vId)) {
-            seenIds.add(vId);
-            items.push({
-              videoId: vId,
-              title: `Video ${items.length + 1}`,
-              thumbnailUrl: `https://img.youtube.com/vi/${vId}/hqdefault.jpg`,
-              url: `https://www.youtube.com/watch?v=${vId}`,
-            });
-          }
+      for (const vId of uniqueIds) {
+        if (!seenIds.has(vId)) {
+          seenIds.add(vId);
+          items.push({
+            videoId: vId,
+            title: "",
+            thumbnailUrl: `https://img.youtube.com/vi/${vId}/hqdefault.jpg`,
+            url: `https://www.youtube.com/watch?v=${vId}`,
+          });
         }
       }
     }
   } catch {
-    // Silently fall back to RSS feed
+    // Non-fatal
   }
 
-  // 2. Secondary Fallback: YouTube Atom RSS Feed (returns first 15 videos if HTML was blocked)
-  if (items.length === 0) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
-      const feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(listId)}`;
-      const res = await fetch(feedUrl, {
-        signal: controller.signal,
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          Accept: "application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8",
-        },
-      });
-      clearTimeout(timeout);
-
-      if (res.ok) {
-        const xml = await res.text();
-
-        if (!playlistTitle) {
-          const feedTitleMatch = xml.match(/<title>([^<]+)<\/title>/);
-          if (feedTitleMatch && feedTitleMatch[1]) {
-            playlistTitle = decodeXmlEntities(feedTitleMatch[1]).trim();
-          }
+  // 3. oEmbed Real Title Resolution for any placeholder/empty items
+  const itemsNeedingTitle = items.filter((item) => !item.title || /^Video\s+\d+$/i.test(item.title));
+  if (itemsNeedingTitle.length > 0) {
+    await Promise.allSettled(
+      itemsNeedingTitle.slice(0, 50).map(async (item) => {
+        const realTitle = await fetchOEmbedTitle(item.videoId);
+        if (realTitle) {
+          item.title = realTitle;
         }
+      })
+    );
+  }
 
-        const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
-        let match: RegExpExecArray | null;
-
-        while ((match = entryRegex.exec(xml)) !== null) {
-          const entryXml = match[1];
-          const videoIdMatch = entryXml.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
-          const titleMatch = entryXml.match(/<title>([^<]+)<\/title>/);
-          const thumbMatch = entryXml.match(/<media:thumbnail\s+[^>]*url="([^"]+)"/);
-
-          if (videoIdMatch && videoIdMatch[1]) {
-            const videoId = videoIdMatch[1].trim();
-            if (!seenIds.has(videoId)) {
-              seenIds.add(videoId);
-              const title =
-                titleMatch && titleMatch[1]
-                  ? decodeXmlEntities(titleMatch[1]).trim()
-                  : `Video ${items.length + 1}`;
-              const thumbnailUrl =
-                thumbMatch && thumbMatch[1]
-                  ? thumbMatch[1]
-                  : `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-
-              items.push({
-                videoId,
-                title,
-                thumbnailUrl,
-                url: `https://www.youtube.com/watch?v=${videoId}`,
-              });
-            }
-          }
-        }
-      }
-    } catch {
-      // Non-fatal
+  // Final pass: ensure none have empty titles
+  items.forEach((item, idx) => {
+    if (!item.title || item.title.trim() === "") {
+      item.title = `Video ${idx + 1}`;
     }
-  }
+  });
 
   return { title: playlistTitle, items };
 }
