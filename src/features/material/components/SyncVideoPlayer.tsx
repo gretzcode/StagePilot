@@ -13,7 +13,7 @@ import { Play, Pause } from "lucide-react";
 
 interface SyncVideoPlayerProps {
   url: string;
-  role?: "control" | "audience" | "confidence";
+  role?: "host" | "operator" | "speaker" | "control" | "audience" | "confidence";
   mediaState?: MediaPlaybackState;
   zoom?: PresentationZoomState;
   onMediaPlay?: (currentTime?: number) => void;

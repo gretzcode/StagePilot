@@ -10,7 +10,7 @@ interface PdfSlideViewerProps {
   url: string;
   currentSlide?: number;
   currentPage?: number;
-  role?: "control" | "audience" | "confidence";
+  role?: "host" | "operator" | "speaker" | "control" | "audience" | "confidence";
   title?: string;
   zoom?: PresentationZoomState;
   /** Called once when the real page count is known from the loaded PDF */

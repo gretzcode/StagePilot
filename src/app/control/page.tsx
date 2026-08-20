@@ -339,11 +339,31 @@ function ControlRoomContent() {
                     >
                       <div>
                         <div className="flex items-start justify-between gap-2 mb-2">
-                          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400">
-                            {mat.type === "video"
-                              ? (mat.totalPages > 1 ? `VIDEO PLAYLIST • ${mat.totalPages} VIDEOS` : "VIDEO")
-                              : `${mat.type.toUpperCase()} • ${mat.totalPages} SLIDES`}
-                          </span>
+                          <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400">
+                              {mat.type === "video"
+                                ? (mat.totalPages > 1 ? `VIDEO PLAYLIST • ${mat.totalPages} VIDEOS` : "VIDEO")
+                                : `${mat.type.toUpperCase()} • ${mat.totalPages} SLIDES`}
+                            </span>
+
+                            {mat.ownerRole && (
+                              <span
+                                className={`text-[9px] font-semibold px-1.5 py-0.2 rounded border ${
+                                  mat.ownerRole === "speaker"
+                                    ? "bg-indigo-950/80 border-indigo-700/60 text-indigo-300"
+                                    : mat.ownerRole === "host"
+                                    ? "bg-purple-950/80 border-purple-700/60 text-purple-300"
+                                    : "bg-emerald-950/80 border-emerald-700/60 text-emerald-300"
+                                }`}
+                              >
+                                {mat.ownerRole === "speaker"
+                                  ? `👤 Speaker: ${mat.ownerName || "Speaker"}`
+                                  : mat.ownerRole === "host"
+                                  ? "👑 Host"
+                                  : `🎮 ${mat.ownerName || "Operator"}`}
+                              </span>
+                            )}
+                          </div>
 
                           {isLive ? (
                             <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white text-[9px] font-extrabold uppercase tracking-wider flex items-center space-x-1 animate-pulse flex-shrink-0">

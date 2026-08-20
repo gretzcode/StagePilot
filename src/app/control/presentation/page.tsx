@@ -58,6 +58,7 @@ function PresentationControlContent() {
   const rawRole = searchParams.get("role")?.toLowerCase();
   const requestedRole = (rawRole || "host") as "host" | "operator" | "control" | "speaker";
   const isHost = requestedRole === "host";
+  const isSpeaker = requestedRole === "speaker";
 
   // Authenticate host session if claiming Host role
   useEffect(() => {
@@ -130,6 +131,8 @@ function PresentationControlContent() {
   }, [dispatchCommand, state]);
 
   const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
+  const speakerMaterials = state?.materials.filter((m) => m.ownerDeviceId === deviceId) || [];
+  const displayMaterials = isSpeaker ? speakerMaterials : (state?.materials || []);
   const isLiveVideo = Boolean(state?.presentation.isPresenting && activeMaterial?.type === "video");
   const isLivePlaylist = Boolean(
     isLiveVideo && ((activeMaterial?.totalPages || 0) > 1 || (activeMaterial?.slides?.length || 0) > 1)
@@ -593,28 +596,30 @@ function PresentationControlContent() {
             <span className="hidden sm:inline text-xs font-semibold ml-1.5">{isSidebarOpen ? "Hide Sidebar" : "Show Sidebar"}</span>
           </button>
 
-          {/* Blank Display Toggle Button */}
-          <button
-            onClick={() => dispatchCommand("DISPLAY_BLANK", { blank: !state?.presentation.blanked })}
-            className={`p-2 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer ${
-              state?.presentation.blanked
-                ? "bg-amber-500/20 border-amber-500/60 text-amber-300"
-                : "bg-slate-800/90 border-slate-700 text-slate-300 hover:text-white"
-            }`}
-            title={state?.presentation.blanked ? "Unblank Display" : "Blank Display (B)"}
-          >
-            {state?.presentation.blanked ? <EyeOff className="w-4 h-4 text-amber-400" /> : <Eye className="w-4 h-4" />}
-            <span className="hidden sm:inline">{state?.presentation.blanked ? "DISPLAY BLANKED" : "BLANK DISPLAY (B)"}</span>
-          </button>
+          {/* Blank Display Toggle Button (Host & Operator only) */}
+          {!isSpeaker && (
+            <button
+              onClick={() => dispatchCommand("DISPLAY_BLANK", { blank: !state?.presentation.blanked })}
+              className={`p-2 sm:px-3 sm:py-1.5 rounded-xl border text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer ${
+                state?.presentation.blanked
+                  ? "bg-amber-500/20 border-amber-500/60 text-amber-300"
+                  : "bg-slate-800/90 border-slate-700 text-slate-300 hover:text-white"
+              }`}
+              title={state?.presentation.blanked ? "Unblank Display" : "Blank Display (B)"}
+            >
+              {state?.presentation.blanked ? <EyeOff className="w-4 h-4 text-amber-400" /> : <Eye className="w-4 h-4" />}
+              <span className="hidden sm:inline">{state?.presentation.blanked ? "DISPLAY BLANKED" : "BLANK DISPLAY (B)"}</span>
+            </button>
+          )}
 
-          {/* Exit to Control Room Button (Returns to control room without stopping live presentation) */}
+          {/* Exit / Back Button */}
           <button
-            onClick={handleExitToControl}
+            onClick={isSpeaker ? () => router.push("/join") : handleExitToControl}
             className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1.5 cursor-pointer"
-            title="Exit to Control Room (Presentation continues running)"
+            title={isSpeaker ? "Keluar dari room" : "Exit to Control Room (Presentation continues running)"}
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline text-xs font-semibold">Control Room</span>
+            <span className="hidden sm:inline text-xs font-semibold">{isSpeaker ? "Keluar" : "Control Room"}</span>
           </button>
         </div>
       </header>
@@ -642,7 +647,7 @@ function PresentationControlContent() {
                   }`}
                 >
                   <ListVideo className="w-3.5 h-3.5" />
-                  <span>QUEUE ({state?.materials.length || 0})</span>
+                  <span>{isSpeaker ? `MY MATERIALS (${speakerMaterials.length})` : `QUEUE (${state?.materials.length || 0})`}</span>
                 </button>
 
                 <button
@@ -675,7 +680,14 @@ function PresentationControlContent() {
               {leftTab === "playlist" ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Queue</span>
+                    <div>
+                      <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                        {isSpeaker ? "My Materials" : "Stage Queue"}
+                      </span>
+                      {isSpeaker && (
+                        <p className="text-[10px] text-slate-500">Materi presentasi milik Anda</p>
+                      )}
+                    </div>
                     <button
                       onClick={() => setShowUploader(true)}
                       className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center space-x-1 shadow glow-purple cursor-pointer"
@@ -699,17 +711,20 @@ function PresentationControlContent() {
 
                   {/* Material Queue Items List */}
                   <div className="space-y-2.5">
-                    {!state?.materials || state.materials.length === 0 ? (
+                    {displayMaterials.length === 0 ? (
                       <div className="p-6 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/40 text-slate-500 text-xs">
-                        No materials in queue. Click &quot;Add Material&quot; above.
+                        {isSpeaker
+                          ? 'Belum ada materi milik Anda. Klik "+ Add Material" di atas untuk menambahkan presentasi.'
+                          : 'No materials in queue. Click "+ Add Material" above.'}
                       </div>
                     ) : (
-                      state.materials.map((mat) => {
-                        const isLive = state.presentation.isPresenting && state.presentation.materialId === mat.id;
+                      displayMaterials.map((mat) => {
+                        const isLive = Boolean(state?.presentation.isPresenting && state.presentation.materialId === mat.id);
                         const isCanvaStale = isCanvaMaterialStale(mat);
                         const isPdfStale = isPdfMaterialStale(mat);
                         const isStale = isCanvaStale || isPdfStale;
                         const isReimporting = reimportingMatId === mat.id;
+                        const isOwner = mat.ownerDeviceId === deviceId || isHost;
 
                         return (
                           <div
@@ -724,18 +739,39 @@ function PresentationControlContent() {
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
-                                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400 block mb-0.5">
-                                  {mat.type === "video"
-                                    ? (mat.totalPages > 1 ? `VIDEO PLAYLIST • ${mat.totalPages} VIDEOS` : "VIDEO")
-                                    : `${mat.type.toUpperCase()} • ${mat.totalPages} SLIDES`}
-                                </span>
+                                <div className="flex items-center space-x-1.5 mb-1 flex-wrap gap-y-1">
+                                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-purple-400">
+                                    {mat.type === "video"
+                                      ? (mat.totalPages > 1 ? `VIDEO • ${mat.totalPages} VIDEOS` : "VIDEO")
+                                      : `${mat.type.toUpperCase()} • ${mat.totalPages} SLIDES`}
+                                  </span>
+
+                                  {/* Owner Badge (Shown for Host and Operator) */}
+                                  {!isSpeaker && mat.ownerRole && (
+                                    <span
+                                      className={`text-[9px] font-semibold px-1.5 py-0.2 rounded border ${
+                                        mat.ownerRole === "speaker"
+                                          ? "bg-indigo-950/80 border-indigo-700/60 text-indigo-300"
+                                          : mat.ownerRole === "host"
+                                          ? "bg-purple-950/80 border-purple-700/60 text-purple-300"
+                                          : "bg-emerald-950/80 border-emerald-700/60 text-emerald-300"
+                                      }`}
+                                    >
+                                      {mat.ownerRole === "speaker"
+                                        ? `👤 Speaker: ${mat.ownerName || "Speaker"}`
+                                        : mat.ownerRole === "host"
+                                        ? "👑 Host"
+                                        : `🎮 ${mat.ownerName || "Operator"}`}
+                                    </span>
+                                  )}
+                                </div>
                                 <h4 className="text-xs font-bold text-white line-clamp-1">{mat.name}</h4>
                               </div>
 
                               {isLive ? (
                                 <span className="px-2 py-0.5 rounded-md bg-rose-600 text-white text-[9px] font-extrabold uppercase tracking-wider flex items-center space-x-1 animate-pulse">
                                   <Play className="w-2.5 h-2.5 fill-current" />
-                                  <span>LIVE</span>
+                                  <span>{isSpeaker ? "ACTIVE" : "LIVE"}</span>
                                 </span>
                               ) : isStale ? (
                                 <span className="px-2 py-0.5 rounded-md bg-amber-950/80 border border-amber-700/60 text-amber-300 text-[9px] font-bold uppercase tracking-wider flex items-center space-x-1">
@@ -766,14 +802,16 @@ function PresentationControlContent() {
                                         : "SYNC PDF PAGES"}
                                     </span>
                                   </button>
-                                  <button
-                                    onClick={() => handleRemoveMaterial(mat.id)}
-                                    disabled={isReimporting || isLive}
-                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition cursor-pointer disabled:opacity-40"
-                                    title="Remove from Queue & Database"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  {isOwner && (
+                                    <button
+                                      onClick={() => handleRemoveMaterial(mat.id)}
+                                      disabled={isReimporting || isLive}
+                                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition cursor-pointer disabled:opacity-40"
+                                      title="Remove Material"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </>
                               ) : !isLive ? (
                                 <>
@@ -785,15 +823,17 @@ function PresentationControlContent() {
                                     className="flex-1 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 glow-purple cursor-pointer shadow"
                                   >
                                     <Play className="w-3 h-3 fill-current" />
-                                    <span>GO LIVE NOW</span>
+                                    <span>{isSpeaker ? "SIAPKAN / PRESENT" : "GO LIVE NOW"}</span>
                                   </button>
-                                  <button
-                                    onClick={() => handleRemoveMaterial(mat.id)}
-                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition cursor-pointer"
-                                    title="Remove from Queue & Database"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  {isOwner && (
+                                    <button
+                                      onClick={() => handleRemoveMaterial(mat.id)}
+                                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 transition cursor-pointer"
+                                      title="Remove Material"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </>
                               ) : (
                                 <div className="flex items-center gap-1.5 w-full">
@@ -816,10 +856,10 @@ function PresentationControlContent() {
                                   <button
                                     onClick={handleStopPresentation}
                                     className="py-1.5 px-2.5 rounded-lg bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 font-bold text-xs transition flex items-center justify-center space-x-1 cursor-pointer"
-                                    title="Stop Live Presentation across all screens"
+                                    title={isSpeaker ? "Tutup presentasi" : "Stop Live Presentation across all screens"}
                                   >
                                     <Square className="w-3 h-3" />
-                                    <span>STOP</span>
+                                    <span>{isSpeaker ? "TUTUP" : "STOP"}</span>
                                   </button>
                                 </div>
                               )}
@@ -865,8 +905,8 @@ function PresentationControlContent() {
           </aside>
         )}
 
-        {/* Center Column: Live Slide Output Viewer (Expands dynamically to col-span-9 when sidebar is hidden) */}
-        <div className={`${isSidebarOpen ? "col-span-12 lg:col-span-6" : "col-span-12 lg:col-span-9"} bg-black flex flex-col justify-between p-2 sm:p-4 md:p-6 relative overflow-hidden transition-all duration-200 min-h-[350px] sm:min-h-[450px]`}>
+        {/* Center Column: Live Slide Output Viewer (Expands dynamically when sidebar is hidden or for Speaker) */}
+        <div className={`${isSidebarOpen ? (isSpeaker ? "col-span-12 lg:col-span-9" : "col-span-12 lg:col-span-6") : (isSpeaker ? "col-span-12" : "col-span-12 lg:col-span-9")} bg-black flex flex-col justify-between p-2 sm:p-4 md:p-6 relative overflow-hidden transition-all duration-200 min-h-[350px] sm:min-h-[450px]`}>
           <div
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -881,7 +921,7 @@ function PresentationControlContent() {
               slide={state?.presentation.currentSlideMetadata || null}
               currentSlide={state?.presentation.currentSlide || 1}
               blanked={state?.presentation.blanked}
-              role="control"
+              role={isSpeaker ? "speaker" : "control"}
               deviceId={deviceId}
               mediaState={state?.presentation.mediaState}
               zoom={state?.presentation.zoom}
@@ -903,7 +943,7 @@ function PresentationControlContent() {
               onNumPagesDiscovered={handlePdfNumPagesDiscovered}
             >
               {/* Interactive Zoom Area Selection Overlay directly inside 16:9 Stage */}
-              {isZoomAreaActive && state?.presentation.isPresenting && activeMaterial && (
+              {!isSpeaker && isZoomAreaActive && state?.presentation.isPresenting && activeMaterial && (
                 <ZoomAreaOverlay
                   isActive={isZoomAreaActive}
                   onSelectRegion={handleSelectZoomRegion}
@@ -912,8 +952,8 @@ function PresentationControlContent() {
               )}
             </SlideViewer>
 
-            {/* Floating Zoom Controls Widget */}
-            {state?.presentation.isPresenting && activeMaterial && (
+            {/* Floating Zoom Controls Widget (Host & Operator only) */}
+            {!isSpeaker && state?.presentation.isPresenting && activeMaterial && (
               <div
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerUp={(e) => e.stopPropagation()}
@@ -1009,7 +1049,7 @@ function PresentationControlContent() {
                     title="Rewind 10s"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">-10s</span>
+                    <span className="hidden md:inline">-10s</span>
                   </button>
 
                   <button
@@ -1054,10 +1094,10 @@ function PresentationControlContent() {
                   <button
                     onClick={handleStopPresentation}
                     className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
-                    title="Stop Video Presentation"
+                    title={isSpeaker ? "Tutup Video" : "Stop Video Presentation"}
                   >
                     <Square className="w-3.5 h-3.5" />
-                    <span>Stop Video</span>
+                    <span>{isSpeaker ? "Tutup Video" : "Stop Video"}</span>
                   </button>
                 </div>
               </div>
@@ -1097,70 +1137,72 @@ function PresentationControlContent() {
               <button
                 onClick={handleStopPresentation}
                 className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
-                title="Stop Presentation across all screens"
+                title={isSpeaker ? "Tutup Presentasi" : "Stop Presentation across all screens"}
               >
                 <Square className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Stop Presentation</span>
+                <span className="hidden sm:inline">{isSpeaker ? "Tutup Presentasi" : "Stop Presentation"}</span>
               </button>
             </div>
           )}
         </div>
 
-        {/* Right Column: Timer & Show Caller Brief Cue Controls */}
-        <div className="col-span-12 lg:col-span-3 border-t lg:border-t-0 lg:border-l border-slate-800 bg-slate-900/40 p-4 space-y-4 overflow-y-auto">
-          {/* Stage Timer Control */}
-          {state && (
-            <TimerControl
-              timer={state.timer}
-              onStart={() => dispatchCommand("TIMER_START")}
-              onPause={() => dispatchCommand("TIMER_PAUSE")}
-              onReset={() => dispatchCommand("TIMER_RESET")}
-              onSetDuration={(duration) => dispatchCommand("TIMER_SET", { duration })}
-            />
-          )}
+        {/* Right Column: Timer & Show Caller Brief Cue Controls (Host & Operator only) */}
+        {!isSpeaker && (
+          <div className="col-span-12 lg:col-span-3 border-t lg:border-t-0 lg:border-l border-slate-800 bg-slate-900/40 p-4 space-y-4 overflow-y-auto">
+            {/* Stage Timer Control */}
+            {state && (
+              <TimerControl
+                timer={state.timer}
+                onStart={() => dispatchCommand("TIMER_START")}
+                onPause={() => dispatchCommand("TIMER_PAUSE")}
+                onReset={() => dispatchCommand("TIMER_RESET")}
+                onSetDuration={(duration) => dispatchCommand("TIMER_SET", { duration })}
+              />
+            )}
 
-          {/* Show Caller Brief Cue Control */}
-          {state && (
-            <BriefControl
-              brief={state.brief}
-              onSendBrief={(text, urgency) => dispatchCommand("BRIEF_UPDATE", { text, urgency })}
-              onResetBrief={() => dispatchCommand("BRIEF_CLEAR", {})}
-            />
-          )}
+            {/* Show Caller Brief Cue Control */}
+            {state && (
+              <BriefControl
+                brief={state.brief}
+                onSendBrief={(text, urgency) => dispatchCommand("BRIEF_UPDATE", { text, urgency })}
+                onResetBrief={() => dispatchCommand("BRIEF_CLEAR", {})}
+              />
+            )}
 
-          {/* Quick Display Links Panel */}
-          <div className="glass-panel p-4 rounded-3xl border border-slate-800 space-y-2">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
-              Live Stage Displays
-            </span>
-
-            <a
-              href={`/display/audience?roomCode=${roomCode}`}
-              target="_blank"
-              rel="noreferrer"
-              className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-indigo-300 flex items-center justify-between transition"
-            >
-              <span className="flex items-center space-x-2">
-                <Tv className="w-4 h-4 text-indigo-400" />
-                <span>Audience Display Window</span>
+            {/* Quick Display Links Panel */}
+            <div className="glass-panel p-4 rounded-3xl border border-slate-800 space-y-2">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                Live Stage Displays
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">↗</span>
-            </a>
 
-            <a
-              href={`/display/confidence?roomCode=${roomCode}`}
-              target="_blank"
-              rel="noreferrer"
-              className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-purple-300 flex items-center justify-between transition"
-            >
-              <span className="flex items-center space-x-2">
-                <Tv className="w-4 h-4 text-purple-400" />
-                <span>Confidence Display Window</span>
-              </span>
-              <span className="text-[10px] text-slate-500 font-mono">↗</span>
-            </a>
+              <a
+                href={`/display/audience?roomCode=${roomCode}`}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-indigo-300 flex items-center justify-between transition"
+              >
+                <span className="flex items-center space-x-2">
+                  <Tv className="w-4 h-4 text-indigo-400" />
+                  <span>Audience Display Window</span>
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">↗</span>
+              </a>
+
+              <a
+                href={`/display/confidence?roomCode=${roomCode}`}
+                target="_blank"
+                rel="noreferrer"
+                className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-purple-300 flex items-center justify-between transition"
+              >
+                <span className="flex items-center space-x-2">
+                  <Tv className="w-4 h-4 text-purple-400" />
+                  <span>Confidence Display Window</span>
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">↗</span>
+              </a>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Material Uploader Modal */}

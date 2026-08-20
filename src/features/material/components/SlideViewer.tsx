@@ -12,7 +12,7 @@ interface SlideViewerProps {
   currentSlide?: number;
   currentPage?: number;
   blanked?: boolean;
-  role?: "control" | "audience" | "confidence";
+  role?: "host" | "operator" | "speaker" | "control" | "audience" | "confidence";
   zoom?: PresentationZoomState;
   /** Called when the real PDF page count is discovered from PDF.js */
   onNumPagesDiscovered?: (numPages: number) => void;

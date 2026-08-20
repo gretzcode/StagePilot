@@ -145,11 +145,11 @@ export async function POST(request: Request) {
       const device = deviceId && state?.devices ? state.devices[deviceId] : null;
       const canUpload =
         device?.approvalStatus === "approved" &&
-        (device.role === "host" || device.role === "control" || device.isHostDevice);
+        (device.role === "host" || device.role === "operator" || device.role === "speaker" || device.role === "control" || device.isHostDevice);
 
       if (!canUpload) {
         const forbidden = NextResponse.json(
-          { error: "DEVICE_NOT_APPROVED", message: "Hanya device control yang sudah di-approve yang dapat mengunggah file materi." },
+          { error: "DEVICE_NOT_APPROVED", message: "Hanya perangkat partisipan yang sudah disetujui yang dapat mengunggah file materi." },
           { status: 403 }
         );
         return applySecurityHeaders(forbidden);

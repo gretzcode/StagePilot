@@ -130,8 +130,8 @@ export class PermissionPolicy {
   }
 
   private static checkSpeakerPermissions(
-    _state: StageSessionState,
-    _sender: DeviceState,
+    state: StageSessionState,
+    sender: DeviceState,
     command: StageCommand
   ): PermissionCheckResult {
     const restrictedForSpeaker = [
@@ -148,7 +148,8 @@ export class PermissionPolicy {
       "BRIEF_CLEAR",
       "DISPLAY_BLANK",
       "DISPLAY_SHOW",
-      "MATERIAL_REMOVE",
+      "ZOOM_SET",
+      "ZOOM_RESET",
     ];
 
     if (restrictedForSpeaker.includes(command.type)) {
@@ -158,13 +159,80 @@ export class PermissionPolicy {
       };
     }
 
-    // Speaker is allowed slide navigation during presentation
+    // Material Ownership Checks for Speaker
+    if (command.type === "MATERIAL_REMOVE") {
+      const materialId = command.payload?.materialId;
+      const targetMaterial = state.materials.find((m) => m.id === materialId);
+      if (targetMaterial) {
+        if (targetMaterial.ownerRole === "host" || (!targetMaterial.ownerDeviceId && targetMaterial.ownerUserId) || targetMaterial.ownerDeviceId === state.host?.hostDeviceId) {
+          return {
+            allowed: false,
+            reason: "Speaker cannot delete Host-owned material",
+          };
+        }
+        if (targetMaterial.ownerDeviceId && targetMaterial.ownerDeviceId !== sender.id) {
+          return {
+            allowed: false,
+            reason: "Speaker cannot delete material owned by another participant",
+          };
+        }
+      }
+      return { allowed: true };
+    }
+
+    if (command.type === "MATERIAL_UPDATE") {
+      const material = command.payload?.material;
+      if (material) {
+        const existing = state.materials.find((m) => m.id === material.id);
+        if (existing) {
+          if (existing.ownerRole === "host" || (!existing.ownerDeviceId && existing.ownerUserId) || existing.ownerDeviceId === state.host?.hostDeviceId) {
+            return {
+              allowed: false,
+              reason: "Speaker cannot modify Host-owned material",
+            };
+          }
+          if (existing.ownerDeviceId && existing.ownerDeviceId !== sender.id) {
+            return {
+              allowed: false,
+              reason: "Speaker cannot modify material owned by another participant",
+            };
+          }
+        }
+      }
+      return { allowed: true };
+    }
+
+    if (command.type === "MATERIAL_ADD") {
+      return { allowed: true };
+    }
+
+    // Presentation Preparation & Navigation
+    if (command.type === "PRESENTATION_START") {
+      const materialId = command.payload?.materialId;
+      const targetMaterial = state.materials.find((m) => m.id === materialId);
+      if (targetMaterial) {
+        // Speaker cannot start presentation of another Speaker's private material
+        if (targetMaterial.ownerDeviceId && targetMaterial.ownerDeviceId !== sender.id && targetMaterial.ownerRole === "speaker") {
+          return {
+            allowed: false,
+            reason: "Speaker cannot present material owned by another Speaker",
+          };
+        }
+      }
+      return { allowed: true };
+    }
+
+    // Speaker is allowed slide navigation & playback during presentation
     const allowedForSpeaker = [
       "SLIDE_NEXT",
       "SLIDE_PREVIOUS",
       "SLIDE_GOTO",
-      "PRESENTATION_START",
       "PRESENTATION_EXIT",
+      "MEDIA_PLAY",
+      "MEDIA_PAUSE",
+      "MEDIA_SEEK",
+      "MEDIA_STOP",
+      "MEDIA_DURATION_UPDATE",
     ];
 
     if (allowedForSpeaker.includes(command.type)) {

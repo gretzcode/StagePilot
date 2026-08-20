@@ -1,4 +1,4 @@
-import { StageCommand, StageSessionState } from "../types";
+import { StageCommand, StageSessionState, Material } from "../types";
 import { PermissionPolicy } from "../permissions/policy";
 
 function ensureMaterialSlides(material: StageSessionState["materials"][number] | undefined, targetPage: number) {
@@ -112,6 +112,13 @@ export function stageSessionReducer(
         (m) => m.id === material.id || (material.externalUrl && m.externalUrl === material.externalUrl)
       );
 
+      const senderDevice = nextState.devices[command.senderDeviceId];
+      const isHostSender =
+        senderDevice?.role === "host" ||
+        senderDevice?.isHostDevice ||
+        nextState.host?.hostDeviceId === command.senderDeviceId;
+      const isSpeakerSender = senderDevice?.role === "speaker";
+
       // Authoritative Server-Side Live Material Protection:
       // If the presentation is currently live and using this material,
       // reject updating the material to prevent live mutation/desynchronization.
@@ -124,16 +131,50 @@ export function stageSessionReducer(
         throw new Error("MATERIAL_LIVE_UPDATE_BLOCKED: Active presentation material cannot be modified while presenting");
       }
 
+      const existingMaterial = existingIdx >= 0 ? nextState.materials[existingIdx] : null;
+
+      // Authoritative ownership resolution:
+      // If material already has an established owner, preserve it unless modified by host
+      const ownerDeviceId = existingMaterial?.ownerDeviceId || (isHostSender ? (nextState.host?.hostDeviceId || command.senderDeviceId) : command.senderDeviceId);
+      const ownerRole = existingMaterial?.ownerRole || (isHostSender ? "host" : isSpeakerSender ? "speaker" : "operator");
+      const ownerName = existingMaterial?.ownerName || (senderDevice?.name || (isHostSender ? "Host" : isSpeakerSender ? "Speaker" : "Operator"));
+      const ownerUserId = existingMaterial?.ownerUserId || (isHostSender ? nextState.host?.hostUserId : undefined);
+
+      const enrichedMaterial: Material = {
+        ...material,
+        ownerDeviceId,
+        ownerRole,
+        ownerName,
+        ownerUserId,
+      };
+
       if (existingIdx >= 0) {
-        nextState.materials[existingIdx] = material;
+        nextState.materials[existingIdx] = enrichedMaterial;
       } else {
-        nextState.materials.push(material);
+        nextState.materials.push(enrichedMaterial);
       }
       break;
     }
 
     case "MATERIAL_REMOVE": {
       const { materialId } = command.payload;
+      const targetMaterial = nextState.materials.find((m) => m.id === materialId);
+      const senderDevice = nextState.devices[command.senderDeviceId];
+      const isHostSender =
+        senderDevice?.role === "host" ||
+        senderDevice?.isHostDevice ||
+        nextState.host?.hostDeviceId === command.senderDeviceId;
+
+      // Non-host participants can only delete materials they own
+      if (targetMaterial && !isHostSender) {
+        if (targetMaterial.ownerRole === "host" || (!targetMaterial.ownerDeviceId && targetMaterial.ownerUserId) || targetMaterial.ownerDeviceId === nextState.host?.hostDeviceId) {
+          throw new Error("UNAUTHORIZED_MATERIAL_REMOVE: Cannot delete Host-owned material");
+        }
+        if (targetMaterial.ownerDeviceId && targetMaterial.ownerDeviceId !== command.senderDeviceId) {
+          throw new Error("UNAUTHORIZED_MATERIAL_REMOVE: Cannot delete material owned by another participant");
+        }
+      }
+
       nextState.materials = nextState.materials.filter((m) => m.id !== materialId);
       if (nextState.presentation.materialId === materialId) {
         nextState.presentation.isPresenting = false;
