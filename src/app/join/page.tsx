@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DeviceRole, StageSessionState } from "@/core/types";
-import { Radio, Tv, Monitor, ArrowRight, AlertCircle, RefreshCw, CheckCircle2, Search, Laptop } from "lucide-react";
+import { Radio, Tv, Monitor, ArrowRight, AlertCircle, RefreshCw, CheckCircle2, Search } from "lucide-react";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
 
@@ -421,13 +421,9 @@ function JoinPageContent() {
               type="text"
               value={deviceName}
               onChange={(e) => setDeviceName(e.target.value)}
-              placeholder={`Default otomatis: "${autoNameHint}"`}
+              placeholder={autoNameHint}
               className="w-full px-4 py-3 rounded-2xl bg-slate-900 border border-slate-800 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-purple-500 transition"
             />
-            <p className="text-[11px] text-slate-500 mt-1.5 flex items-center space-x-1">
-              <Laptop className="w-3 h-3 text-purple-400 flex-shrink-0" />
-              <span>Jika kosong, otomatis terdeteksi sebagai <strong>&quot;{autoNameHint}&quot;</strong></span>
-            </p>
           </div>
 
           <button

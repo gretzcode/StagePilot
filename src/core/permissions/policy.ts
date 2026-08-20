@@ -59,22 +59,8 @@ export class PermissionPolicy {
       return { allowed: true };
     }
 
-    // CONTROL role permissions check
+    // CONTROL role permissions check (Strictly cannot manage/approve devices)
     if (role === "control") {
-      const hasDeviceMgmt = sender.permissions?.canManageDevices ?? true;
-      if (
-        (sender.approvalStatus === "approved" || sender.approvalStatus === "connected") &&
-        hasDeviceMgmt
-      ) {
-        const allowedWithDeviceMgmt = [
-          "DEVICE_APPROVE",
-          "DEVICE_REJECT",
-          "DEVICE_REMOVE",
-        ];
-        if (allowedWithDeviceMgmt.includes(command.type)) {
-          return { allowed: true };
-        }
-      }
       return this.checkControlPermissions(state, sender, command);
     }
 

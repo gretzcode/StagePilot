@@ -48,7 +48,7 @@ function ControlRoomContent() {
     deviceName: isHost ? "Host Primary Controller" : "Brief Controller",
   });
 
-  const canManageDevices = isHost || (myDevice?.approvalStatus === "approved" && Boolean(myDevice?.permissions?.canManageDevices));
+  const canManageDevices = isHost;
 
   useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
 
@@ -145,8 +145,8 @@ function ControlRoomContent() {
 
       {/* Main Workspace Body - Responsive Edge-to-Edge Layout */}
       <div className="flex-1 w-full px-3 sm:px-6 py-4 sm:py-6 flex flex-col lg:grid lg:grid-cols-12 gap-4 sm:gap-6 overflow-y-auto lg:overflow-hidden">
-        {/* Left Column: Device Authorization (Host & Approved Controller - Compact Sidebar) */}
-        {canManageDevices && (
+        {/* Left Column: Device Authorization (Strictly Host Only - Compact Sidebar) */}
+        {isHost && (
           <aside className="col-span-12 lg:col-span-3 space-y-4 border-b lg:border-b-0 lg:border-r border-slate-800/80 pb-4 lg:pb-0 pr-0 lg:pr-6 lg:overflow-y-auto lg:max-h-[calc(100vh-6rem)]">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <h2 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center space-x-1.5">
@@ -174,9 +174,9 @@ function ControlRoomContent() {
                     key={device.id}
                     className="p-3 rounded-2xl bg-slate-900 border border-amber-500/40 shadow-md space-y-2"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-white truncate max-w-[120px]">{device.name}</span>
-                      <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-800 text-purple-300 border border-slate-700">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-bold text-xs text-white break-words flex-1 leading-snug">{device.name}</span>
+                      <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-800 text-purple-300 border border-slate-700 flex-shrink-0">
                         {device.role}
                       </span>
                     </div>
@@ -229,11 +229,11 @@ function ControlRoomContent() {
                     className="p-3 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-2"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
-                        <span className="font-bold text-xs text-white truncate">{device.name}</span>
+                      <div className="flex items-start space-x-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0 mt-1" />
+                        <span className="font-bold text-xs text-white break-words leading-snug flex-1">{device.name}</span>
                       </div>
-                      <div className="flex items-center space-x-2 mt-0.5">
+                      <div className="flex items-center space-x-2 mt-1 ml-3.5">
                         <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300">
                           {device.role}
                         </span>
@@ -260,8 +260,8 @@ function ControlRoomContent() {
           </aside>
         )}
 
-        {/* Right Area: Brief & Stage Control Center (Full-Width for Non-Manager, Grid for Manager) */}
-        <main className={`${canManageDevices ? "col-span-12 lg:col-span-9" : "col-span-12"} space-y-6 overflow-y-auto max-h-[calc(100vh-6rem)] pr-1`}>
+        {/* Right Area: Brief & Stage Control Center (Full-Width for Non-Host, Grid for Host) */}
+        <main className={`${isHost ? "col-span-12 lg:col-span-9" : "col-span-12"} space-y-6 overflow-y-auto max-h-[calc(100vh-6rem)] pr-1`}>
 
           {/* Grid: Timer & Brief Controls */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

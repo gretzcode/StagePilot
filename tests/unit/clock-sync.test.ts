@@ -11,7 +11,7 @@ describe("Clock Sync & Timer Skew Compensation", () => {
     const localNow = Date.now();
     const serverTimestamp = localNow - 44000; // Client is 44s ahead of server
 
-    updateServerTimeOffset(serverTimestamp);
+    updateServerTimeOffset(serverTimestamp, localNow);
 
     expect(getServerTimeOffset()).toBe(-44000);
     expect(Math.abs(getSyncedNow() - serverTimestamp)).toBeLessThanOrEqual(5);
@@ -21,7 +21,7 @@ describe("Clock Sync & Timer Skew Compensation", () => {
     const localNow = Date.now();
     const serverTimestamp = localNow + 30000; // Client is 30s behind server
 
-    updateServerTimeOffset(serverTimestamp);
+    updateServerTimeOffset(serverTimestamp, localNow);
 
     expect(getServerTimeOffset()).toBe(30000);
     expect(Math.abs(getSyncedNow() - serverTimestamp)).toBeLessThanOrEqual(5);
