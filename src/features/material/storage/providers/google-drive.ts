@@ -14,6 +14,7 @@ import { estimatePdfPageCountFromBlob } from "../../pdf-page-count";
 import { computeDefaultExpiration, isMaterialExpired } from "@/core/config/material";
 import { MaterialRegistryService, MaterialRecord } from "@/lib/storage/registry";
 import { createAssetGrant } from "@/lib/auth/asset-grant";
+import { IntegrationCredentialStore } from "@/lib/integrations/credential-store";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
@@ -57,7 +58,21 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
   }
 
   async isAvailable(): Promise<boolean> {
-    return Boolean(this.getSecret("GOOGLE_CLIENT_ID") && this.getSecret("GOOGLE_CLIENT_SECRET") && this.getSecret("GOOGLE_REFRESH_TOKEN"));
+    if (this.getSecret("GOOGLE_CLIENT_ID") && this.getSecret("GOOGLE_CLIENT_SECRET")) {
+      if (this.getSecret("GOOGLE_REFRESH_TOKEN")) return true;
+      try {
+        const credStore = new IntegrationCredentialStore(this.env);
+        const storedCred = await credStore.getAnyCredential("google_drive");
+        if (storedCred?.refreshToken || storedCred?.accessToken) return true;
+      } catch {
+        // Non-fatal
+      }
+    }
+    return false;
+  }
+
+  hasSecretRefreshToken(): boolean {
+    return Boolean(this.getSecret("GOOGLE_REFRESH_TOKEN"));
   }
 
   async upload(input: MaterialUploadInput): Promise<StoredMaterial> {
@@ -316,9 +331,28 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
     if (globalDriveToken && globalDriveToken.expiresAt > Date.now() + 60_000) return globalDriveToken.token;
     const clientId = this.getSecret("GOOGLE_CLIENT_ID");
     const clientSecret = this.getSecret("GOOGLE_CLIENT_SECRET");
-    const refreshToken = this.getSecret("GOOGLE_REFRESH_TOKEN");
+    let refreshToken = this.getSecret("GOOGLE_REFRESH_TOKEN");
+
+    const credStore = new IntegrationCredentialStore(this.env);
+    let storedCred = null;
+    try {
+      storedCred = await credStore.getAnyCredential("google_drive");
+    } catch {
+      // Non-fatal D1 lookup
+    }
+
+    // If stored credential in D1 has a valid active access token, use it immediately
+    if (storedCred?.accessToken && storedCred.expiresAt > Date.now() + 60_000) {
+      globalDriveToken = { token: storedCred.accessToken, expiresAt: storedCred.expiresAt };
+      return storedCred.accessToken;
+    }
+
+    if (!refreshToken && storedCred?.refreshToken) {
+      refreshToken = storedCred.refreshToken;
+    }
+
     if (!clientId || !clientSecret || !refreshToken) {
-      throw new Error("Google Drive belum dikonfigurasi (GOOGLE_REFRESH_TOKEN atau credentials belum diset).");
+      throw new Error("Google Drive belum dikonfigurasi. Sambungkan akun Google Drive via Dashboard.");
     }
 
     const response = await fetch(TOKEN_API, {
@@ -337,7 +371,18 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
       const errorDetail = json.error ? ` (${json.error})` : "";
       throw new Error(`Koneksi Google Drive tidak tersedia${errorDetail}. Refresh token mungkin kedaluwarsa atau perlu disambungkan ulang via Dashboard.`);
     }
-    globalDriveToken = { token: json.access_token, expiresAt: Date.now() + (json.expires_in || 3600) * 1000 };
+
+    const newExpiresAt = Date.now() + (json.expires_in || 3600) * 1000;
+    globalDriveToken = { token: json.access_token, expiresAt: newExpiresAt };
+
+    if (storedCred) {
+      await credStore.saveCredential({
+        ...storedCred,
+        accessToken: json.access_token,
+        expiresAt: newExpiresAt,
+      }).catch(() => null);
+    }
+
     return json.access_token;
   }
 

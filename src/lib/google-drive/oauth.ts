@@ -40,7 +40,19 @@ export function buildGoogleAuthorizationUrl(request: Request, env: Record<string
   return url.toString();
 }
 
-export async function exchangeGoogleCodeForRefreshToken(request: Request, env: Record<string, unknown>, code: string): Promise<string> {
+export interface GoogleOAuthTokens {
+  access_token: string;
+  refresh_token?: string | null;
+  expires_in: number;
+  token_type: string;
+  scope?: string;
+}
+
+export async function exchangeGoogleCodeForTokens(
+  request: Request,
+  env: Record<string, unknown>,
+  code: string
+): Promise<GoogleOAuthTokens> {
   const clientId = getGoogleSecret(env, "GOOGLE_CLIENT_ID");
   const clientSecret = getGoogleSecret(env, "GOOGLE_CLIENT_SECRET");
   if (!clientId || !clientSecret) throw new Error("Google OAuth client belum lengkap.");
@@ -56,11 +68,33 @@ export async function exchangeGoogleCodeForRefreshToken(request: Request, env: R
       grant_type: "authorization_code",
     }),
   });
-  const json = (await response.json().catch(() => ({}))) as { refresh_token?: string };
-  if (!response.ok || !json.refresh_token) {
-    throw new Error("Google Drive gagal memberi refresh token. Coba reconnect dengan prompt consent.");
+  const json = (await response.json().catch(() => ({}))) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    token_type?: string;
+    scope?: string;
+    error?: string;
+    error_description?: string;
+  };
+  if (!response.ok || !json.access_token) {
+    throw new Error(json.error_description || json.error || "Google Drive gagal memberi token otorisasi.");
   }
-  return json.refresh_token;
+  return {
+    access_token: json.access_token,
+    refresh_token: json.refresh_token || null,
+    expires_in: json.expires_in || 3600,
+    token_type: json.token_type || "Bearer",
+    scope: json.scope,
+  };
+}
+
+export async function exchangeGoogleCodeForRefreshToken(request: Request, env: Record<string, unknown>, code: string): Promise<string> {
+  const tokens = await exchangeGoogleCodeForTokens(request, env, code);
+  if (!tokens.refresh_token) {
+    throw new Error("Google Drive tidak mengembalikan refresh token. Hubungkan ulang dengan prompt consent.");
+  }
+  return tokens.refresh_token;
 }
 
 export function buildOAuthTransactionCookie(_request: Request, transactionId: string, maxAgeSeconds: number): string {

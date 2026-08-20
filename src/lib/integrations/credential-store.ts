@@ -113,6 +113,41 @@ export class IntegrationCredentialStore {
     return memoryCredentials.get(this.getKey(userId, provider)) || null;
   }
 
+  async getAnyCredential(provider: string): Promise<IntegrationCredential | null> {
+    if (this.db) {
+      try {
+        const row = await this.db
+          .prepare(`SELECT * FROM integration_credentials WHERE provider = ? ORDER BY updated_at DESC LIMIT 1`)
+          .bind(provider)
+          .first<Record<string, unknown>>();
+
+        if (row) {
+          return {
+            id: String(row.id),
+            userId: String(row.user_id),
+            provider: String(row.provider),
+            accessToken: String(row.access_token),
+            refreshToken: row.refresh_token ? String(row.refresh_token) : null,
+            tokenType: String(row.token_type || "Bearer"),
+            expiresAt: Number(row.expires_at),
+            scopes: typeof row.scopes === "string" ? row.scopes.split(" ").filter(Boolean) : [],
+            accountEmail: row.account_email ? String(row.account_email) : null,
+            accountName: row.account_name ? String(row.account_name) : null,
+            createdAt: Number(row.created_at),
+            updatedAt: Number(row.updated_at),
+          };
+        }
+      } catch (err) {
+        console.warn("[IntegrationCredentialStore] D1 read any failed, falling back to memory:", err);
+      }
+    }
+
+    for (const cred of memoryCredentials.values()) {
+      if (cred.provider === provider) return cred;
+    }
+    return null;
+  }
+
   async deleteCredential(userId: string, provider: string): Promise<boolean> {
     memoryCredentials.delete(this.getKey(userId, provider));
 
