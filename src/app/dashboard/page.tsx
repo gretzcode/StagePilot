@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [isCanvaModalOpen, setIsCanvaModalOpen] = useState(false);
   const [loadingDesigns, setLoadingDesigns] = useState(false);
   const [disconnectingCanva, setDisconnectingCanva] = useState(false);
+  const [disconnectingDrive, setDisconnectingDrive] = useState(false);
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -199,6 +200,18 @@ export default function DashboardPage() {
     }
   };
 
+  const handleDisconnectDrive = async () => {
+    setDisconnectingDrive(true);
+    try {
+      await fetch("/api/google-drive/disconnect", { method: "POST" });
+      setDriveStatus({ connected: false, account: null });
+    } catch {
+      // Non-fatal
+    } finally {
+      setDisconnectingDrive(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">
@@ -294,12 +307,32 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
-          <a
-            href="/api/google-drive/connect"
-            className="px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-xs text-center transition"
-          >
-            {driveStatus?.connected ? "Reconnect Google Drive" : "Connect Google Drive"}
-          </a>
+              <div className="flex items-center gap-2">
+                {driveStatus?.connected ? (
+                  <>
+                    <a
+                      href="/api/google-drive/connect"
+                      className="flex-1 px-4 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/40 hover:bg-emerald-600/30 text-emerald-300 font-medium text-xs text-center transition"
+                    >
+                      Switch Account
+                    </a>
+                    <button
+                      onClick={handleDisconnectDrive}
+                      disabled={disconnectingDrive}
+                      className="px-3 py-2 rounded-xl bg-rose-950/60 border border-rose-800 hover:bg-rose-900/80 text-rose-300 font-medium text-xs transition"
+                    >
+                      {disconnectingDrive ? "..." : "Disconnect"}
+                    </button>
+                  </>
+                ) : (
+                  <a
+                    href="/api/google-drive/connect"
+                    className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-xs text-center transition"
+                  >
+                    Connect Google Drive
+                  </a>
+                )}
+              </div>
             </div>
 
             {/* Canva Connect API Card */}
