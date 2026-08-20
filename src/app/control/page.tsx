@@ -298,9 +298,13 @@ function ControlRoomContent() {
             canControl={isHost || requestedRole === "operator" || requestedRole === "control"}
             onTakeLive={(sourceType, sourceId) => {
               dispatchCommand("SOURCE_TAKE_LIVE", { sourceType, sourceId });
+              router.push(`/control/presentation?roomCode=${encodeURIComponent(roomCode)}${isHost ? "&role=host" : "&role=control"}`);
             }}
             onTakeOffline={() => {
               dispatchCommand("SOURCE_TAKE_OFFLINE", {});
+            }}
+            onViewPresentation={() => {
+              router.push(`/control/presentation?roomCode=${encodeURIComponent(roomCode)}${isHost ? "&role=host" : "&role=control"}`);
             }}
           />
 

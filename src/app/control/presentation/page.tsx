@@ -42,7 +42,7 @@ import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
 import { isCanvaMaterialStale, isPdfMaterialStale } from "@/features/material/validator";
 import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
-import { ScreenSharePanel } from "@/features/screen-share";
+import { ScreenSharePanel, useScreenShareSubscriber, ScreenShareLiveViewer } from "@/features/screen-share";
 
 function formatVideoTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return "00:00";
@@ -132,6 +132,19 @@ function PresentationControlContent() {
   }, [dispatchCommand, state]);
 
   const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
+  const liveSource = state?.liveSource;
+  const isLiveScreenShare = Boolean(
+    liveSource?.type === "screen_share" &&
+    state?.screenShareSources?.[liveSource.id]?.status === "active"
+  );
+  const activeScreenShare = isLiveScreenShare && liveSource ? state?.screenShareSources?.[liveSource.id] : null;
+
+  const { stream: liveScreenStream, status: liveScreenStatus } = useScreenShareSubscriber({
+    sourceId: isLiveScreenShare && liveSource ? liveSource.id : null,
+    deviceId,
+    sendSignal: sendWebRtcSignal,
+  });
+
   const speakerMaterials = state?.materials.filter((m) => m.ownerDeviceId === deviceId) || [];
   const displayMaterials = isSpeaker ? speakerMaterials : (state?.materials || []);
   const isLiveVideo = Boolean(state?.presentation.isPresenting && activeMaterial?.type === "video");
@@ -937,41 +950,49 @@ function PresentationControlContent() {
               currentZoom.scale > 1.0 ? "cursor-grab active:cursor-grabbing touch-none" : ""
             }`}
           >
-            <SlideViewer
-              material={activeMaterial}
-              slide={state?.presentation.currentSlideMetadata || null}
-              currentSlide={state?.presentation.currentSlide || 1}
-              blanked={state?.presentation.blanked}
-              role={isSpeaker ? "speaker" : "control"}
-              deviceId={deviceId}
-              mediaState={state?.presentation.mediaState}
-              zoom={state?.presentation.zoom}
-              onMediaPlay={(time) => dispatchCommand("MEDIA_PLAY", { currentTime: time ?? localVideoTime })}
-              onMediaPause={(time) => dispatchCommand("MEDIA_PAUSE", { currentTime: time ?? localVideoTime })}
-              onMediaSeek={(target) => {
-                setLocalVideoTime(target);
-                dispatchCommand("MEDIA_SEEK", { targetTime: target });
-              }}
-              onMediaStop={() => {
-                setLocalVideoTime(0);
-                dispatchCommand("MEDIA_STOP");
-              }}
-              onMediaDurationDiscovered={(duration) => {
-                if (duration > 0 && (!state?.presentation.mediaState?.duration || Math.abs(state.presentation.mediaState.duration - duration) > 1)) {
-                  dispatchCommand("MEDIA_DURATION_UPDATE", { duration });
-                }
-              }}
-              onNumPagesDiscovered={handlePdfNumPagesDiscovered}
-            >
-              {/* Interactive Zoom Area Selection Overlay directly inside 16:9 Stage */}
-              {!isSpeaker && isZoomAreaActive && state?.presentation.isPresenting && activeMaterial && (
-                <ZoomAreaOverlay
-                  isActive={isZoomAreaActive}
-                  onSelectRegion={handleSelectZoomRegion}
-                  onCancel={() => setIsZoomAreaActive(false)}
-                />
-              )}
-            </SlideViewer>
+            {isLiveScreenShare ? (
+              <ScreenShareLiveViewer
+                stream={liveScreenStream}
+                status={liveScreenStatus}
+                speakerName={activeScreenShare?.speakerName}
+              />
+            ) : (
+              <SlideViewer
+                material={activeMaterial}
+                slide={state?.presentation.currentSlideMetadata || null}
+                currentSlide={state?.presentation.currentSlide || 1}
+                blanked={state?.presentation.blanked}
+                role={isSpeaker ? "speaker" : "control"}
+                deviceId={deviceId}
+                mediaState={state?.presentation.mediaState}
+                zoom={state?.presentation.zoom}
+                onMediaPlay={(time) => dispatchCommand("MEDIA_PLAY", { currentTime: time ?? localVideoTime })}
+                onMediaPause={(time) => dispatchCommand("MEDIA_PAUSE", { currentTime: time ?? localVideoTime })}
+                onMediaSeek={(target) => {
+                  setLocalVideoTime(target);
+                  dispatchCommand("MEDIA_SEEK", { targetTime: target });
+                }}
+                onMediaStop={() => {
+                  setLocalVideoTime(0);
+                  dispatchCommand("MEDIA_STOP");
+                }}
+                onMediaDurationDiscovered={(duration) => {
+                  if (duration > 0 && (!state?.presentation.mediaState?.duration || Math.abs(state.presentation.mediaState.duration - duration) > 1)) {
+                    dispatchCommand("MEDIA_DURATION_UPDATE", { duration });
+                  }
+                }}
+                onNumPagesDiscovered={handlePdfNumPagesDiscovered}
+              >
+                {/* Interactive Zoom Area Selection Overlay directly inside 16:9 Stage */}
+                {!isSpeaker && isZoomAreaActive && state?.presentation.isPresenting && activeMaterial && (
+                  <ZoomAreaOverlay
+                    isActive={isZoomAreaActive}
+                    onSelectRegion={handleSelectZoomRegion}
+                    onCancel={() => setIsZoomAreaActive(false)}
+                  />
+                )}
+              </SlideViewer>
+            )}
 
             {/* Floating Zoom Controls Widget (Host & Operator only) */}
             {!isSpeaker && state?.presentation.isPresenting && activeMaterial && (
@@ -993,7 +1014,28 @@ function PresentationControlContent() {
           </div>
 
           {/* Bottom Bar: Synchronized Video Controls OR Slide Controls */}
-          {isLiveVideo ? (
+          {isLiveScreenShare ? (
+            /* Live Screen Share Controls Bar */
+            <div className="h-16 bg-slate-900/90 border border-slate-800 rounded-2xl px-4 sm:px-6 flex items-center justify-between shadow-2xl mt-4 z-10">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+                <span className="text-xs sm:text-sm font-bold text-cyan-300 font-mono">
+                  LIVE SCREEN: {activeScreenShare?.speakerName || "Speaker"}&apos;s Screen
+                </span>
+              </div>
+
+              {!isSpeaker && (
+                <button
+                  onClick={() => dispatchCommand("SOURCE_TAKE_OFFLINE", {})}
+                  className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
+                  title="Stop Live Screen Share across all screens"
+                >
+                  <Square className="w-3.5 h-3.5" />
+                  <span>Stop Live</span>
+                </button>
+              )}
+            </div>
+          ) : isLiveVideo ? (
             <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-3 sm:p-4 shadow-2xl mt-3 sm:mt-4 z-10 flex flex-col gap-2.5">
               {/* Progress Seekbar */}
               <div className="flex items-center gap-2.5 sm:gap-3 w-full">
