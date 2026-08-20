@@ -117,6 +117,8 @@ export class PermissionPolicy {
       "CONTROL_TAKEOVER",
       "ZOOM_SET",
       "ZOOM_RESET",
+      "SOURCE_TAKE_LIVE",
+      "SOURCE_TAKE_OFFLINE",
     ];
 
     if (allowedForOperator.includes(command.type)) {
@@ -150,6 +152,8 @@ export class PermissionPolicy {
       "DISPLAY_SHOW",
       "ZOOM_SET",
       "ZOOM_RESET",
+      "SOURCE_TAKE_LIVE",
+      "SOURCE_TAKE_OFFLINE",
     ];
 
     if (restrictedForSpeaker.includes(command.type)) {

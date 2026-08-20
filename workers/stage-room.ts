@@ -281,6 +281,14 @@ export class StageRoom extends DurableObject {
         delete this.state.screenShareSources[deviceId];
       }
 
+      // If disconnected device was the LIVE source (screen share), clear liveSource
+      if (this.state.liveSource?.type === "screen_share" && this.state.liveSource.id === deviceId) {
+        this.state.liveSource = null;
+        this.state.presentation.isPresenting = false;
+        this.state.presentation.status = "ended";
+        this.state.presentation.materialId = null;
+      }
+
       await this.persistStateNow();
       this.broadcastState();
     }

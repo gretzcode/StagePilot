@@ -3,6 +3,7 @@ import { Material, PresentationState } from "./presentation";
 import { TimerState } from "./timer";
 import { BriefState } from "./brief";
 import { ScreenShareSource } from "./screen-share";
+import { LiveSourceReference } from "./source";
 
 export interface DisplayState {
   id: string;
@@ -39,6 +40,8 @@ export interface StageSessionState {
   brief: BriefState;
   displays: Record<string, DisplayState>;
   screenShareSources: Record<string, ScreenShareSource>;
+  liveSource: LiveSourceReference | null;
   version: number;
 }
+
 

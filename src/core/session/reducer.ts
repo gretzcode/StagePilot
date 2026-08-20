@@ -176,7 +176,8 @@ export function stageSessionReducer(
       }
 
       nextState.materials = nextState.materials.filter((m) => m.id !== materialId);
-      if (nextState.presentation.materialId === materialId) {
+      if (nextState.presentation.materialId === materialId || (nextState.liveSource?.type === "material" && nextState.liveSource.id === materialId)) {
+        nextState.liveSource = null;
         nextState.presentation.isPresenting = false;
         nextState.presentation.status = "ended";
         nextState.presentation.materialId = null;
@@ -198,6 +199,25 @@ export function stageSessionReducer(
       ensureMaterialSlides(material, totalSlides);
 
       const isVideoMaterial = material?.type === "video" || material?.mediaType === "video";
+      const senderDevice = nextState.devices[command.senderDeviceId];
+      const isHostOrOperator =
+        senderDevice?.role === "host" ||
+        senderDevice?.role === "operator" ||
+        senderDevice?.isHostDevice ||
+        nextState.host?.hostDeviceId === command.senderDeviceId;
+
+      // Host and Operator taking presentation start also sets liveSource for backward compatibility
+      if (isHostOrOperator && material) {
+        nextState.liveSource = {
+          type: "material",
+          id: material.id,
+          ownerDeviceId: material.ownerDeviceId,
+          ownerName: material.ownerName,
+          ownerRole: material.ownerRole,
+          title: material.name,
+          takenLiveAt: now,
+        };
+      }
 
       nextState.presentation = {
         isPresenting: true,
@@ -227,6 +247,7 @@ export function stageSessionReducer(
     }
 
     case "PRESENTATION_EXIT": {
+      nextState.liveSource = null;
       nextState.presentation.isPresenting = false;
       nextState.presentation.status = "ended";
       nextState.presentation.materialId = null;
@@ -583,6 +604,119 @@ export function stageSessionReducer(
         // Remove stopped sources to keep state clean
         delete nextState.screenShareSources[targetDeviceId];
       }
+
+      // If the stopped screen share was LIVE, clear live source and end presentation
+      if (nextState.liveSource?.type === "screen_share" && nextState.liveSource.id === targetDeviceId) {
+        nextState.liveSource = null;
+        nextState.presentation.isPresenting = false;
+        nextState.presentation.status = "ended";
+        nextState.presentation.materialId = null;
+        nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+        nextState.presentation.updatedAt = now;
+      }
+      break;
+    }
+
+    case "SOURCE_TAKE_LIVE": {
+      const { sourceType, sourceId } = command.payload;
+
+      if (sourceType === "material") {
+        const material = nextState.materials.find((m) => m.id === sourceId);
+        if (!material) {
+          throw new Error("SOURCE_NOT_FOUND: Material does not exist");
+        }
+        if (material.status === "error" || material.status === "deleted") {
+          throw new Error("SOURCE_UNAVAILABLE: Material is unavailable");
+        }
+
+        const totalSlides = Math.max(material.totalPages || 1, material.slides?.length || 1, 1);
+        ensureMaterialSlides(material, totalSlides);
+        const isVideoMaterial = material.type === "video" || material.mediaType === "video";
+
+        nextState.liveSource = {
+          type: "material",
+          id: material.id,
+          ownerDeviceId: material.ownerDeviceId,
+          ownerName: material.ownerName,
+          ownerRole: material.ownerRole,
+          title: material.name,
+          takenLiveAt: now,
+        };
+
+        nextState.presentation = {
+          isPresenting: true,
+          status: "live",
+          materialId: material.id,
+          currentSlide: 1,
+          totalSlides,
+          totalPages: totalSlides,
+          revision: (nextState.presentation.revision || 0) + 1,
+          currentSlideMetadata: material.slides[0] || { index: 1, title: "Slide 1" },
+          nextSlideMetadata: material.slides[1] || (totalSlides > 1 ? { index: 2, title: "Slide 2" } : null),
+          blanked: false,
+          blackoutMode: false,
+          mediaState: isVideoMaterial
+            ? {
+                status: "playing",
+                currentTime: 0,
+                playbackRate: 1.0,
+                updatedAt: now,
+              }
+            : undefined,
+          zoom: { scale: 1.0, panX: 0, panY: 0, updatedAt: now },
+          startedAt: now,
+          updatedAt: now,
+        };
+      } else if (sourceType === "screen_share") {
+        const screenSource = nextState.screenShareSources?.[sourceId];
+        if (!screenSource || screenSource.status !== "active") {
+          throw new Error("SOURCE_NOT_FOUND: Screen share source does not exist or is inactive");
+        }
+
+        nextState.liveSource = {
+          type: "screen_share",
+          id: sourceId,
+          ownerDeviceId: sourceId,
+          ownerName: screenSource.speakerName,
+          ownerRole: "speaker",
+          title: `${screenSource.speakerName}'s Screen`,
+          takenLiveAt: now,
+        };
+
+        nextState.presentation = {
+          isPresenting: true,
+          status: "live",
+          materialId: null,
+          currentSlide: 1,
+          totalSlides: 1,
+          totalPages: 1,
+          revision: (nextState.presentation.revision || 0) + 1,
+          currentSlideMetadata: null,
+          nextSlideMetadata: null,
+          blanked: false,
+          blackoutMode: false,
+          zoom: { scale: 1.0, panX: 0, panY: 0, updatedAt: now },
+          startedAt: now,
+          updatedAt: now,
+        };
+      }
+      break;
+    }
+
+    case "SOURCE_TAKE_OFFLINE": {
+      nextState.liveSource = null;
+      nextState.presentation.isPresenting = false;
+      nextState.presentation.status = "ended";
+      nextState.presentation.materialId = null;
+      nextState.presentation.currentSlide = 1;
+      nextState.presentation.totalSlides = 0;
+      nextState.presentation.totalPages = 0;
+      nextState.presentation.currentSlideMetadata = null;
+      nextState.presentation.nextSlideMetadata = null;
+      nextState.presentation.blanked = false;
+      nextState.presentation.zoom = { scale: 1.0, panX: 0, panY: 0, updatedAt: now };
+      nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
+      nextState.presentation.updatedAt = now;
       break;
     }
   }

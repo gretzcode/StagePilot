@@ -82,6 +82,7 @@ export function createInitialSessionState(
     },
     displays: {},
     screenShareSources: {},
+    liveSource: null,
     activeControllerDeviceId: hostDeviceId || hostUserId,
   };
 }

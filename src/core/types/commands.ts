@@ -34,7 +34,9 @@ export type StageCommandType =
   | "ZOOM_SET"
   | "ZOOM_RESET"
   | "SCREEN_SHARE_START"
-  | "SCREEN_SHARE_STOP";
+  | "SCREEN_SHARE_STOP"
+  | "SOURCE_TAKE_LIVE"
+  | "SOURCE_TAKE_OFFLINE";
 
 export interface BaseCommand {
   type: StageCommandType;
@@ -252,6 +254,19 @@ export interface ScreenShareStopCommand extends BaseCommand {
   };
 }
 
+export interface SourceTakeLiveCommand extends BaseCommand {
+  type: "SOURCE_TAKE_LIVE";
+  payload: {
+    sourceType: "material" | "screen_share";
+    sourceId: string; // materialId or deviceId
+  };
+}
+
+export interface SourceTakeOfflineCommand extends BaseCommand {
+  type: "SOURCE_TAKE_OFFLINE";
+  payload?: Record<string, never>;
+}
+
 export type StageCommand =
   | RoomCreateCommand
   | DeviceRequestJoinCommand
@@ -283,4 +298,7 @@ export type StageCommand =
   | ZoomSetCommand
   | ZoomResetCommand
   | ScreenShareStartCommand
-  | ScreenShareStopCommand;
+  | ScreenShareStopCommand
+  | SourceTakeLiveCommand
+  | SourceTakeOfflineCommand;
+
