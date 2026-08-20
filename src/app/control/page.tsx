@@ -291,6 +291,40 @@ function ControlRoomContent() {
             )}
           </div>
 
+          {/* Active Screen Shares (Sources) */}
+          {state?.screenShareSources && Object.keys(state.screenShareSources).length > 0 && (
+            <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-cyan-900/50 bg-cyan-950/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-cyan-300 flex items-center space-x-2">
+                  <Monitor className="w-4 h-4 text-cyan-400" />
+                  <span>Active Screen Shares ({Object.keys(state.screenShareSources).length})</span>
+                </h3>
+                <span className="px-2 py-0.5 rounded-md bg-cyan-950 border border-cyan-800 text-cyan-300 text-[10px] font-bold uppercase">
+                  Available Sources
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {Object.values(state.screenShareSources).map((source) => (
+                  <div key={source.deviceId} className="p-3 rounded-2xl bg-slate-900/80 border border-cyan-800/40 flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{source.speakerName}</p>
+                      <p className="text-[10px] text-cyan-400">Screen Sharing Active</p>
+                    </div>
+                    {isHost && (
+                      <button
+                        onClick={() => dispatchCommand("SCREEN_SHARE_STOP", { targetDeviceId: source.deviceId })}
+                        className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-[10px] font-bold cursor-pointer"
+                        title="Stop Speaker Screen Share"
+                      >
+                        Stop
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Stage Materials Playlist Queue Section */}
           <div className="glass-panel p-4 sm:p-6 rounded-3xl border border-slate-800 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

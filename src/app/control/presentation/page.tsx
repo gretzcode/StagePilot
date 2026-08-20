@@ -42,6 +42,7 @@ import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
 import { isCanvaMaterialStale, isPdfMaterialStale } from "@/features/material/validator";
 import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
+import { ScreenSharePanel } from "@/features/screen-share";
 
 function formatVideoTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return "00:00";
@@ -270,6 +271,14 @@ function PresentationControlContent() {
       } catch {}
     }
   };
+
+  const handleScreenShareStart = useCallback(() => {
+    dispatchCommand("SCREEN_SHARE_START", {});
+  }, [dispatchCommand]);
+
+  const handleScreenShareStop = useCallback(() => {
+    dispatchCommand("SCREEN_SHARE_STOP", {});
+  }, [dispatchCommand]);
 
   const scannedMaterialsRef = useRef<Set<string>>(new Set());
   const [leftTab, setLeftTab] = useState<"playlist" | "slides">("playlist");
@@ -706,6 +715,16 @@ function PresentationControlContent() {
                         <X className="w-4 h-4" />
                       </button>
                       <MaterialUploader roomCode={roomCode} deviceId={deviceId} onMaterialAdded={handleAddMaterial} />
+                    </div>
+                  )}
+
+                  {/* Speaker Screen Sharing Section */}
+                  {isSpeaker && (
+                    <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-inner">
+                      <ScreenSharePanel
+                        onScreenShareStart={handleScreenShareStart}
+                        onScreenShareStop={handleScreenShareStop}
+                      />
                     </div>
                   )}
 

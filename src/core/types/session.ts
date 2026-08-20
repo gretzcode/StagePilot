@@ -2,6 +2,7 @@ import { DeviceState, DisplayMode } from "./device";
 import { Material, PresentationState } from "./presentation";
 import { TimerState } from "./timer";
 import { BriefState } from "./brief";
+import { ScreenShareSource } from "./screen-share";
 
 export interface DisplayState {
   id: string;
@@ -37,5 +38,7 @@ export interface StageSessionState {
   timer: TimerState;
   brief: BriefState;
   displays: Record<string, DisplayState>;
+  screenShareSources: Record<string, ScreenShareSource>;
   version: number;
 }
+

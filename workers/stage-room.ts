@@ -276,6 +276,11 @@ export class StageRoom extends DurableObject {
         this.state.host.isHostConnected = false;
       }
 
+      // Clean up screen share source if disconnected device was sharing
+      if (this.state.screenShareSources && this.state.screenShareSources[deviceId]) {
+        delete this.state.screenShareSources[deviceId];
+      }
+
       await this.persistStateNow();
       this.broadcastState();
     }

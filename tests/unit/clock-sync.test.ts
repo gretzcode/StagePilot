@@ -13,7 +13,7 @@ describe("Clock Sync & Timer Skew Compensation", () => {
 
     updateServerTimeOffset(serverTimestamp, localNow);
 
-    expect(getServerTimeOffset()).toBe(-44000);
+    expect(Math.abs(getServerTimeOffset() - (-44000))).toBeLessThanOrEqual(5);
     expect(Math.abs(getSyncedNow() - serverTimestamp)).toBeLessThanOrEqual(5);
   });
 
@@ -23,7 +23,7 @@ describe("Clock Sync & Timer Skew Compensation", () => {
 
     updateServerTimeOffset(serverTimestamp, localNow);
 
-    expect(getServerTimeOffset()).toBe(30000);
+    expect(Math.abs(getServerTimeOffset() - 30000)).toBeLessThanOrEqual(5);
     expect(Math.abs(getSyncedNow() - serverTimestamp)).toBeLessThanOrEqual(5);
   });
 

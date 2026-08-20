@@ -540,6 +540,51 @@ export function stageSessionReducer(
       nextState.presentation.updatedAt = now;
       break;
     }
+
+    case "SCREEN_SHARE_START": {
+      const senderDevice = nextState.devices[command.senderDeviceId];
+      if (!nextState.screenShareSources) {
+        nextState.screenShareSources = {};
+      }
+      nextState.screenShareSources[command.senderDeviceId] = {
+        deviceId: command.senderDeviceId,
+        speakerName: senderDevice?.name || "Speaker",
+        status: "active",
+        startedAt: now,
+        stoppedAt: null,
+        updatedAt: now,
+      };
+      break;
+    }
+
+    case "SCREEN_SHARE_STOP": {
+      if (!nextState.screenShareSources) {
+        nextState.screenShareSources = {};
+      }
+      const targetDeviceId = command.payload?.targetDeviceId || command.senderDeviceId;
+      const senderDevice = nextState.devices[command.senderDeviceId];
+      const isHostSender =
+        senderDevice?.role === "host" ||
+        senderDevice?.isHostDevice ||
+        nextState.host?.hostDeviceId === command.senderDeviceId;
+
+      // Only the owner or host can stop a screen share
+      if (!isHostSender && targetDeviceId !== command.senderDeviceId) {
+        throw new Error("UNAUTHORIZED_SCREEN_SHARE_STOP: Cannot stop another Speaker's screen share");
+      }
+
+      if (nextState.screenShareSources[targetDeviceId]) {
+        nextState.screenShareSources[targetDeviceId] = {
+          ...nextState.screenShareSources[targetDeviceId],
+          status: "stopped",
+          stoppedAt: now,
+          updatedAt: now,
+        };
+        // Remove stopped sources to keep state clean
+        delete nextState.screenShareSources[targetDeviceId];
+      }
+      break;
+    }
   }
 
   return nextState;

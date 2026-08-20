@@ -81,6 +81,7 @@ export function createInitialSessionState(
       updatedAt: now,
     },
     displays: {},
+    screenShareSources: {},
     activeControllerDeviceId: hostDeviceId || hostUserId,
   };
 }

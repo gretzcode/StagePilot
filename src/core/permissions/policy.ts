@@ -239,6 +239,23 @@ export class PermissionPolicy {
       return { allowed: true };
     }
 
+    // Screen Share Lifecycle: Speaker can start/stop their own screen share
+    if (command.type === "SCREEN_SHARE_START") {
+      return { allowed: true };
+    }
+
+    if (command.type === "SCREEN_SHARE_STOP") {
+      const targetDeviceId = command.payload?.targetDeviceId;
+      // Speaker can only stop their own screen share
+      if (targetDeviceId && targetDeviceId !== sender.id) {
+        return {
+          allowed: false,
+          reason: "Speaker cannot stop another Speaker's screen share",
+        };
+      }
+      return { allowed: true };
+    }
+
     return {
       allowed: false,
       reason: `Command '${command.type}' is unauthorized for Speaker role`,

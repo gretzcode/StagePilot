@@ -32,7 +32,9 @@ export type StageCommandType =
   | "MEDIA_DURATION_UPDATE"
   | "CONTROL_TAKEOVER"
   | "ZOOM_SET"
-  | "ZOOM_RESET";
+  | "ZOOM_RESET"
+  | "SCREEN_SHARE_START"
+  | "SCREEN_SHARE_STOP";
 
 export interface BaseCommand {
   type: StageCommandType;
@@ -238,6 +240,18 @@ export interface ZoomResetCommand extends BaseCommand {
   payload?: Record<string, never>;
 }
 
+export interface ScreenShareStartCommand extends BaseCommand {
+  type: "SCREEN_SHARE_START";
+  payload: Record<string, never>;
+}
+
+export interface ScreenShareStopCommand extends BaseCommand {
+  type: "SCREEN_SHARE_STOP";
+  payload: {
+    targetDeviceId?: string; // Host can stop another Speaker's share
+  };
+}
+
 export type StageCommand =
   | RoomCreateCommand
   | DeviceRequestJoinCommand
@@ -267,4 +281,6 @@ export type StageCommand =
   | MediaDurationUpdateCommand
   | ControlTakeoverCommand
   | ZoomSetCommand
-  | ZoomResetCommand;
+  | ZoomResetCommand
+  | ScreenShareStartCommand
+  | ScreenShareStopCommand;
