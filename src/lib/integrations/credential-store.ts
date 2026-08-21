@@ -14,6 +14,55 @@ export interface IntegrationCredential {
 }
 
 const memoryCredentials = new Map<string, IntegrationCredential>();
+let isTableInitialized = false;
+
+async function ensureIntegrationTable(db: D1Database): Promise<void> {
+  if (isTableInitialized) return;
+  try {
+    if (typeof db.exec === "function") {
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS integration_credentials (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT,
+          token_type TEXT DEFAULT 'Bearer',
+          expires_at INTEGER NOT NULL,
+          scopes TEXT,
+          account_email TEXT,
+          account_name TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          UNIQUE(user_id, provider)
+        );
+        CREATE INDEX IF NOT EXISTS idx_integration_credentials_user_provider ON integration_credentials(user_id, provider);
+      `);
+    } else if (typeof db.prepare === "function") {
+      await db.prepare(`
+        CREATE TABLE IF NOT EXISTS integration_credentials (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT,
+          token_type TEXT DEFAULT 'Bearer',
+          expires_at INTEGER NOT NULL,
+          scopes TEXT,
+          account_email TEXT,
+          account_name TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          UNIQUE(user_id, provider)
+        )
+      `).run().catch(() => null);
+    }
+    isTableInitialized = true;
+  } catch (err) {
+    console.warn("[IntegrationCredentialStore] Auto table creation noticed:", err);
+    isTableInitialized = true;
+  }
+}
 
 export class IntegrationCredentialStore {
   private db: D1Database | null = null;
@@ -39,6 +88,7 @@ export class IntegrationCredentialStore {
     };
 
     if (this.db) {
+      await ensureIntegrationTable(this.db);
       try {
         await this.db
           .prepare(
@@ -81,6 +131,7 @@ export class IntegrationCredentialStore {
 
   async getCredential(userId: string, provider: string): Promise<IntegrationCredential | null> {
     if (this.db) {
+      await ensureIntegrationTable(this.db);
       try {
         const row = await this.db
           .prepare(`SELECT * FROM integration_credentials WHERE user_id = ? AND provider = ? LIMIT 1`)
@@ -115,6 +166,7 @@ export class IntegrationCredentialStore {
 
   async getAnyCredential(provider: string): Promise<IntegrationCredential | null> {
     if (this.db) {
+      await ensureIntegrationTable(this.db);
       try {
         const row = await this.db
           .prepare(`SELECT * FROM integration_credentials WHERE provider = ? ORDER BY updated_at DESC LIMIT 1`)
@@ -152,6 +204,7 @@ export class IntegrationCredentialStore {
     memoryCredentials.delete(this.getKey(userId, provider));
 
     if (this.db) {
+      await ensureIntegrationTable(this.db);
       try {
         await this.db
           .prepare(`DELETE FROM integration_credentials WHERE user_id = ? AND provider = ?`)
@@ -174,6 +227,7 @@ export class IntegrationCredentialStore {
     }
 
     if (this.db) {
+      await ensureIntegrationTable(this.db);
       try {
         await this.db
           .prepare(`DELETE FROM integration_credentials WHERE provider = ?`)
