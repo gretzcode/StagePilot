@@ -45,6 +45,7 @@ export interface Material {
   ownerDeviceId?: string;
   ownerRole?: "host" | "speaker" | "operator";
   ownerName?: string;
+  ownerSpeakerName?: string;
   roomCode?: string;
   status: MaterialStatus;
   errorMessage?: string;

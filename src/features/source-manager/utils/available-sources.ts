@@ -60,13 +60,19 @@ export function getAvailableSources(state: StageSessionState | null): AvailableS
           liveSource?.type === "material" && liveSource.id === mat.id
         );
 
+        const speakerDisplayName =
+          mat.ownerSpeakerName ||
+          mat.ownerName ||
+          (mat.ownerDeviceId && state.devices[mat.ownerDeviceId]?.name) ||
+          "Speaker";
+
         if (!sources.some((s) => s.id === mat.id && s.type === "material")) {
           sources.push({
             id: mat.id,
             type: "material",
-            title: `${mat.ownerName || "Speaker"} — ${mat.name}`,
+            title: `${speakerDisplayName} — ${mat.name}`,
             ownerDeviceId: mat.ownerDeviceId,
-            ownerName: mat.ownerName || "Speaker",
+            ownerName: speakerDisplayName,
             ownerRole: "speaker",
             status: isLive ? "live" : "available",
             isLive,

@@ -171,7 +171,22 @@ function PresentationControlContent() {
   const activeViewerStream = isMyLiveScreenShare ? (localScreenStream || liveScreenStream) : liveScreenStream;
   const activeViewerStatus = isMyLiveScreenShare ? (localScreenStream ? "connected" : liveScreenStatus) : liveScreenStatus;
 
-  const speakerMaterials = state?.materials.filter((m) => m.ownerDeviceId === deviceId) || [];
+  const myDevice = state?.devices?.[deviceId];
+  const mySpeakerName = (myDevice?.name || "").trim().toLowerCase();
+
+  const speakerMaterials =
+    state?.materials.filter((m) => {
+      if (m.ownerRole !== "speaker") return false;
+      if (m.ownerDeviceId === deviceId) return true;
+      if (
+        mySpeakerName &&
+        ((m.ownerSpeakerName && m.ownerSpeakerName.trim().toLowerCase() === mySpeakerName) ||
+          (m.ownerName && m.ownerName.trim().toLowerCase() === mySpeakerName))
+      ) {
+        return true;
+      }
+      return false;
+    }) || [];
   const hostMaterials = state?.materials.filter((m) => m.ownerRole !== "speaker" && (!m.ownerDeviceId || m.ownerDeviceId === state.host?.hostDeviceId || !state.devices[m.ownerDeviceId] || state.devices[m.ownerDeviceId]?.role !== "speaker")) || [];
   const displayMaterials = isSpeaker ? speakerMaterials : hostMaterials;
   const isVideoMaterial = Boolean(activeMaterial?.type === "video");
@@ -495,8 +510,15 @@ function PresentationControlContent() {
 
   const handleAddMaterial = (newMaterial: Material) => {
     setShowUploader(false);
-    console.log("[handleAddMaterial] Material added:", { id: newMaterial.id, type: newMaterial.type, name: newMaterial.name });
-    dispatchCommand("MATERIAL_ADD", { material: newMaterial });
+    const enrichedMaterial: Material = {
+      ...newMaterial,
+      ownerDeviceId: deviceId,
+      ownerRole: isSpeaker ? "speaker" : isHost ? "host" : "operator",
+      ownerName: myDevice?.name || (isSpeaker ? "Speaker" : "Operator"),
+      ownerSpeakerName: isSpeaker ? (myDevice?.name || "Speaker") : undefined,
+    };
+    console.log("[handleAddMaterial] Material added:", { id: enrichedMaterial.id, type: enrichedMaterial.type, name: enrichedMaterial.name, ownerSpeakerName: enrichedMaterial.ownerSpeakerName });
+    dispatchCommand("MATERIAL_ADD", { material: enrichedMaterial });
   };
 
   const [reimportingMatId, setReimportingMatId] = useState<string | null>(null);

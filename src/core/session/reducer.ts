@@ -138,6 +138,10 @@ export function stageSessionReducer(
       const ownerDeviceId = existingMaterial?.ownerDeviceId || (isHostSender ? (nextState.host?.hostDeviceId || command.senderDeviceId) : command.senderDeviceId);
       const ownerRole = existingMaterial?.ownerRole || (isHostSender ? "host" : isSpeakerSender ? "speaker" : "operator");
       const ownerName = existingMaterial?.ownerName || (senderDevice?.name || (isHostSender ? "Host" : isSpeakerSender ? "Speaker" : "Operator"));
+      const ownerSpeakerName =
+        existingMaterial?.ownerSpeakerName ||
+        material.ownerSpeakerName ||
+        (isSpeakerSender ? (senderDevice?.name || "Speaker") : undefined);
       const ownerUserId = existingMaterial?.ownerUserId || (isHostSender ? nextState.host?.hostUserId : undefined);
 
       const enrichedMaterial: Material = {
@@ -145,6 +149,7 @@ export function stageSessionReducer(
         ownerDeviceId,
         ownerRole,
         ownerName,
+        ownerSpeakerName,
         ownerUserId,
       };
 
