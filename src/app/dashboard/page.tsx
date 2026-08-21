@@ -192,7 +192,7 @@ export default function DashboardPage() {
   const handleDisconnectCanva = async () => {
     setDisconnectingCanva(true);
     try {
-      await fetch("/api/integrations/canva/disconnect", { method: "POST" });
+      await fetch(API_ROUTES.integrations.canva.disconnect, { method: "POST" });
       setCanvaStatus({ connected: false, accountName: null, accountEmail: null });
     } catch {
       // Non-fatal
@@ -204,7 +204,7 @@ export default function DashboardPage() {
   const handleDisconnectDrive = async () => {
     setDisconnectingDrive(true);
     try {
-      await fetch("/api/google-drive/disconnect", { method: "POST" });
+      await fetch(API_ROUTES.integrations.googleDrive.disconnect, { method: "POST" });
       setDriveStatus({ connected: false, account: null });
     } catch {
       // Non-fatal
@@ -312,7 +312,7 @@ export default function DashboardPage() {
                 {driveStatus?.connected ? (
                   <>
                     <a
-                      href="/api/google-drive/connect"
+                      href={API_ROUTES.integrations.googleDrive.connect}
                       className="flex-1 px-4 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/40 hover:bg-emerald-600/30 text-emerald-300 font-medium text-xs text-center transition"
                     >
                       Switch Account
@@ -327,7 +327,7 @@ export default function DashboardPage() {
                   </>
                 ) : (
                   <a
-                    href="/api/google-drive/connect"
+                    href={API_ROUTES.integrations.googleDrive.connect}
                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-xs text-center transition"
                   >
                     Connect Google Drive
@@ -379,7 +379,7 @@ export default function DashboardPage() {
                   </>
                 ) : (
                   <a
-                    href="/api/integrations/canva/authorize"
+                    href={API_ROUTES.integrations.canva.authorize}
                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-xs text-center transition"
                   >
                     Connect Canva
