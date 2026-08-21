@@ -3,6 +3,7 @@ import { StageSessionState, StageCommand } from "../src/core/types";
 import { createInitialSessionState } from "../src/core/session/initial-state";
 import { CommandDispatcher } from "../src/core/commands/dispatcher";
 import { ClientMessage, ServerMessage } from "../src/core/realtime/protocol";
+import { verifyDisplayGrant } from "../src/lib/auth/display-grant";
 
 export interface Env {
   STAGE_ROOM: DurableObjectNamespace;
@@ -119,6 +120,16 @@ export class StageRoom extends DurableObject {
 
     const isOperator = effectiveRole === "operator" || effectiveRole === "control";
     const isSpeaker = effectiveRole === "speaker";
+    const isDisplayMode = requestedRole === "audience" || requestedRole === "confidence";
+    const grant = url.searchParams.get("grant");
+    let isDisplayGrantValid = url.searchParams.get("isDisplayGrantValid") === "true";
+    if (isDisplayMode && !isDisplayGrantValid && grant) {
+      isDisplayGrantValid = await verifyDisplayGrant(roomCode, requestedRole, grant, this.env as unknown as Record<string, unknown>);
+    }
+
+    if (isDisplayMode && !isDisplayGrantValid) {
+      return new Response("Display URL requires an authorized grant from Host or Control Room.", { status: 403 });
+    }
 
     if (isHostRole) {
       // Purge any stale previous host device entries so host count remains exactly 1
@@ -139,6 +150,8 @@ export class StageRoom extends DurableObject {
       canTakeoverControl: isHostRole || isOperator,
     };
 
+    const autoApprove = isHostRole || (isDisplayMode && isDisplayGrantValid);
+
     // Register or update device connection status in state
     const existingDevice = this.state.devices[deviceId];
     if (existingDevice) {
@@ -151,10 +164,11 @@ export class StageRoom extends DurableObject {
         this.state.host.isHostConnected = true;
         this.state.host.hostDeviceId = deviceId;
         this.state.activeControllerDeviceId = deviceId;
+      } else if (isDisplayMode && isDisplayGrantValid) {
+        existingDevice.approvalStatus = "approved";
       }
       existingDevice.permissions = rolePermissions;
     } else {
-      const autoApprove = isHostRole;
       this.state.devices[deviceId] = {
         id: deviceId,
         name: deviceName,

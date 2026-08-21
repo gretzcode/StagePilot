@@ -9,6 +9,7 @@ import { verifyHostToken } from "@/lib/auth/jwt";
 import { MaterialRegistryService } from "@/lib/storage/registry";
 import { Material } from "@/core/types";
 import { createAssetGrant } from "@/lib/auth/asset-grant";
+import { verifyDisplayGrant } from "@/lib/auth/display-grant";
 
 interface LocalRoomInstance {
   state: StageSessionState;
@@ -141,7 +142,28 @@ export async function GET(request: Request) {
     isHostAuthenticated = true;
   }
 
-  // 3. Durable Object Upgrade for Cloudflare Workers Environment
+  // 3. Authoritative Display Mode Access Verification (Must have valid display grant from Host/Control)
+  const isDisplayMode = requestedRole === "audience" || requestedRole === "confidence";
+  const displayGrant = url.searchParams.get("grant");
+  let isDisplayGrantValid = false;
+
+  if (isDisplayMode) {
+    const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
+    const env = (cfCtx?.env || process.env) as Record<string, unknown>;
+    isDisplayGrantValid = await verifyDisplayGrant(roomCode, requestedRole, displayGrant, env);
+
+    if (!isDisplayGrantValid) {
+      return new Response(
+        JSON.stringify({
+          error: "ROOM_ACCESS_DENIED",
+          message: "Tautan display ini tidak dapat dibuka bebas. Buka melalui Host atau Control Room.",
+        }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }
+
+  // 4. Durable Object Upgrade for Cloudflare Workers Environment
   try {
     const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
     const env = (cfCtx?.env || process.env) as Record<string, unknown>;
@@ -156,6 +178,9 @@ export async function GET(request: Request) {
       const doUrl = new URL(request.url);
       doUrl.searchParams.set("hostUserId", roomRecord.hostUserId);
       doUrl.searchParams.set("title", roomRecord.name);
+      if (isDisplayGrantValid) {
+        doUrl.searchParams.set("isDisplayGrantValid", "true");
+      }
       if (isHostAuthenticated) {
         doUrl.searchParams.set("isHostAuthenticated", "true");
       } else if (requestedRole === "host") {
@@ -201,7 +226,7 @@ export async function GET(request: Request) {
   }
 
   if (!localRoom.state.devices[deviceId]) {
-    const autoApprove = isHostRole;
+    const autoApprove = isHostRole || (isDisplayMode && isDisplayGrantValid);
     localRoom.state.devices[deviceId] = {
       id: deviceId,
       name: deviceName,

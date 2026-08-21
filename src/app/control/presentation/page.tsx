@@ -90,6 +90,23 @@ function PresentationControlContent() {
       : "Operator Controller",
   });
 
+  const [displayGrants, setDisplayGrants] = useState<{ audienceGrant?: string; confidenceGrant?: string }>({});
+
+  useEffect(() => {
+    if (!roomCode) return;
+    fetch(`/api/room/display-grant?roomCode=${encodeURIComponent(roomCode)}`)
+      .then((res) => (res.ok ? (res.json() as Promise<{ audienceGrant?: string; confidenceGrant?: string }>) : null))
+      .then((data) => {
+        if (data) {
+          setDisplayGrants({
+            audienceGrant: data.audienceGrant,
+            confidenceGrant: data.confidenceGrant,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [roomCode]);
+
   useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
 
   // Keyboard Navigation & Shortcuts
@@ -1239,7 +1256,7 @@ function PresentationControlContent() {
               </span>
 
               <a
-                href={`/display/audience?roomCode=${roomCode}`}
+                href={`/display/audience?roomCode=${encodeURIComponent(roomCode)}${displayGrants.audienceGrant ? `&grant=${encodeURIComponent(displayGrants.audienceGrant)}` : ""}`}
                 target="_blank"
                 rel="noreferrer"
                 className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-indigo-300 flex items-center justify-between transition"
@@ -1252,7 +1269,7 @@ function PresentationControlContent() {
               </a>
 
               <a
-                href={`/display/confidence?roomCode=${roomCode}`}
+                href={`/display/confidence?roomCode=${encodeURIComponent(roomCode)}${displayGrants.confidenceGrant ? `&grant=${encodeURIComponent(displayGrants.confidenceGrant)}` : ""}`}
                 target="_blank"
                 rel="noreferrer"
                 className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-purple-300 flex items-center justify-between transition"

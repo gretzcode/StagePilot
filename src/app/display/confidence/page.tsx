@@ -26,6 +26,7 @@ function ConfidenceDisplayContent() {
   const searchParams = useSearchParams();
   const rawRoomCode = searchParams.get("roomCode");
   const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
+  const grant = searchParams.get("grant");
   const [deviceId] = useState(() => getPersistentDeviceId("confidence", roomCode, searchParams.get("deviceId")));
   useAutoHideCursor(2500);
 
@@ -34,6 +35,7 @@ function ConfidenceDisplayContent() {
     role: "confidence",
     deviceId,
     deviceName: "Confidence Display",
+    displayGrant: grant || undefined,
   });
 
   const now = useTimerTicker(state?.timer.status === "running");

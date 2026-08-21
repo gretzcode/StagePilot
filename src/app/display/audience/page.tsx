@@ -17,6 +17,7 @@ function AudienceDisplayContent() {
   const searchParams = useSearchParams();
   const rawRoomCode = searchParams.get("roomCode");
   const roomCode = rawRoomCode ? rawRoomCode.trim().toUpperCase() : "";
+  const grant = searchParams.get("grant");
   const [deviceId] = useState(() => getPersistentDeviceId("audience", roomCode, searchParams.get("deviceId")));
   useAutoHideCursor(2500);
 
@@ -25,6 +26,7 @@ function AudienceDisplayContent() {
     role: "audience",
     deviceId,
     deviceName: "Audience Display",
+    displayGrant: grant || undefined,
   });
 
   useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);

@@ -55,6 +55,22 @@ function ControlRoomContent() {
   });
 
   const canManageDevices = isHost;
+  const [displayGrants, setDisplayGrants] = useState<{ audienceGrant?: string; confidenceGrant?: string }>({});
+
+  useEffect(() => {
+    if (!roomCode) return;
+    fetch(`/api/room/display-grant?roomCode=${encodeURIComponent(roomCode)}`)
+      .then((res) => (res.ok ? (res.json() as Promise<{ audienceGrant?: string; confidenceGrant?: string }>) : null))
+      .then((data) => {
+        if (data) {
+          setDisplayGrants({
+            audienceGrant: data.audienceGrant,
+            confidenceGrant: data.confidenceGrant,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [roomCode]);
 
   useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
 
@@ -463,7 +479,7 @@ function ControlRoomContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Audience Display Link */}
               <a
-                href={`/display/audience?roomCode=${roomCode}`}
+                href={`/display/audience?roomCode=${encodeURIComponent(roomCode)}${displayGrants.audienceGrant ? `&grant=${encodeURIComponent(displayGrants.audienceGrant)}` : ""}`}
                 target="_blank"
                 rel="noreferrer"
                 className="p-5 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-indigo-500/50 transition flex items-center justify-between group"
@@ -482,7 +498,7 @@ function ControlRoomContent() {
 
               {/* Confidence Display Link */}
               <a
-                href={`/display/confidence?roomCode=${roomCode}`}
+                href={`/display/confidence?roomCode=${encodeURIComponent(roomCode)}${displayGrants.confidenceGrant ? `&grant=${encodeURIComponent(displayGrants.confidenceGrant)}` : ""}`}
                 target="_blank"
                 rel="noreferrer"
                 className="p-5 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-purple-500/50 transition flex items-center justify-between group"

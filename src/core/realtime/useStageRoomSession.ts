@@ -13,9 +13,10 @@ export interface UseStageRoomSessionOptions {
   displayMode?: "audience" | "confidence";
   deviceId: string;
   deviceName?: string;
+  displayGrant?: string;
 }
 
-export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: UseStageRoomSessionOptions) {
+export function useStageRoomSession({ roomCode, role, deviceId, deviceName, displayGrant }: UseStageRoomSessionOptions) {
   const [state, setState] = useState<StageSessionState | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [roomError, setRoomError] = useState<string | null>(null);
@@ -60,9 +61,10 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
     const fetchState = async () => {
       try {
         const reqSentAt = Date.now();
+        const grantQuery = displayGrant ? `&grant=${encodeURIComponent(displayGrant)}` : "";
         const url = `/api/ws?roomCode=${encodeURIComponent(normalizedRoomCode)}&deviceId=${encodeURIComponent(
           deviceId
-        )}&role=${role}&deviceName=${encodeURIComponent(deviceName || "Device")}`;
+        )}&role=${role}&deviceName=${encodeURIComponent(deviceName || "Device")}${grantQuery}`;
         const res = await fetch(url);
 
         if (!isMounted) return;
@@ -180,9 +182,10 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
 
     // 4. Connect WebSocket for realtime sync
     const wsProtocol = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:";
+    const grantQuery = displayGrant ? `&grant=${encodeURIComponent(displayGrant)}` : "";
     const socketUrl = `${wsProtocol}//${window.location.host}/api/ws?roomCode=${encodeURIComponent(
       normalizedRoomCode
-    )}&deviceId=${encodeURIComponent(deviceId)}&role=${role}&deviceName=${encodeURIComponent(deviceName || "Device")}`;
+    )}&deviceId=${encodeURIComponent(deviceId)}&role=${role}&deviceName=${encodeURIComponent(deviceName || "Device")}${grantQuery}`;
 
     let reconnectTimer: NodeJS.Timeout | null = null;
     let pingInterval: NodeJS.Timeout | null = null;
@@ -295,7 +298,7 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName }: Us
         socket.close();
       }
     };
-  }, [normalizedRoomCode, deviceId, role, deviceName]);
+  }, [normalizedRoomCode, deviceId, role, deviceName, displayGrant]);
 
   const dispatchCommand = useCallback(
     async (type: StageCommand["type"], payload: Record<string, unknown> = {}) => {
