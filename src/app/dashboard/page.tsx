@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Plus, Radio, Play, Users, Tv, Monitor, LogOut, AlertCircle, Trash2, X, AlertTriangle, HardDrive } from "lucide-react";
+import { ROUTES, API_ROUTES } from "@/lib/routes";
 
 interface RoomItem {
   roomId: string;
@@ -39,16 +40,16 @@ export default function DashboardPage() {
   useEffect(() => {
     async function initDashboard() {
       try {
-        const authRes = await fetch("/api/auth/me");
+        const authRes = await fetch(API_ROUTES.auth.me);
         const authData = (await authRes.json()) as { authenticated?: boolean; user?: { id: string; email: string; name: string } };
         if (!authRes.ok || !authData.authenticated || !authData.user) {
-          router.push("/login");
+          router.push(ROUTES.login(ROUTES.dashboard()));
           return;
         }
         setUser(authData.user);
 
         // Fetch host rooms list
-        const roomsRes = await fetch("/api/room/list");
+        const roomsRes = await fetch(API_ROUTES.room.list);
         if (roomsRes.ok) {
           const roomsData = (await roomsRes.json()) as { success?: boolean; rooms?: RoomItem[] };
           if (roomsData.success && Array.isArray(roomsData.rooms)) {
@@ -56,13 +57,13 @@ export default function DashboardPage() {
           }
         }
 
-        const driveRes = await fetch("/api/google-drive/status");
+        const driveRes = await fetch(API_ROUTES.integrations.googleDrive.status);
         if (driveRes.ok) {
           const driveData = (await driveRes.json()) as { connected?: boolean; account?: string | null };
           setDriveStatus({ connected: Boolean(driveData.connected), account: driveData.account || null });
         }
 
-        const canvaRes = await fetch("/api/integrations/canva/status");
+        const canvaRes = await fetch(API_ROUTES.integrations.canva.status);
         if (canvaRes.ok) {
           const canvaData = (await canvaRes.json()) as { connected?: boolean; accountName?: string | null; accountEmail?: string | null };
           setCanvaStatus({
@@ -72,7 +73,7 @@ export default function DashboardPage() {
           });
         }
       } catch {
-        router.push("/login");
+        router.push(ROUTES.login(ROUTES.dashboard()));
       } finally {
         setLoading(false);
       }
@@ -92,7 +93,7 @@ export default function DashboardPage() {
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch("/api/room/create", {
+      const res = await fetch(API_ROUTES.room.create, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: newRoomTitle.trim() }),
@@ -116,7 +117,7 @@ export default function DashboardPage() {
     setDeletingId(targetId);
     setError(null);
     try {
-      const res = await fetch("/api/room/delete", {
+      const res = await fetch(API_ROUTES.room.delete, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomId: targetId }),
@@ -168,15 +169,15 @@ export default function DashboardPage() {
   }, [isModalOpen]);
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    await fetch(API_ROUTES.auth.logout, { method: "POST" });
+    router.push(ROUTES.login());
   };
 
   const handleBrowseCanvaDesigns = async () => {
     setIsCanvaModalOpen(true);
     setLoadingDesigns(true);
     try {
-      const res = await fetch("/api/integrations/canva/designs");
+      const res = await fetch(API_ROUTES.integrations.canva.designs);
       const data = (await res.json()) as { success?: boolean; designs?: Array<{ id: string; title: string; thumbnail?: { url: string } }> };
       if (res.ok && data.success && Array.isArray(data.designs)) {
         setCanvaDesigns(data.designs);
@@ -513,14 +514,14 @@ export default function DashboardPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                   <div className="flex flex-wrap gap-3">
                     <Link
-                      href={`/control?roomCode=${room.roomCode}`}
+                      href={ROUTES.control(room.roomCode, "host")}
                       className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-medium text-sm transition flex items-center space-x-2 glow-purple"
                     >
                       <Play className="w-4 h-4 fill-white" />
                       <span>Enter Control Room</span>
                     </Link>
                     <Link
-                      href={`/control/presentation?roomCode=${room.roomCode}&role=host`}
+                      href={ROUTES.presentation(room.roomCode, "host")}
                       className="px-5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-sm transition flex items-center space-x-2"
                     >
                       <span>Presentation View</span>

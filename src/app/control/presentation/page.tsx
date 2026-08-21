@@ -43,6 +43,7 @@ import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
 import { isCanvaMaterialStale, isPdfMaterialStale } from "@/features/material/validator";
 import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
 import { ScreenSharePanel, useScreenShareSubscriber, ScreenShareLiveViewer } from "@/features/screen-share";
+import { ROUTES, API_ROUTES } from "@/lib/routes";
 
 function formatVideoTime(seconds: number): string {
   if (isNaN(seconds) || seconds < 0) return "00:00";
@@ -64,14 +65,14 @@ function PresentationControlContent() {
   // Authenticate host session if claiming Host role
   useEffect(() => {
     if (isHost) {
-      fetch("/api/auth/me", { credentials: "include" })
+      fetch(API_ROUTES.auth.me, { credentials: "include" })
         .then((res) => {
           if (!res.ok) {
-            router.push(`/login?redirect=/control/presentation?roomCode=${encodeURIComponent(roomCode)}&role=host`);
+            router.push(ROUTES.login(ROUTES.presentation(roomCode, "host")));
           }
         })
         .catch(() => {
-          router.push(`/login?redirect=/control/presentation?roomCode=${encodeURIComponent(roomCode)}&role=host`);
+          router.push(ROUTES.login(ROUTES.presentation(roomCode, "host")));
         });
     }
   }, [isHost, roomCode, router]);
@@ -94,7 +95,7 @@ function PresentationControlContent() {
 
   useEffect(() => {
     if (!roomCode) return;
-    fetch(`/api/room/display-grant?roomCode=${encodeURIComponent(roomCode)}`)
+    fetch(API_ROUTES.room.displayGrant(roomCode))
       .then((res) => (res.ok ? (res.json() as Promise<{ audienceGrant?: string; confidenceGrant?: string }>) : null))
       .then((data) => {
         if (data) {
@@ -471,7 +472,7 @@ function PresentationControlContent() {
   }, [state?.presentation?.isPresenting, state?.presentation?.materialId]);
 
   const handleExitToControl = () => {
-    router.push(`/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`);
+    router.push(ROUTES.control(roomCode, isHost ? "host" : requestedRole));
   };
 
   const handleStopPresentation = () => {
@@ -509,7 +510,7 @@ function PresentationControlContent() {
     setReimportError(null);
 
     try {
-      const res = await fetch("/api/integrations/canva/import", {
+      const res = await fetch(API_ROUTES.integrations.canva.import, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -551,7 +552,7 @@ function PresentationControlContent() {
     setReimportError(null);
 
     try {
-      const res = await fetch(`/api/material/resolve?materialId=${encodeURIComponent(mat.id)}&roomCode=${encodeURIComponent(roomCode)}`);
+      const res = await fetch(API_ROUTES.material.resolve(mat.id, roomCode));
       const data = (await res.json().catch(() => ({}))) as {
         success?: boolean;
         material?: Material;
@@ -575,7 +576,7 @@ function PresentationControlContent() {
 
   const handleRemoveMaterial = (materialId: string) => {
     dispatchCommand("MATERIAL_REMOVE", { materialId });
-    fetch("/api/material/delete", {
+    fetch(API_ROUTES.material.delete, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ materialId }),
@@ -666,7 +667,7 @@ function PresentationControlContent() {
 
           {/* Exit / Back Button */}
           <button
-            onClick={isSpeaker ? () => router.push("/join") : handleExitToControl}
+            onClick={isSpeaker ? () => router.push(ROUTES.join()) : handleExitToControl}
             className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1.5 cursor-pointer"
             title={isSpeaker ? "Keluar dari room" : "Exit to Control Room (Presentation continues running)"}
           >
@@ -1269,7 +1270,7 @@ function PresentationControlContent() {
               </span>
 
               <a
-                href={`/display/audience?roomCode=${encodeURIComponent(roomCode)}${displayGrants.audienceGrant ? `&grant=${encodeURIComponent(displayGrants.audienceGrant)}` : ""}`}
+                href={ROUTES.displayAudience(roomCode, displayGrants.audienceGrant)}
                 target="_blank"
                 rel="noreferrer"
                 className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-indigo-300 flex items-center justify-between transition"
@@ -1282,7 +1283,7 @@ function PresentationControlContent() {
               </a>
 
               <a
-                href={`/display/confidence?roomCode=${encodeURIComponent(roomCode)}${displayGrants.confidenceGrant ? `&grant=${encodeURIComponent(displayGrants.confidenceGrant)}` : ""}`}
+                href={ROUTES.displayConfidence(roomCode, displayGrants.confidenceGrant)}
                 target="_blank"
                 rel="noreferrer"
                 className="w-full p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-semibold text-purple-300 flex items-center justify-between transition"

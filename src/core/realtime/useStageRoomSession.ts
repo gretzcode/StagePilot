@@ -6,6 +6,7 @@ import { ServerMessage, ClientMessage, WebRtcSignalPayload } from "@/core/realti
 
 import { stageSessionReducer } from "@/core/session/reducer";
 import { updateServerTimeOffset } from "@/core/utils/clock-sync";
+import { API_ROUTES } from "@/lib/routes";
 
 export interface UseStageRoomSessionOptions {
   roomCode: string;
@@ -61,10 +62,13 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName, disp
     const fetchState = async () => {
       try {
         const reqSentAt = Date.now();
-        const grantQuery = displayGrant ? `&grant=${encodeURIComponent(displayGrant)}` : "";
-        const url = `/api/ws?roomCode=${encodeURIComponent(normalizedRoomCode)}&deviceId=${encodeURIComponent(
-          deviceId
-        )}&role=${role}&deviceName=${encodeURIComponent(deviceName || "Device")}${grantQuery}`;
+        const url = API_ROUTES.ws({
+          roomCode: normalizedRoomCode,
+          deviceId,
+          role,
+          deviceName: deviceName || "Device",
+          displayGrant,
+        });
         const res = await fetch(url);
 
         if (!isMounted) return;
@@ -182,10 +186,14 @@ export function useStageRoomSession({ roomCode, role, deviceId, deviceName, disp
 
     // 4. Connect WebSocket for realtime sync
     const wsProtocol = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:";
-    const grantQuery = displayGrant ? `&grant=${encodeURIComponent(displayGrant)}` : "";
-    const socketUrl = `${wsProtocol}//${window.location.host}/api/ws?roomCode=${encodeURIComponent(
-      normalizedRoomCode
-    )}&deviceId=${encodeURIComponent(deviceId)}&role=${role}&deviceName=${encodeURIComponent(deviceName || "Device")}${grantQuery}`;
+    const wsPath = API_ROUTES.ws({
+      roomCode: normalizedRoomCode,
+      deviceId,
+      role,
+      deviceName: deviceName || "Device",
+      displayGrant,
+    });
+    const socketUrl = `${wsProtocol}//${window.location.host}${wsPath}`;
 
     let reconnectTimer: NodeJS.Timeout | null = null;
     let pingInterval: NodeJS.Timeout | null = null;

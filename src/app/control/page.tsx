@@ -15,6 +15,7 @@ import { MaterialUploader } from "@/features/material/components/MaterialUploade
 import { Material } from "@/core/types";
 import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
 import { SourceManagerPanel } from "@/features/source-manager";
+import { ROUTES, API_ROUTES } from "@/lib/routes";
 
 function ControlRoomContent() {
   const router = useRouter();
@@ -31,14 +32,14 @@ function ControlRoomContent() {
   // Authenticate host session for Host role access
   useEffect(() => {
     if (isHost) {
-      fetch("/api/auth/me", { credentials: "include" })
+      fetch(API_ROUTES.auth.me, { credentials: "include" })
         .then((res) => {
           if (!res.ok) {
-            router.push(`/login?redirect=/control?roomCode=${encodeURIComponent(roomCode)}`);
+            router.push(ROUTES.login(ROUTES.control(roomCode, "host")));
           }
         })
         .catch(() => {
-          router.push(`/login?redirect=/control?roomCode=${encodeURIComponent(roomCode)}`);
+          router.push(ROUTES.login(ROUTES.control(roomCode, "host")));
         });
     }
   }, [isHost, roomCode, router]);
@@ -59,7 +60,7 @@ function ControlRoomContent() {
 
   useEffect(() => {
     if (!roomCode) return;
-    fetch(`/api/room/display-grant?roomCode=${encodeURIComponent(roomCode)}`)
+    fetch(API_ROUTES.room.displayGrant(roomCode))
       .then((res) => (res.ok ? (res.json() as Promise<{ audienceGrant?: string; confidenceGrant?: string }>) : null))
       .then((data) => {
         if (data) {
@@ -327,13 +328,13 @@ function ControlRoomContent() {
             canControl={isHost || requestedRole === "operator" || requestedRole === "control"}
             onTakeLive={(sourceType, sourceId) => {
               dispatchCommand("SOURCE_TAKE_LIVE", { sourceType, sourceId });
-              router.push(`/control/presentation?roomCode=${encodeURIComponent(roomCode)}${isHost ? "&role=host" : "&role=control"}`);
+              router.push(ROUTES.presentation(roomCode, isHost ? "host" : requestedRole));
             }}
             onTakeOffline={() => {
               dispatchCommand("SOURCE_TAKE_OFFLINE", {});
             }}
             onViewPresentation={() => {
-              router.push(`/control/presentation?roomCode=${encodeURIComponent(roomCode)}${isHost ? "&role=host" : "&role=control"}`);
+              router.push(ROUTES.presentation(roomCode, isHost ? "host" : requestedRole));
             }}
           />
 
@@ -434,7 +435,7 @@ function ControlRoomContent() {
                             if (!isLive) {
                               dispatchCommand("PRESENTATION_START", { materialId: mat.id, startPage: 1 });
                             }
-                            router.push(`/control/presentation?roomCode=${encodeURIComponent(roomCode)}${isHost ? "&role=host" : "&role=control"}`);
+                            router.push(ROUTES.presentation(roomCode, isHost ? "host" : requestedRole));
                           }}
                           className="flex-1 py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-500 active:bg-purple-700 active:scale-95 text-white font-bold text-xs transition flex items-center justify-center space-x-1.5 glow-purple shadow-md cursor-pointer touch-manipulation"
                         >
@@ -458,7 +459,7 @@ function ControlRoomContent() {
                             type="button"
                             onClick={() => {
                               dispatchCommand("MATERIAL_REMOVE", { materialId: mat.id });
-                              fetch("/api/material/delete", {
+                              fetch(API_ROUTES.material.delete, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ materialId: mat.id }),
@@ -492,7 +493,7 @@ function ControlRoomContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Audience Display Link */}
               <a
-                href={`/display/audience?roomCode=${encodeURIComponent(roomCode)}${displayGrants.audienceGrant ? `&grant=${encodeURIComponent(displayGrants.audienceGrant)}` : ""}`}
+                href={ROUTES.displayAudience(roomCode, displayGrants.audienceGrant)}
                 target="_blank"
                 rel="noreferrer"
                 className="p-5 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-indigo-500/50 transition flex items-center justify-between group"
@@ -511,7 +512,7 @@ function ControlRoomContent() {
 
               {/* Confidence Display Link */}
               <a
-                href={`/display/confidence?roomCode=${encodeURIComponent(roomCode)}${displayGrants.confidenceGrant ? `&grant=${encodeURIComponent(displayGrants.confidenceGrant)}` : ""}`}
+                href={ROUTES.displayConfidence(roomCode, displayGrants.confidenceGrant)}
                 target="_blank"
                 rel="noreferrer"
                 className="p-5 rounded-2xl bg-slate-900/80 hover:bg-slate-900 border border-slate-800 hover:border-purple-500/50 transition flex items-center justify-between group"

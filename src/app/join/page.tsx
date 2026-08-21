@@ -6,6 +6,7 @@ import { ParticipantRole, StageSessionState } from "@/core/types";
 import { Radio, Mic, ArrowRight, AlertCircle, RefreshCw, CheckCircle2, Search } from "lucide-react";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
+import { ROUTES, API_ROUTES } from "@/lib/routes";
 
 interface ActiveRoomSummary {
   roomCode: string;
@@ -79,7 +80,7 @@ function JoinPageContent() {
   const fetchActiveRooms = async () => {
     try {
       setLoadingRooms(true);
-      const res = await fetch("/api/room/active");
+      const res = await fetch(API_ROUTES.room.active);
       if (res.ok) {
         const data = (await res.json()) as { success?: boolean; rooms?: ActiveRoomSummary[] };
         if (data.success && Array.isArray(data.rooms)) {
@@ -112,9 +113,12 @@ function JoinPageContent() {
     const checkApproval = async () => {
       try {
         const res = await fetch(
-          `/api/ws?roomCode=${encodeURIComponent(roomCode)}&deviceId=${encodeURIComponent(
-            generatedDeviceId
-          )}&role=${role}&deviceName=${encodeURIComponent(devNameToUse)}`
+          API_ROUTES.ws({
+            roomCode,
+            deviceId: generatedDeviceId,
+            role,
+            deviceName: devNameToUse,
+          })
         );
         if (res.ok && isMounted) {
           const data = (await res.json()) as { type?: string; state?: StageSessionState };
@@ -129,9 +133,9 @@ function JoinPageContent() {
                 }
 
                 if (role === "speaker") {
-                  router.push(`/control/presentation?roomCode=${encodeURIComponent(roomCode)}&role=speaker`);
+                  router.push(ROUTES.presentation(roomCode, "speaker"));
                 } else {
-                  router.push(`/control?roomCode=${encodeURIComponent(roomCode)}&role=operator`);
+                  router.push(ROUTES.control(roomCode, "operator"));
                 }
               } else if (myDev.approvalStatus === "rejected" || myDev.approvalStatus === "revoked") {
                 setStatus("rejected");
@@ -167,7 +171,7 @@ function JoinPageContent() {
 
     try {
       // 1. Validate room code with backend
-      const res = await fetch("/api/room/validate", {
+      const res = await fetch(API_ROUTES.room.validate, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ roomCode: normalizedCode }),

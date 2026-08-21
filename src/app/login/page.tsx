@@ -1,25 +1,29 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Lock, Mail, Shield, ArrowRight, AlertCircle } from "lucide-react";
+import { ROUTES, API_ROUTES } from "@/lib/routes";
 
-export default function LoginPage() {
+function LoginFormContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTarget = searchParams.get("redirect") || ROUTES.dashboard();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Auto-redirect to dashboard if host is already authenticated
+  // Auto-redirect to redirect target if host is already authenticated
   useEffect(() => {
     let isMounted = true;
-    fetch("/api/auth/me")
+    fetch(API_ROUTES.auth.me)
       .then((res) => (res && res.ok ? (res.json() as Promise<{ authenticated?: boolean }>) : null))
       .then((data) => {
         if (isMounted && data?.authenticated) {
-          router.replace("/dashboard");
+          router.replace(redirectTarget);
         }
       })
       .catch(() => {});
@@ -27,7 +31,7 @@ export default function LoginPage() {
     return () => {
       isMounted = false;
     };
-  }, [router]);
+  }, [redirectTarget, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +39,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(API_ROUTES.auth.login, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -46,7 +50,7 @@ export default function LoginPage() {
         throw new Error(data.error || "Authentication failed");
       }
 
-      router.push("/dashboard");
+      router.push(redirectTarget);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -63,7 +67,7 @@ export default function LoginPage() {
           </div>
           <h1 className="text-2xl font-bold text-white">Host Authentication</h1>
           <p className="text-slate-400 text-sm mt-1">
-            Account login for Stage Room Owners & Show Callers
+            Account login for Stage Room Owners &amp; Show Callers
           </p>
         </div>
 
@@ -123,7 +127,7 @@ export default function LoginPage() {
           <p className="text-xs text-slate-500 flex items-center justify-center space-x-1">
             <Shield className="w-3.5 h-3.5 text-purple-400" />
             <span>Guests do not require an account.</span>
-            <Link href="/join" className="text-purple-400 hover:underline font-medium">
+            <Link href={ROUTES.join()} className="text-purple-400 hover:underline font-medium">
               Join as Guest
             </Link>
           </p>
@@ -133,3 +137,10 @@ export default function LoginPage() {
   );
 }
 
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">Loading...</div>}>
+      <LoginFormContent />
+    </Suspense>
+  );
+}
