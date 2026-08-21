@@ -150,8 +150,6 @@ export class PermissionPolicy {
       "BRIEF_CLEAR",
       "DISPLAY_BLANK",
       "DISPLAY_SHOW",
-      "ZOOM_SET",
-      "ZOOM_RESET",
       "SOURCE_TAKE_LIVE",
       "SOURCE_TAKE_OFFLINE",
     ];
@@ -226,7 +224,7 @@ export class PermissionPolicy {
       return { allowed: true };
     }
 
-    // Speaker is allowed slide navigation & playback during presentation
+    // Speaker is allowed slide navigation, playback & zoom during presentation
     const allowedForSpeaker = [
       "SLIDE_NEXT",
       "SLIDE_PREVIOUS",
@@ -237,6 +235,8 @@ export class PermissionPolicy {
       "MEDIA_SEEK",
       "MEDIA_STOP",
       "MEDIA_DURATION_UPDATE",
+      "ZOOM_SET",
+      "ZOOM_RESET",
     ];
 
     if (allowedForSpeaker.includes(command.type)) {

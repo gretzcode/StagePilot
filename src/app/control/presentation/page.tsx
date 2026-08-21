@@ -164,10 +164,12 @@ function PresentationControlContent() {
   });
 
   const speakerMaterials = state?.materials.filter((m) => m.ownerDeviceId === deviceId) || [];
-  const displayMaterials = isSpeaker ? speakerMaterials : (state?.materials || []);
-  const isLiveVideo = Boolean(state?.presentation?.isPresenting && activeMaterial?.type === "video");
+  const hostMaterials = state?.materials.filter((m) => m.ownerRole !== "speaker" && (!m.ownerDeviceId || m.ownerDeviceId === state.host?.hostDeviceId || !state.devices[m.ownerDeviceId] || state.devices[m.ownerDeviceId]?.role !== "speaker")) || [];
+  const displayMaterials = isSpeaker ? speakerMaterials : hostMaterials;
+  const isVideoMaterial = Boolean(activeMaterial?.type === "video");
+  const isLiveVideo = isVideoMaterial;
   const isLivePlaylist = Boolean(
-    isLiveVideo && ((activeMaterial?.totalPages || 0) > 1 || (activeMaterial?.slides?.length || 0) > 1)
+    isVideoMaterial && ((activeMaterial?.totalPages || 0) > 1 || (activeMaterial?.slides?.length || 0) > 1)
   );
 
   const [localVideoTime, setLocalVideoTime] = useState(0);
@@ -487,12 +489,6 @@ function PresentationControlContent() {
     setShowUploader(false);
     console.log("[handleAddMaterial] Material added:", { id: newMaterial.id, type: newMaterial.type, name: newMaterial.name });
     dispatchCommand("MATERIAL_ADD", { material: newMaterial });
-
-    if (!state?.presentation.isPresenting) {
-      console.log("[handleAddMaterial] Starting presentation with material:", newMaterial.id);
-      dispatchCommand("PRESENTATION_START", { materialId: newMaterial.id, startPage: 1 });
-      setLeftTab("slides");
-    }
   };
 
   const [reimportingMatId, setReimportingMatId] = useState<string | null>(null);
@@ -1032,7 +1028,7 @@ function PresentationControlContent() {
                 onNumPagesDiscovered={handlePdfNumPagesDiscovered}
               >
                 {/* Interactive Zoom Area Selection Overlay directly inside 16:9 Stage */}
-                {!isSpeaker && isZoomAreaActive && state?.presentation.isPresenting && activeMaterial && (
+                {isZoomAreaActive && activeMaterial && activeMaterial.type !== "video" && (
                   <ZoomAreaOverlay
                     isActive={isZoomAreaActive}
                     onSelectRegion={handleSelectZoomRegion}
@@ -1042,8 +1038,8 @@ function PresentationControlContent() {
               </SlideViewer>
             )}
 
-            {/* Floating Zoom Controls Widget (Host & Operator only) */}
-            {!isSpeaker && state?.presentation.isPresenting && activeMaterial && (
+            {/* Floating Zoom Controls Widget */}
+            {activeMaterial && activeMaterial.type !== "video" && (
               <div
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerUp={(e) => e.stopPropagation()}

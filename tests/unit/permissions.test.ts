@@ -182,7 +182,7 @@ describe("PermissionPolicy", () => {
       isHostDevice: false,
     };
 
-    // Speaker is allowed slide navigation
+    // Speaker is allowed slide navigation and zoom
     const slideCmd: StageCommand = {
       type: "SLIDE_NEXT",
       commandId: "c-spk-1",
@@ -200,6 +200,15 @@ describe("PermissionPolicy", () => {
       payload: { pageNumber: 3 },
     };
     expect(PermissionPolicy.canExecuteCommand(state, speakerDevId, slideGotoCmd).allowed).toBe(true);
+
+    const zoomSetCmd: StageCommand = {
+      type: "ZOOM_SET",
+      commandId: "c-spk-zoom",
+      senderDeviceId: speakerDevId,
+      timestamp: Date.now(),
+      payload: { scale: 2.0, panX: 10, panY: 10 },
+    };
+    expect(PermissionPolicy.canExecuteCommand(state, speakerDevId, zoomSetCmd).allowed).toBe(true);
 
     // Speaker is rejected from timer control
     const timerCmd: StageCommand = {

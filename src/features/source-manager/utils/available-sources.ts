@@ -14,12 +14,14 @@ export function getAvailableSources(state: StageSessionState | null): AvailableS
 
   const sources: AvailableSource[] = [];
   const liveSource = state.liveSource;
+  const activeScreenShareDeviceIds = new Set<string>();
 
   // 1. Active Screen Share Sources (Ephemeral active realtime streams from Speakers)
   if (state.screenShareSources) {
     for (const [deviceId, screenSource] of Object.entries(state.screenShareSources)) {
       if (screenSource.status !== "active") continue;
 
+      activeScreenShareDeviceIds.add(deviceId);
       const isLive = Boolean(
         liveSource?.type === "screen_share" && liveSource.id === deviceId
       );
@@ -39,6 +41,7 @@ export function getAvailableSources(state: StageSessionState | null): AvailableS
   }
 
   // 2. Speaker Materials (Materials owned by speakers or active in presentation)
+  // If speaker is sharing screen, screen share takes precedence as their active output.
   if (state.materials) {
     for (const mat of state.materials) {
       if (mat.status === "deleted") continue;
@@ -48,6 +51,11 @@ export function getAvailableSources(state: StageSessionState | null): AvailableS
         (mat.ownerDeviceId && state.devices[mat.ownerDeviceId]?.role === "speaker");
 
       if (isSpeakerMaterial || (state.presentation?.materialId === mat.id && mat.ownerRole !== "host")) {
+        // If this speaker is actively sharing screen, their screen share takes precedence
+        if (mat.ownerDeviceId && activeScreenShareDeviceIds.has(mat.ownerDeviceId)) {
+          continue;
+        }
+
         const isLive = Boolean(
           liveSource?.type === "material" && liveSource.id === mat.id
         );

@@ -344,10 +344,10 @@ function ControlRoomContent() {
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center space-x-2">
                   <ListVideo className="w-4 h-4 text-purple-400" />
-                  <span>Stage Materials Queue ({state?.materials.length || 0})</span>
+                  <span>Stage Materials Queue ({state?.materials ? state.materials.filter((m) => m.ownerRole !== "speaker" && (!m.ownerDeviceId || m.ownerDeviceId === state.host?.hostDeviceId || !state.devices[m.ownerDeviceId] || state.devices[m.ownerDeviceId]?.role !== "speaker")).length : 0})</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Tambahkan materi presentasi (Google Slides, Canva, PDF, Video) dan aktifkan penayangan saat giliran pembicara.
+                  Materi presentasi utama panggung (Google Slides, Canva, PDF, Video) milik Host & Operator.
                 </p>
               </div>
 
@@ -371,8 +371,8 @@ function ControlRoomContent() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 pt-1">
-              {state?.materials && state.materials.length > 0 ? (
-                state.materials.map((mat) => {
+              {state?.materials && state.materials.filter((m) => m.ownerRole !== "speaker" && (!m.ownerDeviceId || m.ownerDeviceId === state.host?.hostDeviceId || !state.devices[m.ownerDeviceId] || state.devices[m.ownerDeviceId]?.role !== "speaker")).length > 0 ? (
+                state.materials.filter((m) => m.ownerRole !== "speaker" && (!m.ownerDeviceId || m.ownerDeviceId === state.host?.hostDeviceId || !state.devices[m.ownerDeviceId] || state.devices[m.ownerDeviceId]?.role !== "speaker")).map((mat) => {
                   const isLive = state.presentation.isPresenting && state.presentation.materialId === mat.id;
 
                   return (

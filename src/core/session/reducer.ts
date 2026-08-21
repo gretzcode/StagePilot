@@ -220,6 +220,26 @@ export function stageSessionReducer(
         };
       }
 
+      // If this was initiated by a Speaker:
+      // 1. Starting material presentation stops/supersedes active screen share for this speaker
+      if (!isHostOrOperator) {
+        if (nextState.screenShareSources?.[command.senderDeviceId]) {
+          delete nextState.screenShareSources[command.senderDeviceId];
+        }
+        // 2. If this Speaker was currently LIVE on stage via Screen Share, switch live to this material
+        if (nextState.liveSource?.type === "screen_share" && nextState.liveSource.id === command.senderDeviceId && material) {
+          nextState.liveSource = {
+            type: "material",
+            id: material.id,
+            ownerDeviceId: material.ownerDeviceId,
+            ownerName: material.ownerName,
+            ownerRole: material.ownerRole,
+            title: material.name,
+            takenLiveAt: now,
+          };
+        }
+      }
+
       const isLiveNow = Boolean(
         isHostOrOperator ||
         (nextState.liveSource?.type === "material" && nextState.liveSource.id === materialId)
@@ -582,6 +602,19 @@ export function stageSessionReducer(
         stoppedAt: null,
         updatedAt: now,
       };
+
+      // If this speaker's material was currently LIVE on stage, auto-switch the stage broadcast to their screen share
+      if (nextState.liveSource?.type === "material" && nextState.liveSource.ownerDeviceId === command.senderDeviceId) {
+        nextState.liveSource = {
+          type: "screen_share",
+          id: command.senderDeviceId,
+          ownerDeviceId: command.senderDeviceId,
+          ownerName: senderDevice?.name || "Speaker",
+          ownerRole: "speaker",
+          title: `${senderDevice?.name || "Speaker"}'s Screen`,
+          takenLiveAt: now,
+        };
+      }
       break;
     }
 

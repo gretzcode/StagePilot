@@ -151,9 +151,24 @@ describe("Source Manager & Take Live (Corrected Semantics)", () => {
   describe("1. Available Sources Semantics (Speaker Sources in Source Manager)", () => {
     it("should include Speaker screen share and Speaker material in getAvailableSources()", () => {
       const state = setupRoomState();
+      // Add Speaker B material (who is not sharing screen)
+      state.materials.push({
+        id: "mat-speaker-b",
+        name: "Harman Product Roadmap",
+        type: "pdf",
+        url: "https://example.com/b.pdf",
+        totalPages: 8,
+        slides: [{ index: 1, title: "Roadmap 1" }],
+        uploadedAt: Date.now(),
+        ownerDeviceId: speakerBDevId,
+        ownerRole: "speaker",
+        ownerName: "Speaker Harman",
+        status: "ready",
+      });
+
       const sources = getAvailableSources(state);
 
-      // Should contain 1 active screen share and 1 speaker material (NOT the host material)
+      // Should contain 1 active screen share (Armand) and 1 speaker material (Harman) (NOT the host material)
       expect(sources.length).toBe(2);
 
       const screenSource = sources.find((s) => s.type === "screen_share");
@@ -163,8 +178,8 @@ describe("Source Manager & Take Live (Corrected Semantics)", () => {
 
       const matSource = sources.find((s) => s.type === "material");
       expect(matSource).toBeDefined();
-      expect(matSource?.id).toBe("mat-speaker-a");
-      expect(matSource?.ownerName).toBe("Speaker Armand");
+      expect(matSource?.id).toBe("mat-speaker-b");
+      expect(matSource?.ownerName).toBe("Speaker Harman");
 
       // Host material is not an ephemeral speaker source
       expect(sources.find((s) => s.id === "mat-host-01")).toBeUndefined();
@@ -502,6 +517,72 @@ describe("Source Manager & Take Live (Corrected Semantics)", () => {
       expect(state.liveSource?.type).toBe("material");
       expect(state.presentation.isPresenting).toBe(true);
       expect(state.presentation.status).toBe("live");
+    });
+
+    it("should seamlessly switch live source when Speaker starts Screen Share while live on Material", () => {
+      let state = setupRoomState();
+
+      // 1. Host takes Armand's material LIVE
+      state = stageSessionReducer(state, {
+        type: "SOURCE_TAKE_LIVE",
+        commandId: "cmd-live-armand",
+        senderDeviceId: hostDeviceId,
+        timestamp: Date.now(),
+        payload: { sourceType: "material", sourceId: "mat-speaker-a" },
+      } as StageCommand);
+
+      expect(state.liveSource?.type).toBe("material");
+      expect(state.liveSource?.id).toBe("mat-speaker-a");
+
+      // 2. Speaker Armand starts Screen Share while live
+      state = stageSessionReducer(state, {
+        type: "SCREEN_SHARE_START",
+        commandId: "cmd-armand-ss",
+        senderDeviceId: speakerADevId,
+        timestamp: Date.now(),
+        payload: {},
+      } as StageCommand);
+
+      // Stage live output seamlessly switches to Armand's Screen Share
+      expect(state.liveSource?.type).toBe("screen_share");
+      expect(state.liveSource?.id).toBe(speakerADevId);
+      expect(state.liveSource?.ownerName).toBe("Speaker Armand");
+
+      // In available sources, screen share supersedes material
+      const sources = getAvailableSources(state);
+      expect(sources.find((s) => s.id === speakerADevId && s.type === "screen_share")?.isLive).toBe(true);
+      expect(sources.find((s) => s.id === "mat-speaker-a")).toBeUndefined();
+    });
+
+    it("should seamlessly switch live source when Speaker starts Material while live on Screen Share", () => {
+      let state = setupRoomState();
+
+      // 1. Host takes Armand's Screen Share LIVE
+      state = stageSessionReducer(state, {
+        type: "SOURCE_TAKE_LIVE",
+        commandId: "cmd-live-ss",
+        senderDeviceId: hostDeviceId,
+        timestamp: Date.now(),
+        payload: { sourceType: "screen_share", sourceId: speakerADevId },
+      } as StageCommand);
+
+      expect(state.liveSource?.type).toBe("screen_share");
+      expect(state.liveSource?.id).toBe(speakerADevId);
+
+      // 2. Speaker Armand starts presenting his Material while live
+      state = stageSessionReducer(state, {
+        type: "PRESENTATION_START",
+        commandId: "cmd-armand-mat",
+        senderDeviceId: speakerADevId,
+        timestamp: Date.now(),
+        payload: { materialId: "mat-speaker-a", startPage: 1 },
+      } as StageCommand);
+
+      // Stage live output seamlessly switches to Armand's Material
+      expect(state.liveSource?.type).toBe("material");
+      expect(state.liveSource?.id).toBe("mat-speaker-a");
+      expect(state.presentation.materialId).toBe("mat-speaker-a");
+      expect(state.presentation.isPresenting).toBe(true);
     });
   });
 });
