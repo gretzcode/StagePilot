@@ -126,7 +126,20 @@ function ControlRoomContent() {
     );
   }
 
-  const allDevices = state ? Object.values(state.devices) : [];
+  // 4. Initial State Loading Guard
+  if (!state) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white text-center font-sans select-none">
+        <div className="w-14 h-14 rounded-3xl bg-purple-950/80 border border-purple-800/60 flex items-center justify-center mb-4 shadow-xl">
+          <div className="w-7 h-7 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+        <h2 className="text-base font-bold text-white mb-1">Menghubungkan ke Stage Room...</h2>
+        <p className="text-xs text-slate-400 max-w-xs">Memuat status panggung realtime.</p>
+      </div>
+    );
+  }
+
+  const allDevices = Object.values(state.devices);
   const pendingDevices = allDevices.filter((d) => d.approvalStatus === "pending");
 
   // Deduplicate host entries: exactly 1 host entry + all approved guest devices

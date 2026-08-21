@@ -138,7 +138,7 @@ function PresentationControlContent() {
         dispatchCommand("SLIDE_GOTO", { pageNumber: 1 });
       } else if (e.key === "End") {
         e.preventDefault();
-        if (state?.presentation.totalPages) {
+        if (state?.presentation?.totalPages) {
           dispatchCommand("SLIDE_GOTO", { pageNumber: state.presentation.totalPages });
         }
       }
@@ -148,7 +148,7 @@ function PresentationControlContent() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [dispatchCommand, state]);
 
-  const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
+  const activeMaterial = state?.materials.find((m) => m.id === state?.presentation?.materialId) || null;
   const liveSource = state?.liveSource;
   const isLiveScreenShare = Boolean(
     liveSource?.type === "screen_share" &&
@@ -164,7 +164,7 @@ function PresentationControlContent() {
 
   const speakerMaterials = state?.materials.filter((m) => m.ownerDeviceId === deviceId) || [];
   const displayMaterials = isSpeaker ? speakerMaterials : (state?.materials || []);
-  const isLiveVideo = Boolean(state?.presentation.isPresenting && activeMaterial?.type === "video");
+  const isLiveVideo = Boolean(state?.presentation?.isPresenting && activeMaterial?.type === "video");
   const isLivePlaylist = Boolean(
     isLiveVideo && ((activeMaterial?.totalPages || 0) > 1 || (activeMaterial?.slides?.length || 0) > 1)
   );
@@ -174,10 +174,10 @@ function PresentationControlContent() {
   // Reset video seekbar time when changing slides / videos in playlist
   useEffect(() => {
     setLocalVideoTime(0);
-  }, [state?.presentation.currentSlide, state?.presentation.materialId]);
+  }, [state?.presentation?.currentSlide, state?.presentation?.materialId]);
 
   useEffect(() => {
-    if (!state?.presentation.mediaState) return;
+    if (!state?.presentation?.mediaState) return;
     const media = state.presentation.mediaState;
     if (media.status !== "playing") {
       setLocalVideoTime(media.currentTime);
@@ -445,7 +445,7 @@ function PresentationControlContent() {
   const handlePdfNumPagesDiscovered = (numPages: number) => {
     if (!activeMaterial) return;
     if (numPages <= 1 || numPages === activeMaterial.totalPages) return;
-    const isLive = state?.presentation.isPresenting && state.presentation.materialId === activeMaterial.id;
+    const isLive = Boolean(state?.presentation?.isPresenting && state?.presentation?.materialId === activeMaterial.id);
     // When not live, safely update the material in DO state
     if (!isLive) {
       const expandedSlides = Array.from({ length: numPages }, (_, i) => ({
@@ -465,10 +465,10 @@ function PresentationControlContent() {
   };
   // Auto-switch sidebar tab to 'slides' whenever GO LIVE / PRESENT is clicked or active
   useEffect(() => {
-    if (state?.presentation.isPresenting && state.presentation.materialId) {
+    if (state?.presentation?.isPresenting && state?.presentation?.materialId) {
       setLeftTab("slides");
     }
-  }, [state?.presentation.isPresenting, state?.presentation.materialId]);
+  }, [state?.presentation?.isPresenting, state?.presentation?.materialId]);
 
   const handleExitToControl = () => {
     router.push(`/control?roomCode=${encodeURIComponent(roomCode)}${requestedRole === "host" ? "&role=host" : "&role=control"}`);
@@ -499,7 +499,7 @@ function PresentationControlContent() {
 
   const handleReimportCanva = async (mat: Material) => {
     if (reimportingMatId) return;
-    const isLive = state?.presentation.isPresenting && state.presentation.materialId === mat.id;
+    const isLive = Boolean(state?.presentation?.isPresenting && state?.presentation?.materialId === mat.id);
     if (isLive) {
       alert("Hentikan presentasi terlebih dahulu sebelum menyinkronkan ulang materi untuk mencegah perubahan mendadak pada tampilan layar.");
       return;
@@ -541,7 +541,7 @@ function PresentationControlContent() {
 
   const handleSyncPdf = async (mat: Material) => {
     if (reimportingMatId) return;
-    const isLive = state?.presentation.isPresenting && state.presentation.materialId === mat.id;
+    const isLive = Boolean(state?.presentation?.isPresenting && state?.presentation?.materialId === mat.id);
     if (isLive) {
       alert("Hentikan presentasi terlebih dahulu sebelum menyinkronkan ulang materi untuk mencegah perubahan mendadak pada tampilan layar.");
       return;
@@ -608,7 +608,20 @@ function PresentationControlContent() {
     );
   }
 
-  // 4. Approved Presentation Control Surface
+  // 4. Initial State Loading Guard
+  if (!state) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-white text-center font-sans select-none">
+        <div className="w-14 h-14 rounded-3xl bg-purple-950/80 border border-purple-800/60 flex items-center justify-center mb-4 shadow-xl">
+          <div className="w-7 h-7 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+        <h2 className="text-base font-bold text-white mb-1">Menghubungkan ke Stage Room...</h2>
+        <p className="text-xs text-slate-400 max-w-xs">Memuat status presentasi panggung realtime.</p>
+      </div>
+    );
+  }
+
+  // 5. Approved Presentation Control Surface
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden">
       {/* Top Stage Control Header — Ultra-Clean Single Row for Mobile & Desktop */}
@@ -770,7 +783,7 @@ function PresentationControlContent() {
                       </div>
                     ) : (
                       displayMaterials.map((mat) => {
-                        const isLive = Boolean(state?.presentation.isPresenting && state.presentation.materialId === mat.id);
+                        const isLive = Boolean(state?.presentation?.isPresenting && state?.presentation?.materialId === mat.id);
                         const isCanvaStale = isCanvaMaterialStale(mat);
                         const isPdfStale = isPdfMaterialStale(mat);
                         const isStale = isCanvaStale || isPdfStale;
@@ -1073,7 +1086,7 @@ function PresentationControlContent() {
                   className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500 hover:accent-purple-400"
                 />
                 <span className="text-[11px] font-mono text-slate-400 w-12">
-                  {state?.presentation.mediaState?.duration ? formatVideoTime(state.presentation.mediaState.duration) : "--:--"}
+                  {state?.presentation?.mediaState?.duration ? formatVideoTime(state.presentation.mediaState.duration) : "--:--"}
                 </span>
               </div>
 
@@ -1084,20 +1097,20 @@ function PresentationControlContent() {
                     <div className="flex items-center space-x-1 mr-1 border-r border-slate-800 pr-2">
                       <button
                         onClick={() => dispatchCommand("SLIDE_PREVIOUS")}
-                        disabled={!state?.presentation.currentSlide || state.presentation.currentSlide <= 1}
+                        disabled={!state?.presentation?.currentSlide || (state?.presentation?.currentSlide || 1) <= 1}
                         className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 hover:text-white transition cursor-pointer"
                         title="Previous Video in Playlist"
                       >
                         <ChevronLeft className="w-3.5 h-3.5" />
                       </button>
                       <span className="text-[10px] font-mono text-purple-300 font-bold px-1 whitespace-nowrap">
-                        #{state?.presentation.currentSlide || 1}/{state?.presentation.totalSlides || state?.presentation.totalPages || 1}
+                        #{state?.presentation?.currentSlide || 1}/{state?.presentation?.totalSlides || state?.presentation?.totalPages || 1}
                       </span>
                       <button
                         onClick={() => dispatchCommand("SLIDE_NEXT")}
                         disabled={
-                          !state?.presentation.currentSlide ||
-                          state.presentation.currentSlide >= (state?.presentation.totalSlides || state?.presentation.totalPages || 1)
+                          !state?.presentation?.currentSlide ||
+                          (state?.presentation?.currentSlide || 1) >= (state?.presentation?.totalSlides || state?.presentation?.totalPages || 1)
                         }
                         className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 hover:text-white transition cursor-pointer"
                         title="Next Video in Playlist"
@@ -1134,7 +1147,7 @@ function PresentationControlContent() {
 
                   <button
                     onClick={() => {
-                      const isPlaying = state?.presentation.mediaState?.status === "playing";
+                      const isPlaying = state?.presentation?.mediaState?.status === "playing";
                       if (isPlaying) {
                         dispatchCommand("MEDIA_PAUSE", { currentTime: localVideoTime });
                       } else {
@@ -1143,7 +1156,7 @@ function PresentationControlContent() {
                     }}
                     className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center space-x-1.5 shadow glow-purple transition cursor-pointer"
                   >
-                    {state?.presentation.mediaState?.status === "playing" ? (
+                    {state?.presentation?.mediaState?.status === "playing" ? (
                       <>
                         <Pause className="w-3.5 h-3.5" />
                         <span>PAUSE</span>
@@ -1166,7 +1179,7 @@ function PresentationControlContent() {
                     title="Forward 10s"
                   >
                     <RotateCw className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">+10s</span>
+                    <span className="hidden md:inline">+10s</span>
                   </button>
                 </div>
 
@@ -1188,7 +1201,7 @@ function PresentationControlContent() {
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => dispatchCommand("SLIDE_PREVIOUS")}
-                  disabled={!state?.presentation.currentSlide || state.presentation.currentSlide <= 1}
+                  disabled={!state?.presentation?.currentSlide || (state?.presentation?.currentSlide || 1) <= 1}
                   className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition cursor-pointer"
                 >
                   <ChevronLeft className="w-5 h-5" />
@@ -1196,12 +1209,12 @@ function PresentationControlContent() {
                 <button
                   onClick={() => dispatchCommand("SLIDE_NEXT")}
                   disabled={
-                    !state?.presentation.currentSlide ||
+                    !state?.presentation?.currentSlide ||
                     (activeMaterial?.type !== "url" &&
                       activeMaterial?.type !== "canva" &&
-                      !!(state.presentation.totalSlides || state.presentation.totalPages) &&
-                      (state.presentation.totalSlides || state.presentation.totalPages) > 1 &&
-                      state.presentation.currentSlide >= (state.presentation.totalSlides || state.presentation.totalPages))
+                      Boolean(state?.presentation?.totalSlides || state?.presentation?.totalPages) &&
+                      (state?.presentation?.totalSlides || state?.presentation?.totalPages || 1) > 1 &&
+                      (state?.presentation?.currentSlide || 1) >= (state?.presentation?.totalSlides || state?.presentation?.totalPages || 1))
                   }
                   className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition cursor-pointer"
                   title="Next Slide (Right Arrow)"
@@ -1211,7 +1224,7 @@ function PresentationControlContent() {
               </div>
 
               <span className="font-mono text-xs sm:text-sm font-bold text-slate-300">
-                SLIDE {state?.presentation.currentSlide || 1} / {state?.presentation.totalSlides || state?.presentation.totalPages || 1}
+                SLIDE {state?.presentation?.currentSlide || 1} / {state?.presentation?.totalSlides || state?.presentation?.totalPages || 1}
               </span>
 
               <button
