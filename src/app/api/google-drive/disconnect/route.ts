@@ -1,8 +1,9 @@
-﻿import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { validateHostSessionRequest } from '@/lib/auth/session';
 import { applySecurityHeaders } from '@/lib/security/headers';
 import { IntegrationCredentialStore } from '@/lib/integrations/credential-store';
+import { resetGoogleDriveTokenCache } from '@/features/material/storage/providers/google-drive';
 
 export async function POST(request: Request) {
   const hostUser = await validateHostSessionRequest(request);
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
 
   const credStore = new IntegrationCredentialStore(env);
   await credStore.deleteCredential(hostUser.id, 'google_drive');
+  resetGoogleDriveTokenCache();
 
   return applySecurityHeaders(NextResponse.json({ success: true, connected: false }));
 }

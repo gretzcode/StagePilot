@@ -11,6 +11,7 @@ import {
 } from "@/lib/google-drive/oauth";
 import { OAuthTransactionStore } from "@/lib/google-drive/oauth-transactions";
 import { IntegrationCredentialStore } from "@/lib/integrations/credential-store";
+import { resetGoogleDriveTokenCache } from "@/features/material/storage/providers/google-drive";
 
 export async function GET(request: Request) {
   try {
@@ -75,6 +76,7 @@ export async function GET(request: Request) {
       accountEmail,
       accountName,
     });
+    resetGoogleDriveTokenCache();
 
     const redirectUrl = new URL("/dashboard?gdrive=connected", url.origin);
     const response = NextResponse.redirect(redirectUrl);
