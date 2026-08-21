@@ -157,11 +157,17 @@ function PresentationControlContent() {
   );
   const activeScreenShare = isLiveScreenShare && liveSource ? state?.screenShareSources?.[liveSource.id] : null;
 
+  const [localScreenStream, setLocalScreenStream] = useState<MediaStream | null>(null);
+
   const { stream: liveScreenStream, status: liveScreenStatus } = useScreenShareSubscriber({
     sourceId: isLiveScreenShare && liveSource ? liveSource.id : null,
     deviceId,
     sendSignal: sendWebRtcSignal,
   });
+
+  const isMyLiveScreenShare = Boolean(isLiveScreenShare && liveSource?.id === deviceId);
+  const activeViewerStream = isMyLiveScreenShare ? (localScreenStream || liveScreenStream) : liveScreenStream;
+  const activeViewerStatus = isMyLiveScreenShare ? (localScreenStream ? "connected" : liveScreenStatus) : liveScreenStatus;
 
   const speakerMaterials = state?.materials.filter((m) => m.ownerDeviceId === deviceId) || [];
   const hostMaterials = state?.materials.filter((m) => m.ownerRole !== "speaker" && (!m.ownerDeviceId || m.ownerDeviceId === state.host?.hostDeviceId || !state.devices[m.ownerDeviceId] || state.devices[m.ownerDeviceId]?.role !== "speaker")) || [];
@@ -783,6 +789,7 @@ function PresentationControlContent() {
                         onScreenShareStart={handleScreenShareStart}
                         onScreenShareStop={handleScreenShareStop}
                         sendSignal={sendWebRtcSignal}
+                        onStreamChange={setLocalScreenStream}
                       />
                     </div>
                   )}
@@ -996,8 +1003,8 @@ function PresentationControlContent() {
           >
             {isLiveScreenShare ? (
               <ScreenShareLiveViewer
-                stream={liveScreenStream}
-                status={liveScreenStatus}
+                stream={activeViewerStream}
+                status={activeViewerStatus}
                 speakerName={activeScreenShare?.speakerName}
               />
             ) : (

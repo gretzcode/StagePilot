@@ -47,6 +47,7 @@ export function useScreenShareSubscriber({
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const sourceIdRef = useRef<string | null>(sourceId);
   sourceIdRef.current = sourceId;
+  const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
 
   const cleanupPeerConnection = useCallback(() => {
     if (pcRef.current) {
@@ -58,21 +59,22 @@ export function useScreenShareSubscriber({
       } catch {}
       pcRef.current = null;
     }
+    pendingCandidatesRef.current = [];
     setStream(null);
     setStatus("idle");
     setError(null);
   }, []);
 
   useEffect(() => {
-    // If no screen share is currently live, reset
-    if (!sourceId) {
+    // If no screen share is currently live, or if the source is the current local device, reset
+    if (!sourceId || sourceId === deviceId) {
       cleanupPeerConnection();
       return;
     }
 
     if (typeof RTCPeerConnection === "undefined") {
       setStatus("failed");
-      setError("Browser does not support WebRTC");
+      setError("Perangkat ini belum mendukung transmisi video langsung.");
       return;
     }
 
@@ -82,6 +84,7 @@ export function useScreenShareSubscriber({
 
     const pc = new RTCPeerConnection(DEFAULT_RTC_CONFIG);
     pcRef.current = pc;
+    pendingCandidatesRef.current = [];
 
     // Handle incoming video track from the Speaker
     pc.ontrack = (event) => {
@@ -113,21 +116,33 @@ export function useScreenShareSubscriber({
         setStatus("connected");
       } else if (state === "failed") {
         setStatus("failed");
-        setError("Koneksi WebRTC gagal terhubung ke pembicara.");
+        setError("Transmisi layar terputus. Mencoba menghubungkan kembali...");
       } else if (state === "closed" || state === "disconnected") {
         setStatus("closed");
       }
     };
 
     // Request the stream from the Speaker
-    sendSignal({
-      targetDeviceId: sourceId,
-      senderDeviceId: deviceId,
-      sourceId,
-      signal: {
-        type: "request_stream",
-      },
-    });
+    const requestStream = () => {
+      if (!sourceIdRef.current) return;
+      sendSignal({
+        targetDeviceId: sourceIdRef.current,
+        senderDeviceId: deviceId,
+        sourceId: sourceIdRef.current,
+        signal: {
+          type: "request_stream",
+        },
+      });
+    };
+
+    requestStream();
+
+    // Request retry timer if initial handshake takes longer than 2.5s
+    const retryTimer = setTimeout(() => {
+      if (pcRef.current && pcRef.current.connectionState !== "connected" && pcRef.current.signalingState === "stable") {
+        requestStream();
+      }
+    }, 2500);
 
     // Listen for WebRTC signals from the Speaker
     const handleSignalEvent = async (e: Event) => {
@@ -142,15 +157,29 @@ export function useScreenShareSubscriber({
       if (!currentPc) return;
 
       if (signal.type === "offer" && signal.sdp) {
+        // Prevent duplicate offer processing if already negotiating
+        if (currentPc.signalingState !== "stable" && currentPc.signalingState !== "have-local-offer") {
+          return;
+        }
+
         try {
           await currentPc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+
+          // Drain any queued ICE candidates that arrived before remote description was set
+          while (pendingCandidatesRef.current.length > 0) {
+            const cand = pendingCandidatesRef.current.shift();
+            if (cand) {
+              await currentPc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+            }
+          }
+
           const answer = await currentPc.createAnswer();
           await currentPc.setLocalDescription(answer);
 
           sendSignal({
-            targetDeviceId: payload.senderDeviceId,
+            targetDeviceId: payload.senderDeviceId || sourceIdRef.current || "",
             senderDeviceId: deviceId,
-            sourceId: payload.senderDeviceId,
+            sourceId: payload.senderDeviceId || sourceIdRef.current || "",
             signal: {
               type: "answer",
               sdp: {
@@ -160,15 +189,17 @@ export function useScreenShareSubscriber({
             },
           });
         } catch (err) {
-          console.error("[WebRTC Subscriber] Failed to handle offer:", err);
-          setStatus("failed");
-          setError("Gagal menegosiasi koneksi video.");
+          console.warn("[ScreenShare Subscriber] Offer negotiation notice:", err);
         }
       } else if (signal.type === "candidate" && signal.candidate) {
         try {
-          await currentPc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          if (currentPc.remoteDescription && currentPc.remoteDescription.type) {
+            await currentPc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          } else {
+            pendingCandidatesRef.current.push(signal.candidate);
+          }
         } catch (err) {
-          console.error("[WebRTC Subscriber] Failed to add ICE candidate:", err);
+          console.warn("[ScreenShare Subscriber] Candidate handling notice:", err);
         }
       }
     };
@@ -176,6 +207,7 @@ export function useScreenShareSubscriber({
     window.addEventListener("stagepilot_webrtc_signal", handleSignalEvent);
 
     return () => {
+      clearTimeout(retryTimer);
       window.removeEventListener("stagepilot_webrtc_signal", handleSignalEvent);
       cleanupPeerConnection();
     };

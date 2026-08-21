@@ -30,6 +30,7 @@ export function useScreenSharePublisher({
   sendSignal,
 }: UseScreenSharePublisherOptions) {
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const streamRef = useRef<MediaStream | null>(stream);
   streamRef.current = stream;
 
@@ -43,6 +44,7 @@ export function useScreenSharePublisher({
       } catch {}
     });
     peerConnectionsRef.current.clear();
+    pendingCandidatesRef.current.clear();
   }, []);
 
   // Handle a new subscriber requesting the stream
@@ -59,6 +61,7 @@ export function useScreenSharePublisher({
         } catch {}
         peerConnectionsRef.current.delete(subscriberDeviceId);
       }
+      pendingCandidatesRef.current.delete(subscriberDeviceId);
 
       try {
         const pc = new RTCPeerConnection(DEFAULT_RTC_CONFIG);
@@ -87,6 +90,7 @@ export function useScreenSharePublisher({
         pc.onconnectionstatechange = () => {
           if (pc.connectionState === "failed" || pc.connectionState === "closed") {
             peerConnectionsRef.current.delete(subscriberDeviceId);
+            pendingCandidatesRef.current.delete(subscriberDeviceId);
           }
         };
 
@@ -110,7 +114,7 @@ export function useScreenSharePublisher({
           },
         });
       } catch (err) {
-        console.error("[WebRTC Publisher] Failed to create offer:", err);
+        console.warn("[ScreenShare Publisher] Error creating offer:", err);
       }
     },
     [deviceId, sendSignal]
@@ -136,17 +140,33 @@ export function useScreenSharePublisher({
         if (pc && pc.signalingState === "have-local-offer") {
           try {
             await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+
+            // Drain any pending ICE candidates for this subscriber
+            const queued = pendingCandidatesRef.current.get(subscriberId) || [];
+            while (queued.length > 0) {
+              const cand = queued.shift();
+              if (cand) {
+                await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+              }
+            }
+            pendingCandidatesRef.current.delete(subscriberId);
           } catch (err) {
-            console.error("[WebRTC Publisher] Failed to set remote answer:", err);
+            console.warn("[ScreenShare Publisher] Notice setting answer:", err);
           }
         }
       } else if (signal.type === "candidate" && signal.candidate) {
         const pc = peerConnectionsRef.current.get(subscriberId);
         if (pc) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-          } catch (err) {
-            console.error("[WebRTC Publisher] Failed to add ICE candidate:", err);
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+            } catch (err) {
+              console.warn("[ScreenShare Publisher] Notice adding candidate:", err);
+            }
+          } else {
+            const list = pendingCandidatesRef.current.get(subscriberId) || [];
+            list.push(signal.candidate);
+            pendingCandidatesRef.current.set(subscriberId, list);
           }
         }
       }

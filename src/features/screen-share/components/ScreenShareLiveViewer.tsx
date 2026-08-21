@@ -37,10 +37,18 @@ export function ScreenShareLiveViewer({
     if (!video) return;
 
     if (stream) {
+      video.muted = true;
+      video.defaultMuted = true;
+      video.playsInline = true;
       video.srcObject = stream;
-      video.play().catch(() => {
-        // Autoplay policy handling
-      });
+      const playPromise = video.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn("[ScreenShareLiveViewer] Autoplay interrupted, retrying muted play:", err);
+          video.muted = true;
+          video.play().catch(() => {});
+        });
+      }
     } else {
       video.srcObject = null;
     }
@@ -58,11 +66,11 @@ export function ScreenShareLiveViewer({
         <div className="w-16 h-16 rounded-2xl bg-cyan-950/80 border border-cyan-800/60 flex items-center justify-center text-cyan-400 mb-4 shadow-xl">
           <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
         </div>
-        <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-950 border border-cyan-800 text-cyan-300 text-xs font-mono font-bold uppercase tracking-wider mb-2">
-          <span>Menghubungkan Layar...</span>
+        <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-cyan-950 border border-cyan-800 text-cyan-300 text-xs font-mono font-bold uppercase tracking-wider mb-2">
+          <span>Menghubungkan Transmisi Layar...</span>
         </div>
-        <p className="text-sm font-semibold text-white">{speakerName}&apos;s Screen</p>
-        <p className="text-xs text-slate-500 mt-1">Menyiapkan koneksi video langsung (WebRTC)...</p>
+        <p className="text-sm font-semibold text-white">Layar {speakerName}</p>
+        <p className="text-xs text-slate-400 mt-1">Menyiapkan saluran video aman & berdefinisi tinggi...</p>
       </div>
     );
   }
@@ -73,9 +81,9 @@ export function ScreenShareLiveViewer({
         <div className="w-16 h-16 rounded-2xl bg-rose-950/80 border border-rose-800/60 flex items-center justify-center text-rose-400 mb-4 shadow-xl">
           <AlertCircle className="w-8 h-8 text-rose-400" />
         </div>
-        <p className="text-sm font-bold text-rose-300">Koneksi Video Terputus</p>
+        <p className="text-sm font-bold text-rose-300">Transmisi Layar Belum Terhubung</p>
         <p className="text-xs text-slate-400 max-w-sm mt-1">
-          Tidak dapat menerima stream layar dari {speakerName}. Menunggu pembicara membagikan ulang.
+          Sedang menghubungkan ulang ke layar {speakerName}. Pastikan jendela atau aplikasi tetap aktif.
         </p>
       </div>
     );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { Monitor, MonitorOff, AlertCircle, Loader2 } from "lucide-react";
 import { WebRtcSignalPayload } from "@/core/realtime/protocol";
 import { useScreenShare, ScreenShareState } from "../hooks/useScreenShare";
@@ -17,6 +17,8 @@ interface ScreenSharePanelProps {
   onScreenShareStop: () => void;
   /** WebRTC signaling callback */
   sendSignal?: (payload: WebRtcSignalPayload) => void;
+  /** Callback when local MediaStream changes */
+  onStreamChange?: (stream: MediaStream | null) => void;
 }
 
 /**
@@ -38,6 +40,7 @@ export function ScreenSharePanel({
   onScreenShareStart,
   onScreenShareStop,
   sendSignal,
+  onStreamChange,
 }: ScreenSharePanelProps) {
   const capability = useScreenShareCapability();
 
@@ -53,6 +56,10 @@ export function ScreenSharePanel({
     onStarted: handleStarted,
     onStopped: handleStopped,
   });
+
+  useEffect(() => {
+    onStreamChange?.(stream);
+  }, [stream, onStreamChange]);
 
   // Automatically publish stream to subscribers via WebRTC
   useScreenSharePublisher({

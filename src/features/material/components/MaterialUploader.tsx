@@ -447,7 +447,6 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
       <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl backdrop-blur">
         <div className="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-800/80">
           <h4 className="text-xs font-semibold text-slate-200">Add Stage Material</h4>
-          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">Room: {roomCode}</span>
         </div>
 
         <div className="mb-3.5 grid grid-cols-2 rounded-xl bg-slate-950/70 p-1 border border-slate-800/80">
