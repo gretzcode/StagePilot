@@ -150,12 +150,14 @@ export async function refreshCanvaAccessToken(
   return data;
 }
 
+const inFlightCanvaRefresh = new Map<string, Promise<string | null>>();
+
 export async function getValidCanvaAccessToken(
   userId: string,
   env?: Record<string, unknown> | null
 ): Promise<string | null> {
   const store = new IntegrationCredentialStore(env);
-  const cred = await store.getCredential(userId, "canva");
+  const cred = (await store.getCredential(userId, "canva")) || (await store.getAnyCredential("canva"));
 
   if (!cred) {
     return null;
@@ -167,29 +169,40 @@ export async function getValidCanvaAccessToken(
     return cred.accessToken;
   }
 
-  // Token is expired, try to refresh using refreshToken
+  // Token is expired, try to refresh using refreshToken with Single-Flight Promise Lock
   if (cred.refreshToken && env) {
-    try {
-      const refreshed = await refreshCanvaAccessToken(env, cred.refreshToken);
-      const newExpiresAt = now + (refreshed.expires_in || 3600) * 1000;
+    const lockKey = `${cred.userId}:canva`;
+    const existingPromise = inFlightCanvaRefresh.get(lockKey);
+    if (existingPromise) return existingPromise;
 
-      await store.saveCredential({
-        userId,
-        provider: "canva",
-        accessToken: refreshed.access_token,
-        refreshToken: refreshed.refresh_token || cred.refreshToken,
-        tokenType: refreshed.token_type || "Bearer",
-        expiresAt: newExpiresAt,
-        scopes: cred.scopes,
-        accountEmail: cred.accountEmail,
-        accountName: cred.accountName,
-      });
+    const refreshPromise = (async () => {
+      try {
+        const refreshed = await refreshCanvaAccessToken(env, cred.refreshToken!);
+        const newExpiresAt = Date.now() + (refreshed.expires_in || 3600) * 1000;
 
-      return refreshed.access_token;
-    } catch (err) {
-      console.warn("[CanvaOAuth] Refresh token failed:", err);
-      return null;
-    }
+        await store.saveCredential({
+          userId: cred.userId,
+          provider: "canva",
+          accessToken: refreshed.access_token,
+          refreshToken: refreshed.refresh_token || cred.refreshToken,
+          tokenType: refreshed.token_type || "Bearer",
+          expiresAt: newExpiresAt,
+          scopes: cred.scopes,
+          accountEmail: cred.accountEmail,
+          accountName: cred.accountName,
+        });
+
+        return refreshed.access_token;
+      } catch (err) {
+        console.warn("[CanvaOAuth] Refresh token failed:", err);
+        return null;
+      } finally {
+        inFlightCanvaRefresh.delete(lockKey);
+      }
+    })();
+
+    inFlightCanvaRefresh.set(lockKey, refreshPromise);
+    return refreshPromise;
   }
 
   return null;

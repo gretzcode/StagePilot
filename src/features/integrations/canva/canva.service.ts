@@ -11,7 +11,7 @@ export class CanvaService {
     env?: Record<string, unknown> | null
   ): Promise<CanvaConnectionStatus> {
     const store = new IntegrationCredentialStore(env);
-    const cred = await store.getCredential(userId, "canva");
+    const cred = (await store.getCredential(userId, "canva")) || (await store.getAnyCredential("canva"));
 
     if (!cred) {
       return {
@@ -37,6 +37,7 @@ export class CanvaService {
     env?: Record<string, unknown> | null
   ): Promise<boolean> {
     const store = new IntegrationCredentialStore(env);
+    await store.deleteAllCredentials("canva");
     return store.deleteCredential(userId, "canva");
   }
 

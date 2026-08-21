@@ -37,12 +37,14 @@ export interface GoogleDriveStreamResult {
 }
 
 let globalDriveToken: { token: string; expiresAt: number } | null = null;
+let inFlightGoogleRefresh: Promise<string> | null = null;
 
 const folderIdCache = new Map<string, { id: string; cachedAt: number }>();
 const FOLDER_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 export function resetGoogleDriveTokenCache(): void {
   globalDriveToken = null;
+  inFlightGoogleRefresh = null;
   folderIdCache.clear();
 }
 
@@ -334,63 +336,69 @@ export class GoogleDriveStorageProvider implements MaterialStorageProvider {
 
   private async getAccessToken(): Promise<string> {
     if (globalDriveToken && globalDriveToken.expiresAt > Date.now() + 60_000) return globalDriveToken.token;
-    const clientId = this.getSecret("GOOGLE_CLIENT_ID");
-    const clientSecret = this.getSecret("GOOGLE_CLIENT_SECRET");
+    if (inFlightGoogleRefresh) return inFlightGoogleRefresh;
 
-    const credStore = new IntegrationCredentialStore(this.env);
-    let storedCred = null;
-    try {
-      storedCred = await credStore.getAnyCredential("google_drive");
-    } catch {
-      // Non-fatal D1 lookup
-    }
+    inFlightGoogleRefresh = (async () => {
+      try {
+        const clientId = this.getSecret("GOOGLE_CLIENT_ID");
+        const clientSecret = this.getSecret("GOOGLE_CLIENT_SECRET");
 
-    // If stored credential in D1 has a valid active access token, use it immediately
-    if (storedCred?.accessToken && storedCred.expiresAt > Date.now() + 60_000) {
-      globalDriveToken = { token: storedCred.accessToken, expiresAt: storedCred.expiresAt };
-      return storedCred.accessToken;
-    }
+        const credStore = new IntegrationCredentialStore(this.env);
+        let storedCred = null;
+        try {
+          storedCred = await credStore.getAnyCredential("google_drive");
+        } catch {
+          // Non-fatal D1 lookup
+        }
 
-    // Prioritize dynamically connected refresh token from D1 over static environment variable
-    const refreshToken = storedCred?.refreshToken || this.getSecret("GOOGLE_REFRESH_TOKEN");
+        // If stored credential in D1 has a valid active access token, use it immediately
+        if (storedCred?.accessToken && storedCred.expiresAt > Date.now() + 60_000) {
+          globalDriveToken = { token: storedCred.accessToken, expiresAt: storedCred.expiresAt };
+          return storedCred.accessToken;
+        }
 
-    if (!clientId || !clientSecret || !refreshToken) {
-      throw new Error("Google Drive belum dikonfigurasi. Sambungkan akun Google Drive via Dashboard.");
-    }
+        // Prioritize dynamically connected refresh token from D1 over static environment variable
+        const refreshToken = storedCred?.refreshToken || this.getSecret("GOOGLE_REFRESH_TOKEN");
 
-    const response = await fetch(TOKEN_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: "refresh_token",
-      }),
-    });
-    const json = (await response.json().catch(() => ({}))) as GoogleTokenResponse;
-    if (!response.ok || !json.access_token) {
-      globalDriveToken = null;
-      if (storedCred && (json.error === "invalid_grant" || response.status === 400)) {
-        // Automatically purge stale invalid credential from store so dashboard status reflects disconnected state
-        await credStore.deleteCredential(storedCred.userId, "google_drive").catch(() => null);
+        if (!clientId || !clientSecret || !refreshToken) {
+          throw new Error("Google Drive belum dikonfigurasi. Sambungkan akun Google Drive via Dashboard.");
+        }
+
+        const response = await fetch(TOKEN_API, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refreshToken,
+            grant_type: "refresh_token",
+          }),
+        });
+        const json = (await response.json().catch(() => ({}))) as GoogleTokenResponse;
+        if (!response.ok || !json.access_token) {
+          globalDriveToken = null;
+          const errorDetail = json.error ? ` (${json.error})` : "";
+          throw new Error(`Koneksi Google Drive tidak tersedia${errorDetail}. Refresh token mungkin kedaluwarsa atau perlu disambungkan ulang via Dashboard.`);
+        }
+
+        const newExpiresAt = Date.now() + (json.expires_in || 3600) * 1000;
+        globalDriveToken = { token: json.access_token, expiresAt: newExpiresAt };
+
+        if (storedCred) {
+          await credStore.saveCredential({
+            ...storedCred,
+            accessToken: json.access_token,
+            expiresAt: newExpiresAt,
+          }).catch(() => null);
+        }
+
+        return json.access_token;
+      } finally {
+        inFlightGoogleRefresh = null;
       }
-      const errorDetail = json.error ? ` (${json.error})` : "";
-      throw new Error(`Koneksi Google Drive tidak tersedia${errorDetail}. Refresh token mungkin kedaluwarsa atau perlu disambungkan ulang via Dashboard.`);
-    }
+    })();
 
-    const newExpiresAt = Date.now() + (json.expires_in || 3600) * 1000;
-    globalDriveToken = { token: json.access_token, expiresAt: newExpiresAt };
-
-    if (storedCred) {
-      await credStore.saveCredential({
-        ...storedCred,
-        accessToken: json.access_token,
-        expiresAt: newExpiresAt,
-      }).catch(() => null);
-    }
-
-    return json.access_token;
+    return inFlightGoogleRefresh;
   }
 
   private getSecret(name: string): string {
