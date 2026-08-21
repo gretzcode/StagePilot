@@ -312,7 +312,7 @@ export default function DashboardPage() {
                 {driveStatus?.connected ? (
                   <>
                     <a
-                      href={API_ROUTES.integrations.googleDrive.connect}
+                      href="/api/google-drive/connect"
                       className="flex-1 px-4 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/40 hover:bg-emerald-600/30 text-emerald-300 font-medium text-xs text-center transition"
                     >
                       Switch Account
@@ -327,7 +327,7 @@ export default function DashboardPage() {
                   </>
                 ) : (
                   <a
-                    href={API_ROUTES.integrations.googleDrive.connect}
+                    href="/api/google-drive/connect"
                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-xs text-center transition"
                   >
                     Connect Google Drive
@@ -379,7 +379,7 @@ export default function DashboardPage() {
                   </>
                 ) : (
                   <a
-                    href={API_ROUTES.integrations.canva.authorize}
+                    href="/api/integrations/canva/authorize"
                     className="w-full px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-200 font-medium text-xs text-center transition"
                   >
                     Connect Canva

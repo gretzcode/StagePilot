@@ -62,10 +62,10 @@ function ConfidenceDisplayContent() {
   }, []);
 
   const liveSource = state?.liveSource;
-  const activeMaterial = state?.materials.find((m) => m.id === state?.presentation?.materialId) || null;
+  const activeMaterial = state?.materials.find((m) => m.id === (liveSource?.type === "material" ? liveSource.id : state?.presentation?.materialId)) || null;
   const isLiveScreenShare = Boolean(liveSource?.type === "screen_share" && state?.screenShareSources?.[liveSource.id]?.status === "active");
-  const isLiveMaterial = Boolean((liveSource?.type === "material" || (!liveSource && state?.presentation?.isPresenting)) && activeMaterial);
-  const isPresenting = Boolean(state?.presentation?.isPresenting && (isLiveMaterial || isLiveScreenShare));
+  const isLiveMaterial = Boolean(liveSource?.type === "material" && activeMaterial && activeMaterial.id === liveSource.id);
+  const isPresenting = Boolean(liveSource && (isLiveMaterial || isLiveScreenShare));
   const activeScreenShare = isLiveScreenShare && liveSource ? state?.screenShareSources?.[liveSource.id] : null;
 
   // WebRTC Screen Share Subscriber: unconditionally registered hook

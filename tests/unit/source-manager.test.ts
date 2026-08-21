@@ -148,18 +148,26 @@ describe("Source Manager & Take Live (Corrected Semantics)", () => {
     return state;
   };
 
-  describe("1. Available Sources Semantics (Materials != Sources)", () => {
-    it("should NOT return persistent materials in getAvailableSources() merely because they exist", () => {
+  describe("1. Available Sources Semantics (Speaker Sources in Source Manager)", () => {
+    it("should include Speaker screen share and Speaker material in getAvailableSources()", () => {
       const state = setupRoomState();
       const sources = getAvailableSources(state);
 
-      // Should ONLY contain active screen share, NOT the 2 materials
-      expect(sources.length).toBe(1);
-      expect(sources[0].id).toBe(speakerADevId);
-      expect(sources[0].type).toBe("screen_share");
+      // Should contain 1 active screen share and 1 speaker material (NOT the host material)
+      expect(sources.length).toBe(2);
 
+      const screenSource = sources.find((s) => s.type === "screen_share");
+      expect(screenSource).toBeDefined();
+      expect(screenSource?.id).toBe(speakerADevId);
+      expect(screenSource?.ownerName).toBe("Speaker Armand");
+
+      const matSource = sources.find((s) => s.type === "material");
+      expect(matSource).toBeDefined();
+      expect(matSource?.id).toBe("mat-speaker-a");
+      expect(matSource?.ownerName).toBe("Speaker Armand");
+
+      // Host material is not an ephemeral speaker source
       expect(sources.find((s) => s.id === "mat-host-01")).toBeUndefined();
-      expect(sources.find((s) => s.id === "mat-speaker-a")).toBeUndefined();
     });
 
     it("should return multiple active Speaker screen shares when multiple speakers share", () => {
@@ -176,18 +184,17 @@ describe("Source Manager & Take Live (Corrected Semantics)", () => {
       };
 
       const sources = getAvailableSources(state);
-      expect(sources.length).toBe(2);
-
-      const armandSource = sources.find((s) => s.id === speakerADevId);
-      const harmanSource = sources.find((s) => s.id === speakerBDevId);
+      const armandSource = sources.find((s) => s.id === speakerADevId && s.type === "screen_share");
+      const harmanSource = sources.find((s) => s.id === speakerBDevId && s.type === "screen_share");
 
       expect(armandSource?.ownerName).toBe("Speaker Armand");
       expect(harmanSource?.ownerName).toBe("Speaker Harman");
     });
 
-    it("should return empty list when no speakers are sharing screen", () => {
+    it("should return empty list when no speakers are sharing screen and no speaker materials exist", () => {
       const state = setupRoomState();
       state.screenShareSources = {};
+      state.materials = state.materials.filter((m) => m.ownerRole !== "speaker");
 
       const sources = getAvailableSources(state);
       expect(sources.length).toBe(0);
@@ -196,6 +203,7 @@ describe("Source Manager & Take Live (Corrected Semantics)", () => {
     it("should exclude stopped screen shares from available sources", () => {
       const state = setupRoomState();
       state.screenShareSources[speakerADevId].status = "stopped";
+      state.materials = state.materials.filter((m) => m.ownerRole !== "speaker");
 
       const sources = getAvailableSources(state);
       expect(sources.length).toBe(0);
@@ -462,6 +470,38 @@ describe("Source Manager & Take Live (Corrected Semantics)", () => {
       // LIVE source must remain Host's presentation
       expect(state.liveSource?.id).toBe("mat-host-01");
       expect(state.liveSource?.type).toBe("material");
+    });
+
+    it("should allow Speaker to prepare presentation without bypassing Host Take Live", () => {
+      let state = setupRoomState();
+
+      // Speaker Armand starts/prepares his presentation
+      state = stageSessionReducer(state, {
+        type: "PRESENTATION_START",
+        commandId: "cmd-spk-prep",
+        senderDeviceId: speakerADevId,
+        timestamp: Date.now(),
+        payload: { materialId: "mat-speaker-a", startPage: 1 },
+      } as StageCommand);
+
+      // Presentation state has the material set, but liveSource is NOT set automatically
+      expect(state.presentation.materialId).toBe("mat-speaker-a");
+      expect(state.liveSource).toBeNull();
+      expect(state.presentation.isPresenting).toBe(false);
+
+      // Now Host executes SOURCE_TAKE_LIVE
+      state = stageSessionReducer(state, {
+        type: "SOURCE_TAKE_LIVE",
+        commandId: "cmd-host-take-live",
+        senderDeviceId: hostDeviceId,
+        timestamp: Date.now(),
+        payload: { sourceType: "material", sourceId: "mat-speaker-a" },
+      } as StageCommand);
+
+      expect(state.liveSource?.id).toBe("mat-speaker-a");
+      expect(state.liveSource?.type).toBe("material");
+      expect(state.presentation.isPresenting).toBe(true);
+      expect(state.presentation.status).toBe("live");
     });
   });
 });

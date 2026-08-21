@@ -636,6 +636,23 @@ function PresentationControlContent() {
             <CopyRoomCodeButton roomCode={roomCode} />
             {roomName && <span className="text-[11px] text-purple-300 font-semibold truncate hidden md:inline">({roomName})</span>}
           </div>
+
+          {/* Speaker Stage Status Badge */}
+          {isSpeaker && (
+            <div className="hidden sm:flex items-center ml-2">
+              {liveSource?.type === "material" && liveSource.id === activeMaterial?.id ? (
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/80 text-emerald-300 font-bold text-[10px] uppercase tracking-wider flex items-center space-x-1.5 animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                  <span>LIVE DI PANGGUNG</span>
+                </span>
+              ) : activeMaterial ? (
+                <span className="px-2.5 py-1 rounded-lg bg-purple-950/80 border border-purple-700/60 text-purple-300 font-bold text-[10px] uppercase tracking-wider flex items-center space-x-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                  <span>STANDBY / READY</span>
+                </span>
+              ) : null}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center space-x-1.5 sm:space-x-2 flex-shrink-0">

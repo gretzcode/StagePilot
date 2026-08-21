@@ -274,8 +274,8 @@ describe("Speaker Material Ownership & Isolation Unit Tests", () => {
       expect(PermissionPolicy.canExecuteCommand(state, speakerADevId, startCmd).allowed).toBe(true);
 
       state = stageSessionReducer(state, startCmd);
-      expect(state.presentation.isPresenting).toBe(true);
       expect(state.presentation.materialId).toBe("mat-alice-keynote");
+      expect(state.presentation.status).toBe("ready");
       expect(state.presentation.currentSlide).toBe(1);
 
       // 2. Speaker A navigates slides: SLIDE_NEXT, SLIDE_PREVIOUS, SLIDE_GOTO

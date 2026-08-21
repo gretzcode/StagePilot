@@ -203,10 +203,11 @@ export function stageSessionReducer(
       const isHostOrOperator =
         senderDevice?.role === "host" ||
         senderDevice?.role === "operator" ||
+        senderDevice?.role === "control" ||
         senderDevice?.isHostDevice ||
         nextState.host?.hostDeviceId === command.senderDeviceId;
 
-      // Host and Operator taking presentation start also sets liveSource for backward compatibility
+      // Host, Operator, and Control starting presentation sets liveSource authoritatively
       if (isHostOrOperator && material) {
         nextState.liveSource = {
           type: "material",
@@ -219,9 +220,14 @@ export function stageSessionReducer(
         };
       }
 
+      const isLiveNow = Boolean(
+        isHostOrOperator ||
+        (nextState.liveSource?.type === "material" && nextState.liveSource.id === materialId)
+      );
+
       nextState.presentation = {
-        isPresenting: true,
-        status: "live",
+        isPresenting: isLiveNow,
+        status: isLiveNow ? "live" : "ready",
         materialId,
         currentSlide: startPage,
         totalSlides,
@@ -258,13 +264,14 @@ export function stageSessionReducer(
       nextState.presentation.nextSlideMetadata = null;
       nextState.presentation.blanked = false;
       nextState.presentation.zoom = { scale: 1.0, panX: 0, panY: 0, updatedAt: now };
+      nextState.presentation.mediaState = undefined;
       nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
       nextState.presentation.updatedAt = now;
       break;
     }
 
     case "SLIDE_NEXT": {
-      if (!nextState.presentation.isPresenting) break;
+      if (!nextState.presentation.materialId) break;
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
       const totalSlides = Math.max(nextState.presentation.totalSlides || 1, material?.totalPages || 1, material?.slides?.length || 1);
       ensureMaterialSlides(material, totalSlides);
@@ -295,7 +302,7 @@ export function stageSessionReducer(
     }
 
     case "SLIDE_PREVIOUS": {
-      if (!nextState.presentation.isPresenting) break;
+      if (!nextState.presentation.materialId) break;
       if (nextState.presentation.currentSlide <= 1) {
         break;
       }
@@ -324,7 +331,7 @@ export function stageSessionReducer(
     }
 
     case "SLIDE_GOTO": {
-      if (!nextState.presentation.isPresenting) break;
+      if (!nextState.presentation.materialId) break;
       const material = nextState.materials.find((m) => m.id === nextState.presentation.materialId);
       const knownMax = Math.max(material?.totalPages || 1, material?.slides?.length || 1, nextState.presentation.totalSlides || 1);
       const targetSlideNum = Math.max(1, Math.min(command.payload.pageNumber, knownMax));

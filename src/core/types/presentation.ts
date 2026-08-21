@@ -51,7 +51,7 @@ export interface Material {
   metadata?: MaterialMetadata;
 }
 
-export type PresentationStatus = "idle" | "live" | "paused" | "ended";
+export type PresentationStatus = "idle" | "ready" | "live" | "paused" | "ended";
 
 export interface MediaPlaybackState {
   status: "playing" | "paused" | "stopped";
