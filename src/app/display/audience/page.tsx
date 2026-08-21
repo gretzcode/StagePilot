@@ -51,6 +51,20 @@ function AudienceDisplayContent() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const liveSource = state?.liveSource;
+  const activeMaterial = state?.materials.find((m) => m.id === state?.presentation?.materialId) || null;
+  const isLiveScreenShare = Boolean(liveSource?.type === "screen_share" && state?.screenShareSources?.[liveSource.id]?.status === "active");
+  const isLiveMaterial = Boolean((liveSource?.type === "material" || (!liveSource && state?.presentation?.isPresenting)) && activeMaterial);
+  const isPresenting = Boolean(state?.presentation?.isPresenting && (isLiveMaterial || isLiveScreenShare));
+  const activeScreenShare = isLiveScreenShare && liveSource ? state?.screenShareSources?.[liveSource.id] : null;
+
+  // WebRTC Screen Share Subscriber: unconditionally registered hook
+  const { stream: screenShareStream, status: screenShareStatus } = useScreenShareSubscriber({
+    sourceId: isLiveScreenShare && liveSource ? liveSource.id : null,
+    deviceId,
+    sendSignal: sendWebRtcSignal,
+  });
+
   // 1. Room/Network Error State
   if (roomError) {
     return <FriendlyErrorState errorType={roomError} roomCode={roomCode} />;
@@ -65,21 +79,6 @@ function AudienceDisplayContent() {
   if (approvalStatus === "rejected" || approvalStatus === "revoked") {
     return <FriendlyErrorState errorType={approvalStatus === "revoked" ? "DEVICE_REVOKED" : "DEVICE_REJECTED"} roomCode={roomCode} />;
   }
-
-  // 4. Approved State Output
-  const liveSource = state?.liveSource;
-  const activeMaterial = state?.materials.find((m) => m.id === state?.presentation.materialId) || null;
-  const isLiveScreenShare = Boolean(liveSource?.type === "screen_share" && state?.screenShareSources?.[liveSource.id]?.status === "active");
-  const isLiveMaterial = Boolean((liveSource?.type === "material" || (!liveSource && state?.presentation.isPresenting)) && activeMaterial);
-  const isPresenting = Boolean(state?.presentation.isPresenting && (isLiveMaterial || isLiveScreenShare));
-  const activeScreenShare = isLiveScreenShare && liveSource ? state?.screenShareSources?.[liveSource.id] : null;
-
-  // WebRTC Screen Share Subscriber: automatically connects when screen share is LIVE
-  const { stream: screenShareStream, status: screenShareStatus } = useScreenShareSubscriber({
-    sourceId: isLiveScreenShare && liveSource ? liveSource.id : null,
-    deviceId,
-    sendSignal: sendWebRtcSignal,
-  });
 
   return (
     <div
