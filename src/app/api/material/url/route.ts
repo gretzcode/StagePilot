@@ -129,12 +129,23 @@ export async function POST(request: Request) {
           })
         );
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "CANVA_IMPORT_FAILED";
+        const code = err instanceof Error ? err.message : "CANVA_IMPORT_FAILED";
+        const userMessage =
+          code === "CANVA_NOT_CONNECTED"
+            ? "Akun Canva belum tersambung. Hubungkan akun Canva Anda terlebih dahulu di Dashboard."
+            : code === "CANVA_ACCESS_DENIED"
+            ? "Desain Canva tidak dapat diakses (Access Denied). Pastikan desain ini dibuat oleh atau dibagikan ke akun Canva yang sedang terhubung di StagePilot."
+            : code === "CANVA_DESIGN_NOT_FOUND"
+            ? "Desain Canva tidak ditemukan."
+            : code === "CANVA_INVALID_URL"
+            ? "URL Canva tidak valid. Masukkan link desain Canva yang benar."
+            : `Gagal mengimpor presentasi Canva: ${code}`;
+
         return applySecurityHeaders(
           NextResponse.json(
             {
-              error: msg,
-              message: `Gagal mengimpor presentasi Canva: ${msg}`,
+              error: code,
+              message: userMessage,
             },
             { status: 400 }
           )
