@@ -33,6 +33,8 @@ import {
   Trash2,
   RefreshCw,
   Film,
+  SkipBack,
+  SkipForward,
   Video,
 } from "lucide-react";
 import { useStageRoomSession } from "@/core/realtime/useStageRoomSession";
@@ -684,15 +686,17 @@ function PresentationControlContent() {
             </button>
           )}
 
-          {/* Exit / Back Button */}
-          <button
-            onClick={isSpeaker ? () => router.push(ROUTES.join()) : handleExitToControl}
-            className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1.5 cursor-pointer"
-            title={isSpeaker ? "Keluar dari room" : "Exit to Control Room (Presentation continues running)"}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline text-xs font-semibold">{isSpeaker ? "Keluar" : "Control Room"}</span>
-          </button>
+          {/* Exit / Back Button (Host & Operator only) */}
+          {!isSpeaker && (
+            <button
+              onClick={handleExitToControl}
+              className="p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-800/90 border border-slate-700 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1.5 cursor-pointer"
+              title="Exit to Control Room (Presentation continues running)"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline text-xs font-semibold">Control Room</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -991,75 +995,112 @@ function PresentationControlContent() {
         )}
 
         {/* Center Column: Live Slide Output Viewer (Expands dynamically when sidebar is hidden or for Speaker) */}
-        <div className={`${isSidebarOpen ? (isSpeaker ? "col-span-12 lg:col-span-9" : "col-span-12 lg:col-span-6") : (isSpeaker ? "col-span-12" : "col-span-12 lg:col-span-9")} bg-black flex flex-col justify-between p-2 sm:p-4 md:p-6 relative overflow-hidden transition-all duration-200 min-h-[350px] sm:min-h-[450px]`}>
-          <div
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            className={`flex-1 flex items-center justify-center relative min-h-[220px] sm:min-h-[250px] overflow-hidden select-none ${
-              currentZoom.scale > 1.0 ? "cursor-grab active:cursor-grabbing touch-none" : ""
-            }`}
-          >
-            {isLiveScreenShare ? (
-              <ScreenShareLiveViewer
-                stream={activeViewerStream}
-                status={activeViewerStatus}
-                speakerName={activeScreenShare?.speakerName}
-              />
-            ) : (
-              <SlideViewer
-                material={activeMaterial}
-                slide={state?.presentation.currentSlideMetadata || null}
-                currentSlide={state?.presentation.currentSlide || 1}
-                blanked={state?.presentation.blanked}
-                role={isSpeaker ? "speaker" : "control"}
-                deviceId={deviceId}
-                mediaState={state?.presentation.mediaState}
-                zoom={state?.presentation.zoom}
-                onMediaPlay={(time) => dispatchCommand("MEDIA_PLAY", { currentTime: time ?? localVideoTime })}
-                onMediaPause={(time) => dispatchCommand("MEDIA_PAUSE", { currentTime: time ?? localVideoTime })}
-                onMediaSeek={(target) => {
-                  setLocalVideoTime(target);
-                  dispatchCommand("MEDIA_SEEK", { targetTime: target });
-                }}
-                onMediaStop={() => {
-                  setLocalVideoTime(0);
-                  dispatchCommand("MEDIA_STOP");
-                }}
-                onMediaDurationDiscovered={(duration) => {
-                  if (duration > 0 && (!state?.presentation.mediaState?.duration || Math.abs(state.presentation.mediaState.duration - duration) > 1)) {
-                    dispatchCommand("MEDIA_DURATION_UPDATE", { duration });
-                  }
-                }}
-                onNumPagesDiscovered={handlePdfNumPagesDiscovered}
-              >
-                {/* Interactive Zoom Area Selection Overlay directly inside 16:9 Stage */}
-                {isZoomAreaActive && activeMaterial && activeMaterial.type !== "video" && (
-                  <ZoomAreaOverlay
-                    isActive={isZoomAreaActive}
-                    onSelectRegion={handleSelectZoomRegion}
-                    onCancel={() => setIsZoomAreaActive(false)}
-                  />
-                )}
-              </SlideViewer>
-            )}
-
-            {/* Floating Zoom Controls Widget */}
-            {activeMaterial && activeMaterial.type !== "video" && (
-              <div
-                onPointerDown={(e) => e.stopPropagation()}
-                onPointerUp={(e) => e.stopPropagation()}
-                className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-30 pointer-events-auto"
-              >
-                <ZoomControls
-                  zoom={state?.presentation.zoom}
-                  isZoomAreaActive={isZoomAreaActive}
-                  onToggleZoomArea={handleToggleZoomArea}
-                  onZoomIn={handleZoomIn}
-                  onZoomOut={handleZoomOut}
-                  onZoomReset={handleZoomReset}
+        <div className={`${isSidebarOpen ? (isSpeaker ? "col-span-12 lg:col-span-9" : "col-span-12 lg:col-span-6") : (isSpeaker ? "col-span-12" : "col-span-12 lg:col-span-9")} bg-black flex flex-col justify-between p-2 sm:p-4 md:p-6 relative overflow-y-auto lg:overflow-hidden transition-all duration-200 min-h-[350px] sm:min-h-[450px]`}>
+          <div className="flex-1 flex flex-col items-center justify-center relative w-full overflow-hidden select-none my-auto">
+            {/* Standardized 16:9 Fixed Stage Viewport Frame */}
+            <div
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              className={`w-full max-w-5xl aspect-video mx-auto bg-black rounded-2xl sm:rounded-3xl border border-slate-800/80 shadow-2xl overflow-hidden relative flex items-center justify-center ${
+                currentZoom.scale > 1.0 ? "cursor-grab active:cursor-grabbing touch-none" : ""
+              }`}
+            >
+              {isLiveScreenShare ? (
+                <ScreenShareLiveViewer
+                  stream={activeViewerStream}
+                  status={activeViewerStatus}
+                  speakerName={activeScreenShare?.speakerName}
                 />
+              ) : (
+                <SlideViewer
+                  material={activeMaterial}
+                  slide={state?.presentation.currentSlideMetadata || null}
+                  currentSlide={state?.presentation.currentSlide || 1}
+                  blanked={state?.presentation.blanked}
+                  role={isSpeaker ? "speaker" : "control"}
+                  deviceId={deviceId}
+                  mediaState={state?.presentation.mediaState}
+                  zoom={state?.presentation.zoom}
+                  onMediaPlay={(time) => dispatchCommand("MEDIA_PLAY", { currentTime: time ?? localVideoTime })}
+                  onMediaPause={(time) => dispatchCommand("MEDIA_PAUSE", { currentTime: time ?? localVideoTime })}
+                  onMediaSeek={(target) => {
+                    setLocalVideoTime(target);
+                    dispatchCommand("MEDIA_SEEK", { targetTime: target });
+                  }}
+                  onMediaStop={() => {
+                    setLocalVideoTime(0);
+                    dispatchCommand("MEDIA_STOP");
+                  }}
+                  onMediaDurationDiscovered={(duration) => {
+                    if (duration > 0 && (!state?.presentation.mediaState?.duration || Math.abs(state.presentation.mediaState.duration - duration) > 1)) {
+                      dispatchCommand("MEDIA_DURATION_UPDATE", { duration });
+                    }
+                  }}
+                  onNumPagesDiscovered={handlePdfNumPagesDiscovered}
+                >
+                  {/* Interactive Zoom Area Selection Overlay directly inside 16:9 Stage */}
+                  {isZoomAreaActive && activeMaterial && activeMaterial.type !== "video" && (
+                    <ZoomAreaOverlay
+                      isActive={isZoomAreaActive}
+                      onSelectRegion={handleSelectZoomRegion}
+                      onCancel={() => setIsZoomAreaActive(false)}
+                    />
+                  )}
+                </SlideViewer>
+              )}
+
+              {/* Floating Zoom Controls Widget */}
+              {activeMaterial && activeMaterial.type !== "video" && (
+                <div
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onPointerUp={(e) => e.stopPropagation()}
+                  className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-30 pointer-events-auto"
+                >
+                  <ZoomControls
+                    zoom={state?.presentation.zoom}
+                    isZoomAreaActive={isZoomAreaActive}
+                    onToggleZoomArea={handleToggleZoomArea}
+                    onZoomIn={handleZoomIn}
+                    onZoomOut={handleZoomOut}
+                    onZoomReset={handleZoomReset}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Speaker Horizontal Slide Strip (Mobile & Quick-Jump Navigator) */}
+            {isSpeaker && activeMaterial && activeMaterial.type !== "video" && (
+              <div className="w-full max-w-5xl mx-auto mt-2 sm:mt-3 px-1">
+                <div className="flex items-center justify-between mb-1.5 px-0.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Pilih Slide ({state?.presentation?.totalSlides || state?.presentation?.totalPages || activeMaterial.totalPages || 1} Slides)
+                  </span>
+                  <span className="text-[10px] font-mono text-purple-400 font-bold">
+                    Slide {state?.presentation?.currentSlide || 1}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5 px-0.5 no-scrollbar touch-pan-x">
+                  {Array.from({ length: state?.presentation?.totalSlides || state?.presentation?.totalPages || activeMaterial.totalPages || 1 }, (_, i) => {
+                    const slideNum = i + 1;
+                    const isCurrent = (state?.presentation?.currentSlide || 1) === slideNum;
+                    return (
+                      <button
+                        key={slideNum}
+                        onClick={() => dispatchCommand("SLIDE_GOTO", { pageNumber: slideNum })}
+                        className={`flex-shrink-0 min-w-[48px] h-10 sm:min-w-[56px] sm:h-11 rounded-xl border flex flex-col items-center justify-center transition active:scale-95 touch-manipulation cursor-pointer ${
+                          isCurrent
+                            ? "bg-purple-600 border-purple-400 text-white font-black shadow-lg shadow-purple-900/50 ring-2 ring-purple-400/50"
+                            : "bg-slate-900/90 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                        }`}
+                      >
+                        <span className="text-[8px] font-mono leading-none opacity-60">P</span>
+                        <span className="text-xs font-bold font-mono leading-tight">{slideNum}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
@@ -1067,7 +1108,7 @@ function PresentationControlContent() {
           {/* Bottom Bar: Synchronized Video Controls OR Slide Controls */}
           {isLiveScreenShare ? (
             /* Live Screen Share Controls Bar */
-            <div className="h-16 bg-slate-900/90 border border-slate-800 rounded-2xl px-4 sm:px-6 flex items-center justify-between shadow-2xl mt-4 z-10">
+            <div className="h-16 bg-slate-900/90 border border-slate-800 rounded-2xl px-4 sm:px-6 flex items-center justify-between shadow-2xl mt-3 sm:mt-4 z-10">
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
                 <span className="text-xs sm:text-sm font-bold text-cyan-300 font-mono">
@@ -1122,7 +1163,7 @@ function PresentationControlContent() {
                         className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 hover:text-white transition cursor-pointer"
                         title="Previous Video in Playlist"
                       >
-                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <SkipBack className="w-3.5 h-3.5" />
                       </button>
                       <span className="text-[10px] font-mono text-purple-300 font-bold px-1 whitespace-nowrap">
                         #{state?.presentation?.currentSlide || 1}/{state?.presentation?.totalSlides || state?.presentation?.totalPages || 1}
@@ -1136,75 +1177,56 @@ function PresentationControlContent() {
                         className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 hover:text-white transition cursor-pointer"
                         title="Next Video in Playlist"
                       >
-                        <ChevronRight className="w-3.5 h-3.5" />
+                        <SkipForward className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )}
 
                   <button
                     onClick={() => {
-                      setLocalVideoTime(0);
-                      dispatchCommand("MEDIA_SEEK", { targetTime: 0 });
+                      const newTime = Math.max(0, localVideoTime - 10);
+                      setLocalVideoTime(newTime);
+                      dispatchCommand("MEDIA_SEEK", { targetTime: newTime });
                     }}
-                    className="p-2 sm:px-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1 text-xs font-semibold cursor-pointer"
-                    title="Reset to 00:00"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span className="hidden md:inline">0:00</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      const target = Math.max(0, localVideoTime - 10);
-                      setLocalVideoTime(target);
-                      dispatchCommand("MEDIA_SEEK", { targetTime: target });
-                    }}
-                    className="p-2 sm:px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1 text-xs font-semibold cursor-pointer"
+                    className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition flex items-center space-x-1 cursor-pointer"
                     title="Rewind 10s"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span className="hidden md:inline">-10s</span>
                   </button>
 
-                  <button
-                    onClick={() => {
-                      const isPlaying = state?.presentation?.mediaState?.status === "playing";
-                      if (isPlaying) {
-                        dispatchCommand("MEDIA_PAUSE", { currentTime: localVideoTime });
-                      } else {
-                        dispatchCommand("MEDIA_PLAY", { currentTime: localVideoTime });
-                      }
-                    }}
-                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center space-x-1.5 shadow glow-purple transition cursor-pointer"
-                  >
-                    {state?.presentation?.mediaState?.status === "playing" ? (
-                      <>
-                        <Pause className="w-3.5 h-3.5" />
-                        <span>PAUSE</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-3.5 h-3.5 fill-white" />
-                        <span>PLAY</span>
-                      </>
-                    )}
-                  </button>
+                  {state?.presentation.mediaState?.status === "playing" ? (
+                    <button
+                      onClick={() => dispatchCommand("MEDIA_PAUSE", { currentTime: localVideoTime })}
+                      className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs transition flex items-center space-x-1.5 cursor-pointer shadow-lg shadow-amber-950/50"
+                    >
+                      <Pause className="w-4 h-4 fill-current" />
+                      <span>Pause</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => dispatchCommand("MEDIA_PLAY", { currentTime: localVideoTime })}
+                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition flex items-center space-x-1.5 cursor-pointer shadow-lg glow-purple"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Play</span>
+                    </button>
+                  )}
 
                   <button
                     onClick={() => {
-                      const target = localVideoTime + 10;
-                      setLocalVideoTime(target);
-                      dispatchCommand("MEDIA_SEEK", { targetTime: target });
+                      const duration = state?.presentation.mediaState?.duration || 100;
+                      const newTime = Math.min(duration, localVideoTime + 10);
+                      setLocalVideoTime(newTime);
+                      dispatchCommand("MEDIA_SEEK", { targetTime: newTime });
                     }}
-                    className="p-2 sm:px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center space-x-1 text-xs font-semibold cursor-pointer"
+                    className="px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold transition flex items-center space-x-1 cursor-pointer"
                     title="Forward 10s"
                   >
                     <RotateCw className="w-3.5 h-3.5" />
                     <span className="hidden md:inline">+10s</span>
                   </button>
-                </div>
 
-                <div className="flex items-center space-x-2">
                   <button
                     onClick={handleStopPresentation}
                     className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
@@ -1218,14 +1240,15 @@ function PresentationControlContent() {
             </div>
           ) : (
             /* Standard Slide Controls Bar */
-            <div className="h-16 bg-slate-900/90 border border-slate-800 rounded-2xl px-4 sm:px-6 flex items-center justify-between shadow-2xl mt-4 z-10">
-              <div className="flex items-center space-x-2">
+            <div className="min-h-16 bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 sm:px-6 flex items-center justify-between shadow-2xl mt-3 sm:mt-4 z-10 gap-2">
+              <div className="flex items-center space-x-2 sm:space-x-3">
                 <button
                   onClick={() => dispatchCommand("SLIDE_PREVIOUS")}
                   disabled={!state?.presentation?.currentSlide || (state?.presentation?.currentSlide || 1) <= 1}
-                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition cursor-pointer"
+                  className="h-11 px-3 sm:px-4 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white font-bold text-xs sm:text-sm transition flex items-center space-x-1.5 active:scale-95 touch-manipulation cursor-pointer shadow"
                 >
                   <ChevronLeft className="w-5 h-5" />
+                  <span className="hidden sm:inline">Prev</span>
                 </button>
                 <button
                   onClick={() => dispatchCommand("SLIDE_NEXT")}
@@ -1237,24 +1260,25 @@ function PresentationControlContent() {
                       (state?.presentation?.totalSlides || state?.presentation?.totalPages || 1) > 1 &&
                       (state?.presentation?.currentSlide || 1) >= (state?.presentation?.totalSlides || state?.presentation?.totalPages || 1))
                   }
-                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white transition cursor-pointer"
+                  className="h-11 px-4 sm:px-6 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-bold text-xs sm:text-sm transition flex items-center space-x-1.5 active:scale-95 touch-manipulation cursor-pointer shadow-lg glow-purple"
                   title="Next Slide (Right Arrow)"
                 >
+                  <span>Next</span>
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
 
-              <span className="font-mono text-xs sm:text-sm font-bold text-slate-300">
+              <span className="font-mono text-xs sm:text-sm font-bold text-slate-200 text-center">
                 SLIDE {state?.presentation?.currentSlide || 1} / {state?.presentation?.totalSlides || state?.presentation?.totalPages || 1}
               </span>
 
               <button
                 onClick={handleStopPresentation}
-                className="px-3 sm:px-3.5 py-2 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
+                className="h-11 px-3 sm:px-4 rounded-xl bg-rose-950/80 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-semibold transition flex items-center space-x-1.5 cursor-pointer shadow-md"
                 title={isSpeaker ? "Tutup Presentasi" : "Stop Presentation across all screens"}
               >
                 <Square className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{isSpeaker ? "Tutup Presentasi" : "Stop Presentation"}</span>
+                <span className="hidden sm:inline">{isSpeaker ? "Tutup" : "Stop"}</span>
               </button>
             </div>
           )}

@@ -246,7 +246,7 @@ export function SlideViewer({
 
   if (!material) {
     return (
-      <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-8 text-center border border-slate-800 rounded-2xl">
+      <div className="w-full h-full bg-black flex flex-col items-center justify-center p-8 text-center border border-slate-800 rounded-2xl">
         <span className="text-xs uppercase font-mono tracking-widest text-slate-500 mb-2">STAGEPILOT OUTPUT</span>
         <h3 className="text-xl font-bold text-slate-400">WAITING FOR PRESENTATION</h3>
         <p className="text-slate-500 text-xs mt-1">Select material in Control Room and click Present</p>
@@ -296,7 +296,7 @@ export function SlideViewer({
       return (
         <div
           ref={fit.containerRef}
-          className="w-full h-full bg-slate-950 flex items-center justify-center p-0 relative overflow-hidden select-none"
+          className="w-full h-full bg-black flex items-center justify-center p-0 relative overflow-hidden select-none"
         >
           {/* Aspect-Ratio Stage Box */}
           <div
@@ -340,7 +340,7 @@ export function SlideViewer({
       return (
         <div
           ref={fit.containerRef}
-          className="w-full h-full bg-slate-950 flex items-center justify-center p-0 relative overflow-hidden select-none"
+          className="w-full h-full bg-black flex items-center justify-center p-0 relative overflow-hidden select-none"
         >
           <div
             style={fit.style}
@@ -354,7 +354,7 @@ export function SlideViewer({
                 key={`gslide-iframe-${googlePresentationId}`}
                 src={embedUrl}
                 title={material.name}
-                className="w-full h-full border-0 bg-slate-950 z-10"
+                className="w-full h-full border-0 bg-black z-10"
                 sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
               />
             </div>
@@ -374,7 +374,7 @@ export function SlideViewer({
         return (
           <div
             ref={fit.containerRef}
-            className="w-full h-full bg-slate-950 flex items-center justify-center p-0 relative overflow-hidden select-none"
+            className="w-full h-full bg-black flex items-center justify-center p-0 relative overflow-hidden select-none"
           >
             <div
               style={fit.style}
@@ -399,7 +399,7 @@ export function SlideViewer({
 
       // If Canva material has no exported slide assets yet
       return (
-        <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none">
+        <div className="w-full h-full bg-black flex flex-col items-center justify-center p-6 text-center select-none">
           <div className="w-12 h-12 rounded-2xl bg-purple-950/80 border border-purple-800/60 flex items-center justify-center text-purple-400 font-bold text-lg mb-3">
             C
           </div>
@@ -420,7 +420,7 @@ export function SlideViewer({
     return (
       <div
         ref={fit.containerRef}
-        className="w-full h-full bg-slate-950 flex items-center justify-center p-0 relative overflow-hidden select-none"
+        className="w-full h-full bg-black flex items-center justify-center p-0 relative overflow-hidden select-none"
       >
         <div
           style={fit.style}
@@ -433,7 +433,7 @@ export function SlideViewer({
               ref={iframeRef}
               src={persistentIframeSrc}
               title={material.name}
-              className="w-full h-full border-0 bg-slate-950 z-10"
+              className="w-full h-full border-0 bg-black z-10"
               sandbox={sandboxAttrs}
               allowFullScreen
               allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -450,7 +450,7 @@ export function SlideViewer({
     return (
       <div
         ref={fit.containerRef}
-        className="w-full h-full bg-slate-950 flex items-center justify-center p-0 relative overflow-hidden select-none"
+        className="w-full h-full bg-black flex items-center justify-center p-0 relative overflow-hidden select-none"
       >
         <div
           style={fit.style}
@@ -475,7 +475,7 @@ export function SlideViewer({
 
   if (renderError) {
     return (
-      <div className="w-full h-full bg-slate-950 flex flex-col items-center justify-center p-8 text-center text-rose-400">
+      <div className="w-full h-full bg-black flex flex-col items-center justify-center p-8 text-center text-rose-400">
         <span className="text-xs uppercase font-mono tracking-widest mb-3">ERROR</span>
         <p className="text-sm">{renderError}</p>
         <p className="text-xs text-slate-500 mt-4">Please try a different presentation or reload the page</p>
@@ -484,9 +484,8 @@ export function SlideViewer({
   }
 
   return (
-    <div className="w-full h-full bg-slate-950 flex items-center justify-center p-6 text-slate-300">
+    <div className="w-full h-full bg-black flex items-center justify-center p-6 text-slate-300">
       <span className="text-sm uppercase tracking-[0.25em]">Unsupported material type: {resolvedMediaType}</span>
     </div>
   );
 }
-
