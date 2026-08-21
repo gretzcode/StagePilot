@@ -165,6 +165,28 @@ export class IntegrationCredentialStore {
 
     return true;
   }
+
+  async deleteAllCredentials(provider: string): Promise<boolean> {
+    for (const [key, cred] of memoryCredentials.entries()) {
+      if (cred.provider === provider) {
+        memoryCredentials.delete(key);
+      }
+    }
+
+    if (this.db) {
+      try {
+        await this.db
+          .prepare(`DELETE FROM integration_credentials WHERE provider = ?`)
+          .bind(provider)
+          .run();
+        return true;
+      } catch (err) {
+        console.warn("[IntegrationCredentialStore] D1 deleteAll failed:", err);
+      }
+    }
+
+    return true;
+  }
 }
 
 export function clearMemoryIntegrationCredentials(): void {

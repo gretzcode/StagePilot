@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const env = (cfCtx?.env || process.env) as Record<string, unknown>;
 
   const credStore = new IntegrationCredentialStore(env);
-  await credStore.deleteCredential(hostUser.id, 'google_drive');
+  await credStore.deleteAllCredentials('google_drive');
   resetGoogleDriveTokenCache();
 
   return applySecurityHeaders(NextResponse.json({ success: true, connected: false }));

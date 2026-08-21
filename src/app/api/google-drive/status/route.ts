@@ -17,15 +17,15 @@ export async function GET(request: Request) {
   const cred = (await credStore.getCredential(hostUser.id, "google_drive")) || (await credStore.getAnyCredential("google_drive"));
 
   const provider = new GoogleDriveStorageProvider(env);
-  const configured = await provider.isAvailable();
-  const connected = Boolean(cred?.accessToken || cred?.refreshToken || provider.hasSecretRefreshToken());
+  const configured = Boolean(provider.isAvailable());
+  const connected = Boolean(cred?.accessToken || cred?.refreshToken);
 
   return applySecurityHeaders(
     NextResponse.json({
       provider: "google_drive",
       configured,
       connected,
-      account: cred?.accountEmail || cred?.accountName || (connected ? "Operator Google Drive" : null),
+      account: connected ? (cred?.accountEmail || cred?.accountName || "Connected Google Drive") : null,
     })
   );
 }
