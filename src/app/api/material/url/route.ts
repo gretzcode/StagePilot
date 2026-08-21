@@ -8,6 +8,7 @@ import { defaultPresentationAdapter } from "@/features/material/adapter";
 import { detectSlideCountFromUrl, resolvePdfFilename } from "@/features/material/validator";
 import { RoomRegistry } from "@/lib/rooms/registry";
 import { Material } from "@/core/types";
+import { computeDefaultExpiration } from "@/core/config/material";
 import { CanvaService } from "@/features/integrations/canva/canva.service";
 import { GoogleDriveStorageProvider } from "@/features/material/storage/providers/google-drive";
 import { registerLocalRoomMaterial } from "@/app/api/ws/route";
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
       return applySecurityHeaders(tooMany);
     }
 
-    // 2.5 Canva Connect Authenticated Export Pipeline
+    // 2.5 Canva Connect Authenticated Export Pipeline with Public Embed Fallback
     const isCanva =
       urlString.includes("canva.com") ||
       urlString.includes("canva.me") ||
@@ -103,54 +104,69 @@ export async function POST(request: Request) {
       const cfCtx = await getCloudflareContext({ async: true }).catch(() => null);
       const env = (cfCtx?.env || process.env) as Record<string, unknown>;
 
+      let canvaMaterial: Material | null = null;
       const canvaStatus = await CanvaService.getConnectionStatus(ownerUserId, env);
-      if (!canvaStatus.connected) {
-        return applySecurityHeaders(
-          NextResponse.json(
-            {
-              error: "CANVA_NOT_CONNECTED",
-              message: "Akun Canva belum tersambung. Hubungkan akun Canva Anda di Dashboard terlebih dahulu agar presentasi Canva dapat diimpor dan disinkronkan ke semua layar.",
-            },
-            { status: 400 }
-          )
-        );
+
+      if (canvaStatus.connected) {
+        try {
+          canvaMaterial = await CanvaService.importDesignAsMaterial(ownerUserId, urlString, env, upperRoomCode);
+        } catch (err: unknown) {
+          console.warn("[CanvaImport] Connect API export unavailable for this link, falling back to Public Embed:", err);
+        }
       }
 
-      try {
-        const canvaMaterial = await CanvaService.importDesignAsMaterial(ownerUserId, urlString, env, upperRoomCode);
-        const hostDeviceId = `dev-host-${ownerUserId.slice(-8)}`;
-        await dispatchMaterialAddCommand(request, upperRoomCode, hostDeviceId, canvaMaterial);
+      // If Canva OAuth is not connected OR the design is an external/public view-only link:
+      // Gracefully fall back to Canva Responsive Embed Player
+      if (!canvaMaterial) {
+        let embedUrl = urlString;
+        try {
+          const parsed = new URL(urlString);
+          if (!parsed.searchParams.has("embed")) {
+            parsed.searchParams.set("embed", "");
+          }
+          embedUrl = parsed.toString();
+        } catch {
+          embedUrl = `${urlString}${urlString.includes("?") ? "&" : "?"}embed`;
+        }
 
-        return applySecurityHeaders(
-          NextResponse.json({
-            success: true,
-            material: canvaMaterial,
-            totalSlides: canvaMaterial.totalPages,
-          })
-        );
-      } catch (err: unknown) {
-        const code = err instanceof Error ? err.message : "CANVA_IMPORT_FAILED";
-        const userMessage =
-          code === "CANVA_NOT_CONNECTED"
-            ? "Akun Canva belum tersambung. Hubungkan akun Canva Anda terlebih dahulu di Dashboard."
-            : code === "CANVA_ACCESS_DENIED"
-            ? "Desain Canva tidak dapat diakses (Access Denied). Pastikan desain ini dibuat oleh atau dibagikan ke akun Canva yang sedang terhubung di StagePilot."
-            : code === "CANVA_DESIGN_NOT_FOUND"
-            ? "Desain Canva tidak ditemukan."
-            : code === "CANVA_INVALID_URL"
-            ? "URL Canva tidak valid. Masukkan link desain Canva yang benar."
-            : `Gagal mengimpor presentasi Canva: ${code}`;
+        const now = Date.now();
+        const designIdMatch = urlString.match(/\/design\/([A-Za-z0-9_-]+)/);
+        const designId = designIdMatch ? designIdMatch[1] : "canva";
+        const title = `Canva Presentation ${designId}`;
 
-        return applySecurityHeaders(
-          NextResponse.json(
-            {
-              error: code,
-              message: userMessage,
-            },
-            { status: 400 }
-          )
-        );
+        canvaMaterial = {
+          id: `mat-canva-embed-${designId}-${now}`,
+          name: title,
+          type: "canva",
+          sourceType: "CANVA_LINK",
+          url: embedUrl,
+          externalUrl: urlString,
+          objectKey: null,
+          sizeBytes: 0,
+          totalPages: 1,
+          slides: [{ index: 1, title: `${title} — Slide 1`, url: embedUrl, contentUrl: embedUrl }],
+          uploadedAt: now,
+          expiresAt: computeDefaultExpiration(now),
+          ownerUserId,
+          roomCode: upperRoomCode,
+          status: "ready",
+          metadata: {
+            title,
+            pageCount: 1,
+          },
+        };
       }
+
+      const hostDeviceId = `dev-host-${ownerUserId.slice(-8)}`;
+      await dispatchMaterialAddCommand(request, upperRoomCode, hostDeviceId, canvaMaterial);
+
+      return applySecurityHeaders(
+        NextResponse.json({
+          success: true,
+          material: canvaMaterial,
+          totalSlides: canvaMaterial.totalPages,
+        })
+      );
     }
 
     // 2.6 Canonical Google Drive PDF Ingestion Pipeline

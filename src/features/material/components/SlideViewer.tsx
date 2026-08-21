@@ -397,19 +397,42 @@ export function SlideViewer({
         );
       }
 
-      // If Canva material has no exported slide assets yet
+      // If Canva material is an embed or public view URL, render responsive Canva iframe player
+      let canvaEmbedSrc = material.externalUrl || material.url || "";
+      if (canvaEmbedSrc.includes("/view") && !canvaEmbedSrc.includes("embed")) {
+        try {
+          const u = new URL(canvaEmbedSrc);
+          u.searchParams.set("embed", "");
+          canvaEmbedSrc = u.toString();
+        } catch {
+          canvaEmbedSrc = `${canvaEmbedSrc}${canvaEmbedSrc.includes("?") ? "&" : "?"}embed`;
+        }
+      }
+
       return (
-        <div className="w-full h-full bg-black flex flex-col items-center justify-center p-6 text-center select-none">
-          <div className="w-12 h-12 rounded-2xl bg-purple-950/80 border border-purple-800/60 flex items-center justify-center text-purple-400 font-bold text-lg mb-3">
-            C
+        <div
+          ref={fit.containerRef}
+          className="w-full h-full bg-black flex items-center justify-center p-0 relative overflow-hidden select-none"
+        >
+          <div
+            style={fit.style}
+            className={`relative flex items-center justify-center overflow-hidden shrink-0 shadow-2xl transition-[width,height] duration-75 ${
+              role !== "control" ? "pointer-events-none select-none" : ""
+            }`}
+          >
+            <div style={zoomStyle} className="w-full h-full relative flex items-center justify-center">
+              <iframe
+                ref={iframeRef}
+                src={canvaEmbedSrc}
+                title={material.name}
+                className="w-full h-full border-0 bg-black z-10"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                allowFullScreen
+                allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              />
+            </div>
+            {children}
           </div>
-          <h3 className="text-base font-bold text-white mb-1">{material.name}</h3>
-          <p className="text-xs text-slate-400 max-w-md mb-4">
-            Slide {activeSlide} of {material.totalPages || 1}
-          </p>
-          <span className="text-[11px] font-mono text-purple-400 bg-purple-950/60 px-3 py-1 rounded-full border border-purple-800/50">
-            Canva Native Presentation Mode Active
-          </span>
         </div>
       );
     }
