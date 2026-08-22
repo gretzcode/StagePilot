@@ -213,7 +213,7 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
           const canvaRes = await fetch("/api/integrations/canva/import", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ url: urlInput.trim(), roomCode }),
+            body: JSON.stringify({ url: urlInput.trim(), roomCode, deviceId: deviceId || undefined }),
           });
           const canvaJson = (await canvaRes.json().catch(() => ({}))) as {
             success?: boolean;
@@ -240,6 +240,7 @@ export function MaterialUploader({ roomCode = "DEFAULT", deviceId, onMaterialAdd
           url: urlInput.trim(),
           title,
           roomCode,
+          deviceId: deviceId || undefined,
         }),
       });
 

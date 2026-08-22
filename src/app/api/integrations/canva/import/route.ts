@@ -16,6 +16,7 @@ export async function POST(request: Request) {
     designId?: string;
     url?: string;
     roomCode?: string;
+    deviceId?: string;
   };
 
   const target = body.designId || body.url;
@@ -45,16 +46,17 @@ export async function POST(request: Request) {
         };
         const doId = stageRoomNs.idFromName(body.roomCode.trim().toUpperCase());
         const stub = stageRoomNs.get(doId);
+        const senderDeviceId = body.deviceId || hostUser.id;
         await stub.fetch(
           new Request(`http://internal/command?roomCode=${encodeURIComponent(body.roomCode)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              deviceId: hostUser.id,
+              deviceId: senderDeviceId,
               command: {
                 type: "MATERIAL_ADD",
                 commandId: `cmd-canva-import-${Date.now()}`,
-                senderDeviceId: hostUser.id,
+                senderDeviceId,
                 timestamp: Date.now(),
                 payload: { material },
               },

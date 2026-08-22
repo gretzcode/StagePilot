@@ -134,15 +134,37 @@ export function stageSessionReducer(
       const existingMaterial = existingIdx >= 0 ? nextState.materials[existingIdx] : null;
 
       // Authoritative ownership resolution:
-      // If material already has an established owner, preserve it unless modified by host
-      const ownerDeviceId = existingMaterial?.ownerDeviceId || (isHostSender ? (nextState.host?.hostDeviceId || command.senderDeviceId) : command.senderDeviceId);
-      const ownerRole = existingMaterial?.ownerRole || (isHostSender ? "host" : isSpeakerSender ? "speaker" : "operator");
-      const ownerName = existingMaterial?.ownerName || (senderDevice?.name || (isHostSender ? "Host" : isSpeakerSender ? "Speaker" : "Operator"));
-      const ownerSpeakerName =
-        existingMaterial?.ownerSpeakerName ||
+      // If material explicitly declares speaker ownership or was dispatched by speaker, preserve/assign speaker identity
+      const explicitSpeakerName =
         material.ownerSpeakerName ||
-        (isSpeakerSender ? (senderDevice?.name || "Speaker") : undefined);
-      const ownerUserId = existingMaterial?.ownerUserId || (isHostSender ? nextState.host?.hostUserId : undefined);
+        (isSpeakerSender ? (senderDevice?.name || "Speaker") : existingMaterial?.ownerSpeakerName);
+
+      const isSpeakerOwned = Boolean(
+        explicitSpeakerName ||
+        material.ownerRole === "speaker" ||
+        isSpeakerSender ||
+        existingMaterial?.ownerRole === "speaker"
+      );
+
+      const ownerDeviceId = isSpeakerOwned
+        ? (material.ownerDeviceId || (isSpeakerSender ? command.senderDeviceId : existingMaterial?.ownerDeviceId || command.senderDeviceId))
+        : (existingMaterial?.ownerDeviceId || (isHostSender ? (nextState.host?.hostDeviceId || command.senderDeviceId) : command.senderDeviceId));
+
+      const ownerRole = isSpeakerOwned
+        ? "speaker"
+        : (existingMaterial?.ownerRole || (isHostSender ? "host" : isSpeakerSender ? "speaker" : "operator"));
+
+      const ownerName = isSpeakerOwned
+        ? (material.ownerName || senderDevice?.name || explicitSpeakerName || "Speaker")
+        : (existingMaterial?.ownerName || (senderDevice?.name || (isHostSender ? "Host" : isSpeakerSender ? "Speaker" : "Operator")));
+
+      const ownerSpeakerName = isSpeakerOwned
+        ? (explicitSpeakerName || existingMaterial?.ownerSpeakerName)
+        : undefined;
+
+      const ownerUserId = !isSpeakerOwned
+        ? (existingMaterial?.ownerUserId || (isHostSender ? nextState.host?.hostUserId : undefined))
+        : undefined;
 
       const enrichedMaterial: Material = {
         ...material,

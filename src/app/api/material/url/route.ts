@@ -78,6 +78,7 @@ export async function POST(request: Request) {
     const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : "External Presentation";
     const roomCode = typeof body.roomCode === "string" ? body.roomCode : "DEFAULT";
     const upperRoomCode = roomCode.toUpperCase();
+    const deviceId = typeof body.deviceId === "string" && body.deviceId.trim() ? body.deviceId.trim() : null;
 
     // 1. Authorize session or fall back to Room owner
     const hostUser = await validateHostSessionRequest(request);
@@ -157,8 +158,8 @@ export async function POST(request: Request) {
         };
       }
 
-      const hostDeviceId = `dev-host-${ownerUserId.slice(-8)}`;
-      await dispatchMaterialAddCommand(request, upperRoomCode, hostDeviceId, canvaMaterial);
+      const senderDeviceId = deviceId || `dev-host-${ownerUserId.slice(-8)}`;
+      await dispatchMaterialAddCommand(request, upperRoomCode, senderDeviceId, canvaMaterial);
 
       return applySecurityHeaders(
         NextResponse.json({
@@ -382,8 +383,8 @@ export async function POST(request: Request) {
         status: "ready",
       };
 
-      const hostDeviceId = `dev-host-${ownerUserId.slice(-8)}`;
-      await dispatchMaterialAddCommand(request, upperRoomCode, hostDeviceId, canonicalPdfMaterial, env);
+      const senderDeviceId = deviceId || `dev-host-${ownerUserId.slice(-8)}`;
+      await dispatchMaterialAddCommand(request, upperRoomCode, senderDeviceId, canonicalPdfMaterial, env);
 
       const response = NextResponse.json({
         success: true,
@@ -447,8 +448,8 @@ export async function POST(request: Request) {
     // 4. Dispatch MATERIAL_ADD to the room state (Durable Object in production,
     //    local in-memory in development). This is the single source of truth
     //    and ensures the material persists across polling cycles.
-    const hostDeviceId = `dev-host-${ownerUserId.slice(-8)}`;
-    await dispatchMaterialAddCommand(request, upperRoomCode, hostDeviceId, newMaterial, env);
+    const senderDeviceId = deviceId || `dev-host-${ownerUserId.slice(-8)}`;
+    await dispatchMaterialAddCommand(request, upperRoomCode, senderDeviceId, newMaterial, env);
 
     const response = NextResponse.json({
       success: true,
