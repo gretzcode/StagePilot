@@ -270,7 +270,31 @@ export class Html5VideoAdapter implements IVideoPresentationAdapter {
 
     this.onError = () => {
       if (this.isDestroyed) return;
-      this.callbacks.onError?.("HTML5 video error occurred");
+      const mediaErr = this.video.error;
+      let errorMsg = "Gagal memutar video HTML5.";
+      if (mediaErr) {
+        if (typeof MediaError !== "undefined") {
+          switch (mediaErr.code) {
+            case MediaError.MEDIA_ERR_ABORTED:
+              errorMsg = "Pemutaran video dibatalkan oleh pengguna/browser.";
+              break;
+            case MediaError.MEDIA_ERR_NETWORK:
+              errorMsg = "Koneksi jaringan terputus saat memuat stream video.";
+              break;
+            case MediaError.MEDIA_ERR_DECODE:
+              errorMsg = "Codec video tidak kompatibel atau data video rusak.";
+              break;
+            case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+              errorMsg = "Format video tidak didukung atau server tidak merespons stream video.";
+              break;
+            default:
+              errorMsg = `Gagal memutar video (${mediaErr.message || "Kode error: " + mediaErr.code})`;
+          }
+        } else {
+          errorMsg = `Gagal memutar video (${mediaErr.message || "Kode: " + mediaErr.code})`;
+        }
+      }
+      this.callbacks.onError?.(errorMsg);
     };
 
     this.video.addEventListener("loadedmetadata", this.onLoadedMetadata);
