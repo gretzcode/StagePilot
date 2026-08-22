@@ -13,7 +13,7 @@ import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { useTimerTicker } from "@/features/timer/hooks/useTimerTicker";
 import { useAutoHideCursor } from "@/core/hooks/useAutoHideCursor";
 import { formatStageTimer } from "@/features/timer/utils/timer-formatter";
-import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
+import { useMaterialQueuePreloader, useMaterialPrecacheListener } from "@/features/material/hooks/useMaterialQueuePreloader";
 import { useScreenShareSubscriber, ScreenShareLiveViewer } from "@/features/screen-share";
 
 function getBriefFontSize(length: number): string {
@@ -30,7 +30,7 @@ function ConfidenceDisplayContent() {
   const [deviceId] = useState(() => getPersistentDeviceId("confidence", roomCode, searchParams.get("deviceId")));
   useAutoHideCursor(2500);
 
-  const { state, roomError, approvalStatus, sendWebRtcSignal } = useStageRoomSession({
+  const { state, roomError, approvalStatus, sendWebRtcSignal, dispatchCommand } = useStageRoomSession({
     roomCode,
     role: "confidence",
     deviceId,
@@ -41,6 +41,7 @@ function ConfidenceDisplayContent() {
   const now = useTimerTicker(state?.timer.status === "running");
 
   useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
+  useMaterialPrecacheListener(state, dispatchCommand, deviceId, "Confidence Display", "confidence");
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {

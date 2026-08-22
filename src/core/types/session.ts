@@ -1,5 +1,5 @@
 import { DeviceState, DisplayMode } from "./device";
-import { Material, PresentationState } from "./presentation";
+import { Material, PresentationState, DeviceMaterialCacheEntry } from "./presentation";
 import { TimerState } from "./timer";
 import { BriefState } from "./brief";
 import { ScreenShareSource } from "./screen-share";
@@ -41,6 +41,8 @@ export interface StageSessionState {
   displays: Record<string, DisplayState>;
   screenShareSources: Record<string, ScreenShareSource>;
   liveSource: LiveSourceReference | null;
+  materialCacheStatus?: Record<string, Record<string, DeviceMaterialCacheEntry>>;
+  lastPrecacheRequest?: { materialId: string; requestedAt: number; targetDeviceId?: string };
   version: number;
 }
 

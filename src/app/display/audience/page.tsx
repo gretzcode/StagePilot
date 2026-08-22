@@ -10,7 +10,7 @@ import { FriendlyErrorState } from "@/components/ui/FriendlyErrorState";
 import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { useAutoHideCursor } from "@/core/hooks/useAutoHideCursor";
-import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
+import { useMaterialQueuePreloader, useMaterialPrecacheListener } from "@/features/material/hooks/useMaterialQueuePreloader";
 import { useScreenShareSubscriber, ScreenShareLiveViewer } from "@/features/screen-share";
 
 function AudienceDisplayContent() {
@@ -21,7 +21,7 @@ function AudienceDisplayContent() {
   const [deviceId] = useState(() => getPersistentDeviceId("audience", roomCode, searchParams.get("deviceId")));
   useAutoHideCursor(2500);
 
-  const { state, roomError, approvalStatus, roomName, sendWebRtcSignal } = useStageRoomSession({
+  const { state, roomError, approvalStatus, roomName, sendWebRtcSignal, dispatchCommand } = useStageRoomSession({
     roomCode,
     role: "audience",
     deviceId,
@@ -30,6 +30,7 @@ function AudienceDisplayContent() {
   });
 
   useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
+  useMaterialPrecacheListener(state, dispatchCommand, deviceId, "Audience Display", "audience");
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {

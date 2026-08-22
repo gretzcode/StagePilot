@@ -203,6 +203,9 @@ export function stageSessionReducer(
       }
 
       nextState.materials = nextState.materials.filter((m) => m.id !== materialId);
+      if (nextState.materialCacheStatus) {
+        delete nextState.materialCacheStatus[materialId];
+      }
       if (nextState.presentation.materialId === materialId || (nextState.liveSource?.type === "material" && nextState.liveSource.id === materialId)) {
         nextState.liveSource = null;
         nextState.presentation.isPresenting = false;
@@ -784,6 +787,81 @@ export function stageSessionReducer(
       nextState.presentation.zoom = { scale: 1.0, panX: 0, panY: 0, updatedAt: now };
       nextState.presentation.revision = (nextState.presentation.revision || 0) + 1;
       nextState.presentation.updatedAt = now;
+      break;
+    }
+
+    case "MATERIAL_PRECACHE_REQUEST": {
+      const { materialId, targetDeviceId } = command.payload;
+      const targetMaterial = nextState.materials.find((m) => m.id === materialId);
+      if (!targetMaterial) break;
+
+      if (!nextState.materialCacheStatus) {
+        nextState.materialCacheStatus = {};
+      }
+      if (!nextState.materialCacheStatus[materialId]) {
+        nextState.materialCacheStatus[materialId] = {};
+      }
+
+      nextState.lastPrecacheRequest = {
+        materialId,
+        requestedAt: now,
+        targetDeviceId,
+      };
+
+      const activeDevices = Object.values(nextState.devices).filter(
+        (d) => d.status === "online" && d.approvalStatus === "approved"
+      );
+
+      for (const dev of activeDevices) {
+        if (!targetDeviceId || dev.id === targetDeviceId) {
+          nextState.materialCacheStatus[materialId][dev.id] = {
+            deviceId: dev.id,
+            deviceName: dev.name || "Device",
+            role: dev.role || "display",
+            status: "caching",
+            progress: 0,
+            cachedAt: undefined,
+          };
+        }
+      }
+
+      if (targetMaterial) {
+        targetMaterial.cacheStatus = {
+          ...(targetMaterial.cacheStatus || {}),
+          ...nextState.materialCacheStatus[materialId],
+        };
+      }
+      break;
+    }
+
+    case "MATERIAL_CACHE_REPORT": {
+      const { materialId, deviceId, deviceName, role, status, progress, error } = command.payload;
+      if (!nextState.materialCacheStatus) {
+        nextState.materialCacheStatus = {};
+      }
+      if (!nextState.materialCacheStatus[materialId]) {
+        nextState.materialCacheStatus[materialId] = {};
+      }
+
+      const entry = {
+        deviceId,
+        deviceName: deviceName || nextState.devices[deviceId]?.name || "Device",
+        role: role || nextState.devices[deviceId]?.role || "display",
+        status,
+        progress: Math.min(100, Math.max(0, progress)),
+        cachedAt: status === "cached" ? now : nextState.materialCacheStatus[materialId][deviceId]?.cachedAt,
+        error,
+      };
+
+      nextState.materialCacheStatus[materialId][deviceId] = entry;
+
+      const targetMaterial = nextState.materials.find((m) => m.id === materialId);
+      if (targetMaterial) {
+        if (!targetMaterial.cacheStatus) {
+          targetMaterial.cacheStatus = {};
+        }
+        targetMaterial.cacheStatus[deviceId] = entry;
+      }
       break;
     }
   }

@@ -26,6 +26,16 @@ export interface MaterialMetadata {
   storageReference?: string;
 }
 
+export interface DeviceMaterialCacheEntry {
+  deviceId: string;
+  deviceName: string;
+  role: string;
+  status: "caching" | "cached" | "error";
+  progress: number; // 0 to 100
+  cachedAt?: number;
+  error?: string;
+}
+
 export interface Material {
   id: string;
   name: string;
@@ -50,6 +60,7 @@ export interface Material {
   status: MaterialStatus;
   errorMessage?: string;
   metadata?: MaterialMetadata;
+  cacheStatus?: Record<string, DeviceMaterialCacheEntry>;
 }
 
 export type PresentationStatus = "idle" | "ready" | "live" | "paused" | "ended";

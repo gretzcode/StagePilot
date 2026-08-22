@@ -262,14 +262,12 @@ export async function GET(request: Request) {
         const responseHeaders = new Headers();
         let mimeType = driveStream.mimeType || record.mimeType;
         if (!mimeType || mimeType === "application/octet-stream" || (record.materialType === "video" && mimeType === "application/pdf")) {
-          if (record.materialType === "video" || record.title?.toLowerCase().endsWith(".mp4") || record.originalFileName?.toLowerCase().endsWith(".mp4")) {
+          const isVideo = record.materialType === "video" || record.title?.toLowerCase().endsWith(".mp4") || record.originalFileName?.toLowerCase().endsWith(".mp4");
+          const isWebm = record.title?.toLowerCase().endsWith(".webm") || record.originalFileName?.toLowerCase().endsWith(".webm");
+          if (isVideo) {
             mimeType = "video/mp4";
-          } else if (record.title?.toLowerCase().endsWith(".webm") || record.originalFileName?.toLowerCase().endsWith(".webm")) {
+          } else if (isWebm) {
             mimeType = "video/webm";
-          } else if (record.materialType === "pdf" || record.title?.toLowerCase().endsWith(".pdf") || record.originalFileName?.toLowerCase().endsWith(".pdf")) {
-            mimeType = "application/pdf";
-          } else if (record.materialType === "video") {
-            mimeType = "video/mp4";
           } else {
             mimeType = "application/pdf";
           }

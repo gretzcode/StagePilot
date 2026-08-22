@@ -83,6 +83,7 @@ export function createInitialSessionState(
     displays: {},
     screenShareSources: {},
     liveSource: null,
+    materialCacheStatus: {},
     activeControllerDeviceId: hostDeviceId || hostUserId,
   };
 }

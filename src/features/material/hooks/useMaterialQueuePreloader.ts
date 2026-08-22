@@ -1,14 +1,143 @@
 "use client";
 
-import { useEffect } from "react";
-import { Material } from "@/core/types";
+import { useEffect, useRef, useCallback } from "react";
+import { Material, StageSessionState, StageCommand } from "@/core/types";
 import { appendAssetAccessParams } from "../validator";
 import { preloadPdfDocument } from "./usePdfDocument";
 
+const CACHE_NAME = "stagepilot-material-assets-v1";
+
+/**
+ * Preload and warm up local browser cache for a given Material.
+ * Supports PDF, Images, Google Slides, Canva, and Video.
+ */
+export async function warmMaterialAsset(
+  material: Material,
+  deviceId?: string,
+  onProgress?: (percent: number) => void
+): Promise<void> {
+  if (!material || typeof window === "undefined") return;
+
+  onProgress?.(10);
+
+  let cache: Cache | null = null;
+  if ("caches" in window) {
+    try {
+      cache = await caches.open(CACHE_NAME);
+    } catch {
+      cache = null;
+    }
+  }
+
+  onProgress?.(25);
+
+  try {
+    // 1. PDF Materials
+    if (material.type === "pdf") {
+      const rawUrl = material.url || material.externalUrl || "";
+      if (rawUrl) {
+        const targetUrl = appendAssetAccessParams(rawUrl, deviceId);
+        // Preload via PDF.js worker
+        await preloadPdfDocument(targetUrl).catch(() => null);
+        onProgress?.(65);
+
+        // Pre-fetch into CacheStorage
+        if (cache && targetUrl.startsWith("/")) {
+          try {
+            const match = await cache.match(targetUrl);
+            if (!match) {
+              const res = await fetch(targetUrl);
+              if (res.ok) {
+                await cache.put(targetUrl, res);
+              }
+            }
+          } catch {
+            // Non-fatal cache write
+          }
+        }
+      }
+      onProgress?.(100);
+      return;
+    }
+
+    // 2. Images, Canva, and Google Slides
+    if (material.type === "image" || material.type === "canva" || material.type === "url") {
+      const slides = material.slides || [];
+      const total = Math.max(slides.length, 1);
+      let loaded = 0;
+
+      const slideUrls = slides
+        .map((s) => s.contentUrl || s.url || s.thumbnailUrl)
+        .filter((u): u is string => Boolean(u && !u.includes("/design/") && !u.includes("/view")));
+
+      if (slideUrls.length === 0 && material.url) {
+        slideUrls.push(material.url);
+      }
+
+      await Promise.all(
+        slideUrls.map(async (url) => {
+          try {
+            // Preload Image Element into browser memory
+            await new Promise<void>((resolve) => {
+              const img = new Image();
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+              img.src = url;
+            });
+
+            // Cache in CacheStorage if relative/local URL
+            if (cache && url.startsWith("/")) {
+              const match = await cache.match(url);
+              if (!match) {
+                const res = await fetch(url);
+                if (res.ok) await cache.put(url, res);
+              }
+            }
+          } catch {
+            // Ignore individual slide failure
+          } finally {
+            loaded++;
+            onProgress?.(Math.min(95, Math.round(25 + (loaded / total) * 70)));
+          }
+        })
+      );
+
+      onProgress?.(100);
+      return;
+    }
+
+    // 3. Video Materials
+    if (material.type === "video") {
+      const rawUrl = material.url || material.externalUrl || "";
+      if (rawUrl) {
+        const videoUrl = appendAssetAccessParams(rawUrl, deviceId);
+        if (cache && videoUrl.startsWith("/")) {
+          try {
+            const match = await cache.match(videoUrl);
+            if (!match) {
+              const res = await fetch(videoUrl, { headers: { Range: "bytes=0-2097152" } });
+              if (res.ok) {
+                await cache.put(videoUrl, res);
+              }
+            }
+          } catch {
+            // Non-fatal video precache
+          }
+        }
+      }
+      onProgress?.(100);
+      return;
+    }
+
+    onProgress?.(100);
+  } catch (err) {
+    console.warn("[warmMaterialAsset] Error:", err);
+    onProgress?.(100);
+  }
+}
+
 /**
  * Background preloader hook that automatically pre-warms materials in queue.
- * For PDF materials, downloads and parses the document into memory in the background
- * so that when "Go Live" or "Present" is clicked, presentation starts instantly (0ms delay).
  */
 export function useMaterialQueuePreloader(
   materials: Material[] | undefined,
@@ -18,7 +147,6 @@ export function useMaterialQueuePreloader(
   useEffect(() => {
     if (!materials || materials.length === 0 || typeof window === "undefined") return;
 
-    // Use requestIdleCallback or setTimeout fallback to avoid competing with UI render thread
     const scheduleWarmup =
       typeof window.requestIdleCallback === "function"
         ? (cb: () => void) => window.requestIdleCallback(cb, { timeout: 2000 })
@@ -26,14 +154,11 @@ export function useMaterialQueuePreloader(
 
     const cancelToken = scheduleWarmup(() => {
       materials.forEach((mat) => {
-        // Phase D: Skip the currently presenting material to prevent duplicate parallel loading with PdfSlideViewer
         if (mat.id === activeMaterialId) return;
 
         if (mat.type === "pdf" && mat.url) {
           const targetUrl = appendAssetAccessParams(mat.url, deviceId);
-          preloadPdfDocument(targetUrl).catch(() => {
-            // Non-fatal background warm-up
-          });
+          preloadPdfDocument(targetUrl).catch(() => {});
         }
       });
     });
@@ -45,3 +170,92 @@ export function useMaterialQueuePreloader(
     };
   }, [materials, deviceId, activeMaterialId]);
 }
+
+/**
+ * Hook that listens for explicit MATERIAL_PRECACHE_REQUEST broadcast commands
+ * and reports progress/status back to the room state.
+ */
+export function useMaterialPrecacheListener(
+  state: StageSessionState | null,
+  dispatchCommand?: (type: StageCommand["type"], payload?: Record<string, unknown>) => void,
+  deviceId?: string,
+  deviceName = "Device",
+  role = "display"
+): void {
+  const lastProcessedTimeRef = useRef<number>(0);
+  const activeCachingRef = useRef<Set<string>>(new Set());
+
+  const handlePrecache = useCallback(
+    async (material: Material) => {
+      if (!dispatchCommand || !deviceId) return;
+      if (activeCachingRef.current.has(material.id)) return;
+
+      activeCachingRef.current.add(material.id);
+
+      // 1. Initial report: Started Caching
+      dispatchCommand("MATERIAL_CACHE_REPORT", {
+        materialId: material.id,
+        deviceId,
+        deviceName,
+        role,
+        status: "caching",
+        progress: 15,
+      });
+
+      try {
+        await warmMaterialAsset(material, deviceId, (percent) => {
+          if (percent < 100) {
+            dispatchCommand("MATERIAL_CACHE_REPORT", {
+              materialId: material.id,
+              deviceId,
+              deviceName,
+              role,
+              status: "caching",
+              progress: percent,
+            });
+          }
+        });
+
+        // 2. Success report: Cached
+        dispatchCommand("MATERIAL_CACHE_REPORT", {
+          materialId: material.id,
+          deviceId,
+          deviceName,
+          role,
+          status: "cached",
+          progress: 100,
+        });
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : "Cache failed";
+        dispatchCommand("MATERIAL_CACHE_REPORT", {
+          materialId: material.id,
+          deviceId,
+          deviceName,
+          role,
+          status: "error",
+          progress: 0,
+          error: errorMsg,
+        });
+      } finally {
+        activeCachingRef.current.delete(material.id);
+      }
+    },
+    [dispatchCommand, deviceId, deviceName, role]
+  );
+
+  useEffect(() => {
+    if (!state || !state.lastPrecacheRequest || !dispatchCommand || !deviceId) return;
+
+    const { materialId, requestedAt, targetDeviceId } = state.lastPrecacheRequest;
+    if (requestedAt <= lastProcessedTimeRef.current) return;
+    if (targetDeviceId && targetDeviceId !== deviceId) return;
+
+    lastProcessedTimeRef.current = requestedAt;
+
+    const targetMaterial = state.materials.find((m) => m.id === materialId);
+    if (targetMaterial) {
+      handlePrecache(targetMaterial);
+    }
+  }, [state, dispatchCommand, deviceId, handlePrecache]);
+}
+

@@ -36,7 +36,9 @@ export type StageCommandType =
   | "SCREEN_SHARE_START"
   | "SCREEN_SHARE_STOP"
   | "SOURCE_TAKE_LIVE"
-  | "SOURCE_TAKE_OFFLINE";
+  | "SOURCE_TAKE_OFFLINE"
+  | "MATERIAL_PRECACHE_REQUEST"
+  | "MATERIAL_CACHE_REPORT";
 
 export interface BaseCommand {
   type: StageCommandType;
@@ -267,6 +269,27 @@ export interface SourceTakeOfflineCommand extends BaseCommand {
   payload?: Record<string, never>;
 }
 
+export interface MaterialPrecacheRequestCommand extends BaseCommand {
+  type: "MATERIAL_PRECACHE_REQUEST";
+  payload: {
+    materialId: string;
+    targetDeviceId?: string;
+  };
+}
+
+export interface MaterialCacheReportCommand extends BaseCommand {
+  type: "MATERIAL_CACHE_REPORT";
+  payload: {
+    materialId: string;
+    deviceId: string;
+    deviceName: string;
+    role: string;
+    status: "caching" | "cached" | "error";
+    progress: number;
+    error?: string;
+  };
+}
+
 export type StageCommand =
   | RoomCreateCommand
   | DeviceRequestJoinCommand
@@ -300,5 +323,7 @@ export type StageCommand =
   | ScreenShareStartCommand
   | ScreenShareStopCommand
   | SourceTakeLiveCommand
-  | SourceTakeOfflineCommand;
+  | SourceTakeOfflineCommand
+  | MaterialPrecacheRequestCommand
+  | MaterialCacheReportCommand;
 

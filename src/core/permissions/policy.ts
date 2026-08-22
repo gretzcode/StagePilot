@@ -46,8 +46,12 @@ export class PermissionPolicy {
 
     const role = sender.role || "host";
 
-    // Displays (Audience & Confidence) are output renderers only and can NEVER send operational commands
+    // Displays (Audience & Confidence) are output renderers only and can NEVER send operational commands,
+    // EXCEPT for MATERIAL_CACHE_REPORT (telemetry acknowledging local preloading)
     if (role === "audience" || role === "confidence") {
+      if (command.type === "MATERIAL_CACHE_REPORT") {
+        return { allowed: true };
+      }
       return {
         allowed: false,
         reason: `Display output mode '${role}' is read-only and cannot send operational commands`,
@@ -119,6 +123,8 @@ export class PermissionPolicy {
       "ZOOM_RESET",
       "SOURCE_TAKE_LIVE",
       "SOURCE_TAKE_OFFLINE",
+      "MATERIAL_PRECACHE_REQUEST",
+      "MATERIAL_CACHE_REPORT",
     ];
 
     if (allowedForOperator.includes(command.type)) {
@@ -159,6 +165,11 @@ export class PermissionPolicy {
         allowed: false,
         reason: `Speaker device cannot execute administrative or stage control command '${command.type}'`,
       };
+    }
+
+    // Material Precache and Telemetry Cache Reports are allowed
+    if (command.type === "MATERIAL_PRECACHE_REQUEST" || command.type === "MATERIAL_CACHE_REPORT") {
+      return { allowed: true };
     }
 
     // Material Ownership Checks for Speaker

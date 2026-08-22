@@ -43,7 +43,8 @@ import { PendingApprovalState } from "@/components/ui/PendingApprovalState";
 import { getPersistentDeviceId } from "@/core/utils/device-id";
 import { CopyRoomCodeButton } from "@/components/ui/CopyRoomCodeButton";
 import { isCanvaMaterialStale, isPdfMaterialStale } from "@/features/material/validator";
-import { useMaterialQueuePreloader } from "@/features/material/hooks/useMaterialQueuePreloader";
+import { useMaterialQueuePreloader, useMaterialPrecacheListener } from "@/features/material/hooks/useMaterialQueuePreloader";
+import { MaterialCacheBadge } from "@/features/material/components/MaterialCacheBadge";
 import { ScreenSharePanel, useScreenShareSubscriber, ScreenShareLiveViewer } from "@/features/screen-share";
 import { ROUTES, API_ROUTES } from "@/lib/routes";
 
@@ -110,7 +111,23 @@ function PresentationControlContent() {
       .catch(() => {});
   }, [roomCode]);
 
+  const myDevice = state?.devices?.[deviceId];
+
   useMaterialQueuePreloader(state?.materials, deviceId, state?.presentation?.materialId);
+  useMaterialPrecacheListener(
+    state,
+    dispatchCommand,
+    deviceId,
+    isSpeaker ? (myDevice?.name || "Speaker Device") : "Operator Controller",
+    requestedRole
+  );
+
+  const handlePrecache = useCallback(
+    (materialId: string) => {
+      dispatchCommand("MATERIAL_PRECACHE_REQUEST", { materialId });
+    },
+    [dispatchCommand]
+  );
 
   // Keyboard Navigation & Shortcuts
   useEffect(() => {
@@ -171,7 +188,6 @@ function PresentationControlContent() {
   const activeViewerStream = isMyLiveScreenShare ? (localScreenStream || liveScreenStream) : liveScreenStream;
   const activeViewerStatus = isMyLiveScreenShare ? (localScreenStream ? "connected" : liveScreenStatus) : liveScreenStatus;
 
-  const myDevice = state?.devices?.[deviceId];
   const mySpeakerName = (myDevice?.name || "").trim().toLowerCase();
 
   const speakerMaterials =
@@ -876,7 +892,8 @@ function PresentationControlContent() {
                                     </span>
                                   )}
                                 </div>
-                                <h4 className="text-xs font-bold text-white line-clamp-1">{mat.name}</h4>
+                                <h4 className="text-xs font-bold text-white line-clamp-1 mb-1.5">{mat.name}</h4>
+                                <MaterialCacheBadge material={mat} state={state} onPrecache={handlePrecache} />
                               </div>
 
                               {isLive ? (
