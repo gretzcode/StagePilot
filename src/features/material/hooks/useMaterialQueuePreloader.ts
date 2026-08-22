@@ -7,8 +7,34 @@ import { preloadPdfDocument } from "./usePdfDocument";
 
 const CACHE_NAME = "stagepilot-material-assets-v1";
 
+// Module-level in-memory Blob Cache for 0ms instant buffering-free local playback
+const materialBlobCache = new Map<string, { blob: Blob; blobUrl: string; size: number }>();
+
+export function getCachedMaterialBlobUrl(key: string): string | null {
+  if (!key) return null;
+  const entry = materialBlobCache.get(key);
+  return entry ? entry.blobUrl : null;
+}
+
+export function setCachedMaterialBlob(key: string, blob: Blob): string {
+  const existing = materialBlobCache.get(key);
+  if (existing) {
+    try {
+      URL.revokeObjectURL(existing.blobUrl);
+    } catch {}
+  }
+  const blobUrl = URL.createObjectURL(blob);
+  materialBlobCache.set(key, { blob, blobUrl, size: blob.size });
+  return blobUrl;
+}
+
+export function hasCachedMaterialBlob(key: string): boolean {
+  return materialBlobCache.has(key);
+}
+
 /**
  * Preload and warm up local browser cache for a given Material.
+ * Downloads the ENTIRE file into local memory/Blob with real byte progress.
  * Supports PDF, Images, Google Slides, Canva, and Video.
  */
 export async function warmMaterialAsset(
@@ -18,7 +44,7 @@ export async function warmMaterialAsset(
 ): Promise<void> {
   if (!material || typeof window === "undefined") return;
 
-  onProgress?.(10);
+  onProgress?.(5);
 
   let cache: Cache | null = null;
   if ("caches" in window) {
@@ -29,26 +55,33 @@ export async function warmMaterialAsset(
     }
   }
 
-  onProgress?.(25);
-
   try {
     // 1. PDF Materials
     if (material.type === "pdf") {
       const rawUrl = material.url || material.externalUrl || "";
       if (rawUrl) {
         const targetUrl = appendAssetAccessParams(rawUrl, deviceId);
-        // Preload via PDF.js worker
+        
+        // 1. Preload via PDF.js worker
         await preloadPdfDocument(targetUrl).catch(() => null);
-        onProgress?.(65);
+        onProgress?.(60);
 
-        // Pre-fetch into CacheStorage
-        if (cache && targetUrl.startsWith("/")) {
+        // 2. Pre-fetch binary into CacheStorage & Blob Cache if available
+        if (targetUrl.startsWith("/")) {
           try {
-            const match = await cache.match(targetUrl);
-            if (!match) {
-              const res = await fetch(targetUrl);
-              if (res.ok) {
-                await cache.put(targetUrl, res);
+            const res = await fetch(targetUrl);
+            if (res.ok) {
+              const blob = await res.blob();
+              setCachedMaterialBlob(material.id, blob);
+              setCachedMaterialBlob(targetUrl, blob);
+              if (cache) {
+                await cache.put(targetUrl, new Response(blob, {
+                  headers: {
+                    "Content-Type": blob.type || "application/pdf",
+                    "Content-Length": String(blob.size),
+                    "Accept-Ranges": "bytes",
+                  },
+                }));
               }
             }
           } catch {
@@ -97,7 +130,7 @@ export async function warmMaterialAsset(
             // Ignore individual slide failure
           } finally {
             loaded++;
-            onProgress?.(Math.min(95, Math.round(25 + (loaded / total) * 70)));
+            onProgress?.(Math.min(95, Math.round(10 + (loaded / total) * 85)));
           }
         })
       );
@@ -106,23 +139,70 @@ export async function warmMaterialAsset(
       return;
     }
 
-    // 3. Video Materials
+    // 3. Video Materials: Download the ENTIRE binary stream with real chunk-by-chunk progress
     if (material.type === "video") {
       const rawUrl = material.url || material.externalUrl || "";
-      if (rawUrl) {
+      if (rawUrl && !rawUrl.includes("youtube.com") && !rawUrl.includes("youtu.be") && !rawUrl.includes("vimeo.com")) {
         const videoUrl = appendAssetAccessParams(rawUrl, deviceId);
+
+        // If already cached in memory, report 100% immediately
+        if (hasCachedMaterialBlob(material.id) || hasCachedMaterialBlob(videoUrl)) {
+          onProgress?.(100);
+          return;
+        }
+
+        const response = await fetch(videoUrl);
+        if (!response.ok) {
+          throw new Error(`Gagal mengunduh stream video (${response.status} ${response.statusText})`);
+        }
+
+        const contentLengthHeader = response.headers.get("content-length");
+        const totalBytes = contentLengthHeader ? parseInt(contentLengthHeader, 10) : (material.sizeBytes || 0);
+
+        if (!response.body) {
+          const blob = await response.blob();
+          setCachedMaterialBlob(material.id, blob);
+          setCachedMaterialBlob(videoUrl, blob);
+          onProgress?.(100);
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const chunks: BlobPart[] = [];
+        let receivedBytes = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            receivedBytes += value.length;
+            if (totalBytes > 0) {
+              const percent = Math.min(99, Math.round((receivedBytes / totalBytes) * 100));
+              onProgress?.(percent);
+            } else {
+              const mb = receivedBytes / (1024 * 1024);
+              onProgress?.(Math.min(95, Math.round(mb * 2)));
+            }
+          }
+        }
+
+        const blobMime = response.headers.get("content-type") || "video/mp4";
+        const blob = new Blob(chunks, { type: blobMime });
+        setCachedMaterialBlob(material.id, blob);
+        setCachedMaterialBlob(videoUrl, blob);
+
+        // Also store full response in CacheStorage if available
         if (cache && videoUrl.startsWith("/")) {
           try {
-            const match = await cache.match(videoUrl);
-            if (!match) {
-              const res = await fetch(videoUrl, { headers: { Range: "bytes=0-2097152" } });
-              if (res.ok) {
-                await cache.put(videoUrl, res);
-              }
-            }
-          } catch {
-            // Non-fatal video precache
-          }
+            await cache.put(videoUrl, new Response(blob, {
+              headers: {
+                "Content-Type": blobMime,
+                "Content-Length": String(blob.size),
+                "Accept-Ranges": "bytes",
+              },
+            }));
+          } catch {}
         }
       }
       onProgress?.(100);
@@ -132,7 +212,7 @@ export async function warmMaterialAsset(
     onProgress?.(100);
   } catch (err) {
     console.warn("[warmMaterialAsset] Error:", err);
-    onProgress?.(100);
+    throw err;
   }
 }
 

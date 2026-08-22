@@ -187,4 +187,17 @@ describe("Material Broadcast Pre-Cache & Device Warm-Up", () => {
     const nextState = stageSessionReducer(initialState, removeCmd);
     expect(nextState.materialCacheStatus?.["mat-sample-123"]).toBeUndefined();
   });
+
+  it("should store and retrieve blobs in materialBlobCache for 0ms local playback", async () => {
+    const { setCachedMaterialBlob, getCachedMaterialBlobUrl, hasCachedMaterialBlob } = await import(
+      "@/features/material/hooks/useMaterialQueuePreloader"
+    );
+
+    const testBlob = new Blob(["fake-mp4-video-data"], { type: "video/mp4" });
+    const url = setCachedMaterialBlob("mat-video-999", testBlob);
+
+    expect(url).toBeDefined();
+    expect(hasCachedMaterialBlob("mat-video-999")).toBe(true);
+    expect(getCachedMaterialBlobUrl("mat-video-999")).toBe(url);
+  });
 });

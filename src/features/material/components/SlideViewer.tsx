@@ -5,6 +5,7 @@ import { Material, MediaPlaybackState, PresentationZoomState, SlideMetadata } fr
 import { PdfSlideViewer } from "./PdfSlideViewer";
 import { SyncVideoPlayer } from "./SyncVideoPlayer";
 import { useAspectFit } from "../hooks/useAspectFit";
+import { getCachedMaterialBlobUrl } from "../hooks/useMaterialQueuePreloader";
 
 interface SlideViewerProps {
   material: Material | null;
@@ -274,7 +275,9 @@ export function SlideViewer({
   }
 
   if (resolvedMediaType === "video" || material.type === "video") {
-    const videoUrl = slide?.contentUrl || material.url || rawUrl;
+    const rawVideoUrl = slide?.contentUrl || material.url || rawUrl;
+    const localBlobUrl = getCachedMaterialBlobUrl(material.id) || getCachedMaterialBlobUrl(rawVideoUrl);
+    const videoUrl = localBlobUrl || rawVideoUrl;
     return (
       <SyncVideoPlayer
         url={videoUrl}
